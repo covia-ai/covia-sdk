@@ -42,6 +42,11 @@ declare class Job {
         timeout?: number;
     }): Promise<any>;
     /**
+     * Stream server-sent events for this job.
+     * @returns AsyncGenerator yielding SSEEvent objects
+     */
+    stream(): AsyncGenerator<SSEEvent>;
+    /**
      * Cancels the execution of the job
      * @returns {Promise<number>}
      */
@@ -282,6 +287,21 @@ declare class Venue implements VenueInterface {
     * @returns {Promise<Job>}
     */
     invoke(assetId: string, input: any): Promise<Job>;
+    /**
+     * Stream server-sent events for a job.
+     * @param jobId - Job identifier
+     * @returns AsyncGenerator yielding SSEEvent objects
+     */
+    streamJobEvents(jobId: string): AsyncGenerator<SSEEvent>;
+    /**
+     * Close the venue and release resources.
+     * Clears cached asset data for this venue.
+     */
+    close(): void;
+    /**
+     * Disposable support — allows `using venue = await Grid.connect(...)` in TS 5.2+.
+     */
+    [Symbol.dispose](): void;
     private _buildHeaders;
 }
 
@@ -319,6 +339,8 @@ interface VenueInterface {
     didDocument(): Promise<DIDDocument>;
     mcpDiscovery(): Promise<MCPDiscovery>;
     agentCard(): Promise<AgentCard>;
+    streamJobEvents(jobId: string): AsyncGenerator<SSEEvent>;
+    close(): void;
 }
 type AssetID = string;
 interface AssetMetadata {
@@ -436,6 +458,15 @@ interface OperationInfo {
     output?: any;
     [key: string]: any;
 }
+/** A single server-sent event received from a Covia venue. */
+interface SSEEvent {
+    event: string | null;
+    data: string;
+    id: string | null;
+    retry: number | null;
+    /** Parse the event data as JSON. */
+    json: () => any;
+}
 declare class CoviaError extends Error {
     code: number | null;
     constructor(message: string, code?: number | null);
@@ -520,6 +551,20 @@ declare function getParsedAssetId(assetId: string): string;
  */
 declare function getAssetIdFromPath(assetHex: string, assetPath: string): string;
 declare function getAssetIdFromVenueId(assetHex: string, venueId: string): string;
+/**
+ * Create an SSEEvent object from parsed fields.
+ */
+declare function createSSEEvent(fields: {
+    event?: string;
+    data?: string;
+    id?: string;
+    retry?: number;
+}): SSEEvent;
+/**
+ * Parse an SSE stream from a fetch Response body.
+ * Yields SSEEvent objects as they arrive.
+ */
+declare function parseSSEStream(response: Response): AsyncGenerator<SSEEvent>;
 
 /**
  * Simple logger for the Covia SDK.
@@ -557,4 +602,4 @@ declare class DataAsset extends Asset {
     constructor(id: AssetID, venue: VenueInterface, metadata?: AssetMetadata);
 }
 
-export { type AgentCard, Asset, type AssetID, type AssetList, type AssetListOptions, type AssetMetadata, AssetNotFoundError, Auth, BasicAuth, BearerAuth, type ContentDetails, CoviaConnectionError, CoviaError, CoviaTimeoutError, CoviaUserAuth, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, Grid, GridError, type InvokePayload, Job, JobFailedError, type JobMetadata, JobNotFoundError, JobStatus, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, type OperationPayload, RunStatus, type StatsData, type StatusData, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, fetchStreamWithError, fetchWithError, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, isJobComplete, isJobFinished, isJobPaused, logger };
+export { type AgentCard, Asset, type AssetID, type AssetList, type AssetListOptions, type AssetMetadata, AssetNotFoundError, Auth, BasicAuth, BearerAuth, type ContentDetails, CoviaConnectionError, CoviaError, CoviaTimeoutError, CoviaUserAuth, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, Grid, GridError, type InvokePayload, Job, JobFailedError, type JobMetadata, JobNotFoundError, JobStatus, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, type OperationPayload, RunStatus, type SSEEvent, type StatsData, type StatusData, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, createSSEEvent, fetchStreamWithError, fetchWithError, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream };

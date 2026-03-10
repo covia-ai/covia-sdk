@@ -1,4 +1,4 @@
-import { JobMetadata, RunStatus, CoviaTimeoutError, JobFailedError, VenueInterface } from "./types";
+import { JobMetadata, RunStatus, CoviaTimeoutError, JobFailedError, VenueInterface, SSEEvent } from "./types";
 import { isJobFinished, isJobComplete } from "./Utils";
 import { logger } from "./Logger";
 
@@ -92,6 +92,14 @@ export class Job {
   async result(options?: { timeout?: number }): Promise<any> {
     await this.wait(options);
     return this.output;
+  }
+
+  /**
+   * Stream server-sent events for this job.
+   * @returns AsyncGenerator yielding SSEEvent objects
+   */
+  async *stream(): AsyncGenerator<SSEEvent> {
+    yield* this.venue.streamJobEvents(this.id);
   }
 
   /**

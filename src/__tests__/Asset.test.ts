@@ -27,6 +27,8 @@ function createMockVenue(overrides: Partial<VenueInterface> = {}): VenueInterfac
     didDocument: jest.fn().mockResolvedValue({ id: 'did:web:venue.example.com' }),
     mcpDiscovery: jest.fn().mockResolvedValue({}),
     agentCard: jest.fn().mockResolvedValue({}),
+    streamJobEvents: jest.fn(),
+    close: jest.fn(),
     ...overrides,
   };
 }

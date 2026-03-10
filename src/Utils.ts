@@ -1,4 +1,4 @@
-import { CoviaError, CoviaConnectionError, GridError, NotFoundError, RunStatus } from './types';
+import { CoviaError, CoviaConnectionError, GridError, NotFoundError, RunStatus, SSEEvent } from './types';
 import { logger } from './Logger';
 
 /**
@@ -159,5 +159,98 @@ export function getAssetIdFromPath(assetHex: string, assetPath:string): string {
 export function getAssetIdFromVenueId(assetHex: string, venueId:string): string {
   //Get did from path and append to asset for full id
   return venueId+"/a/"+assetHex;
+}
+
+/**
+ * Create an SSEEvent object from parsed fields.
+ */
+export function createSSEEvent(fields: { event?: string; data?: string; id?: string; retry?: number }): SSEEvent {
+  const data = fields.data ?? '';
+  return {
+    event: fields.event || null,
+    data,
+    id: fields.id || null,
+    retry: fields.retry ?? null,
+    json() { return JSON.parse(data); },
+  };
+}
+
+/**
+ * Parse an SSE stream from a fetch Response body.
+ * Yields SSEEvent objects as they arrive.
+ */
+export async function* parseSSEStream(response: Response): AsyncGenerator<SSEEvent> {
+  const reader = response.body?.getReader();
+  if (!reader) return;
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let event: string | undefined;
+  let data: string[] = [];
+  let id: string | undefined;
+  let retry: number | undefined;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      // Keep the last incomplete line in the buffer
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (line === '') {
+          // Empty line = end of event
+          if (data.length > 0 || event !== undefined) {
+            yield createSSEEvent({
+              event,
+              data: data.join('\n'),
+              id,
+              retry,
+            });
+            event = undefined;
+            data = [];
+            id = undefined;
+            retry = undefined;
+          }
+          continue;
+        }
+
+        if (line.startsWith(':')) continue; // Comment line
+
+        const colonIdx = line.indexOf(':');
+        let field: string;
+        let val: string;
+
+        if (colonIdx === -1) {
+          field = line;
+          val = '';
+        } else {
+          field = line.slice(0, colonIdx);
+          val = line.slice(colonIdx + 1);
+          if (val.startsWith(' ')) val = val.slice(1);
+        }
+
+        switch (field) {
+          case 'event': event = val; break;
+          case 'data': data.push(val); break;
+          case 'id': id = val; break;
+          case 'retry': {
+            const n = parseInt(val, 10);
+            if (!isNaN(n)) retry = n;
+            break;
+          }
+        }
+      }
+    }
+    // Flush any remaining event
+    if (data.length > 0 || event !== undefined) {
+      yield createSSEEvent({ event, data: data.join('\n'), id, retry });
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 

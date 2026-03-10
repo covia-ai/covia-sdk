@@ -462,3 +462,16 @@ describe('Venue.getMetadata', () => {
     await expect(venue.getMetadata('missing')).rejects.toThrow(AssetNotFoundError);
   });
 });
+
+describe('Venue.close', () => {
+  it('can be called without error', () => {
+    const venue = new Venue({ baseUrl: 'https://test.com', venueId: 'did:web:test.com' });
+    expect(() => venue.close()).not.toThrow();
+  });
+
+  it('supports Symbol.dispose', () => {
+    const venue = new Venue({ baseUrl: 'https://test.com', venueId: 'did:web:test.com' });
+    expect(venue[Symbol.dispose]).toBeDefined();
+    expect(() => venue[Symbol.dispose]()).not.toThrow();
+  });
+});

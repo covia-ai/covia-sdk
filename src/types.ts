@@ -41,6 +41,8 @@ export interface VenueInterface {
   didDocument(): Promise<DIDDocument>;
   mcpDiscovery(): Promise<MCPDiscovery>;
   agentCard(): Promise<AgentCard>;
+  streamJobEvents(jobId: string): AsyncGenerator<SSEEvent>;
+  close(): void;
 
 }
 
@@ -175,6 +177,16 @@ export interface OperationInfo {
   input?: any;
   output?: any;
   [key: string]: any;
+}
+
+/** A single server-sent event received from a Covia venue. */
+export interface SSEEvent {
+  event: string | null;
+  data: string;
+  id: string | null;
+  retry: number | null;
+  /** Parse the event data as JSON. */
+  json: () => any;
 }
 
 export class CoviaError extends Error {

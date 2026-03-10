@@ -1,8 +1,8 @@
-import { CoviaError, VenueOptions, VenueData, AssetMetadata, VenueInterface, AssetID, StatusData, OperationInfo, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard, NotFoundError, AssetNotFoundError, JobNotFoundError } from './types';
+import { CoviaError, VenueOptions, VenueData, AssetMetadata, VenueInterface, AssetID, StatusData, OperationInfo, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard, NotFoundError, AssetNotFoundError, JobNotFoundError, SSEEvent } from './types';
 import { Asset } from './Asset';
 import { Operation } from './Operation';
 import { DataAsset } from './DataAsset';
-import { fetchStreamWithError, fetchWithError, isJobComplete } from './Utils';
+import { fetchStreamWithError, fetchWithError, isJobComplete, parseSSEStream } from './Utils';
 import { Auth, NoAuth } from './Credentials';
 import { Resolver } from 'did-resolver'
 import { getResolver } from 'web-did-resolver'
@@ -368,9 +368,36 @@ export class Venue implements VenueInterface {
       }
     }
 
+    /**
+     * Stream server-sent events for a job.
+     * @param jobId - Job identifier
+     * @returns AsyncGenerator yielding SSEEvent objects
+     */
+    async *streamJobEvents(jobId: string): AsyncGenerator<SSEEvent> {
+      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/sse`, {
+        headers: { ...this._buildHeaders(), 'Accept': 'text/event-stream' },
+      });
+      yield* parseSSEStream(response);
+    }
+
+    /**
+     * Close the venue and release resources.
+     * Clears cached asset data for this venue.
+     */
+    close(): void {
+      cache.clear();
+    }
+
+    /**
+     * Disposable support — allows `using venue = await Grid.connect(...)` in TS 5.2+.
+     */
+    [Symbol.dispose](): void {
+      this.close();
+    }
+
     private _buildHeaders(): Record<string, string> {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       this.auth.apply(headers);
       return headers;
     }
-} 
+}

@@ -239,6 +239,87 @@ function getAssetIdFromPath(assetHex, assetPath) {
 function getAssetIdFromVenueId(assetHex, venueId) {
   return venueId + "/a/" + assetHex;
 }
+function createSSEEvent(fields) {
+  const data = fields.data ?? "";
+  return {
+    event: fields.event || null,
+    data,
+    id: fields.id || null,
+    retry: fields.retry ?? null,
+    json() {
+      return JSON.parse(data);
+    }
+  };
+}
+async function* parseSSEStream(response) {
+  const reader = response.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let event;
+  let data = [];
+  let id;
+  let retry;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (line === "") {
+          if (data.length > 0 || event !== void 0) {
+            yield createSSEEvent({
+              event,
+              data: data.join("\n"),
+              id,
+              retry
+            });
+            event = void 0;
+            data = [];
+            id = void 0;
+            retry = void 0;
+          }
+          continue;
+        }
+        if (line.startsWith(":")) continue;
+        const colonIdx = line.indexOf(":");
+        let field;
+        let val;
+        if (colonIdx === -1) {
+          field = line;
+          val = "";
+        } else {
+          field = line.slice(0, colonIdx);
+          val = line.slice(colonIdx + 1);
+          if (val.startsWith(" ")) val = val.slice(1);
+        }
+        switch (field) {
+          case "event":
+            event = val;
+            break;
+          case "data":
+            data.push(val);
+            break;
+          case "id":
+            id = val;
+            break;
+          case "retry": {
+            const n = parseInt(val, 10);
+            if (!isNaN(n)) retry = n;
+            break;
+          }
+        }
+      }
+    }
+    if (data.length > 0 || event !== void 0) {
+      yield createSSEEvent({ event, data: data.join("\n"), id, retry });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 // src/Asset.ts
 var cache = /* @__PURE__ */ new Map();
@@ -406,6 +487,13 @@ var Job = class {
   async result(options) {
     await this.wait(options);
     return this.output;
+  }
+  /**
+   * Stream server-sent events for this job.
+   * @returns AsyncGenerator yielding SSEEvent objects
+   */
+  async *stream() {
+    yield* this.venue.streamJobEvents(this.id);
   }
   /**
    * Cancels the execution of the job
@@ -738,6 +826,30 @@ var Venue = class _Venue {
       throw error;
     }
   }
+  /**
+   * Stream server-sent events for a job.
+   * @param jobId - Job identifier
+   * @returns AsyncGenerator yielding SSEEvent objects
+   */
+  async *streamJobEvents(jobId) {
+    const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/sse`, {
+      headers: { ...this._buildHeaders(), "Accept": "text/event-stream" }
+    });
+    yield* parseSSEStream(response);
+  }
+  /**
+   * Close the venue and release resources.
+   * Clears cached asset data for this venue.
+   */
+  close() {
+    cache2.clear();
+  }
+  /**
+   * Disposable support — allows `using venue = await Grid.connect(...)` in TS 5.2+.
+   */
+  [Symbol.dispose]() {
+    this.close();
+  }
   _buildHeaders() {
     const headers = { "Content-Type": "application/json" };
     this.auth.apply(headers);
@@ -785,6 +897,7 @@ exports.NotFoundError = NotFoundError;
 exports.Operation = Operation;
 exports.RunStatus = RunStatus;
 exports.Venue = Venue;
+exports.createSSEEvent = createSSEEvent;
 exports.fetchStreamWithError = fetchStreamWithError;
 exports.fetchWithError = fetchWithError;
 exports.getAssetIdFromPath = getAssetIdFromPath;
@@ -794,3 +907,4 @@ exports.isJobComplete = isJobComplete;
 exports.isJobFinished = isJobFinished;
 exports.isJobPaused = isJobPaused;
 exports.logger = logger;
+exports.parseSSEStream = parseSSEStream;

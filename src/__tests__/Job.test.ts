@@ -1,5 +1,6 @@
 import { Job } from '../Job';
-import { RunStatus, VenueInterface, CoviaTimeoutError, JobFailedError } from '../types';
+import { RunStatus, VenueInterface, CoviaTimeoutError, JobFailedError, SSEEvent } from '../types';
+import { createSSEEvent } from '../Utils';
 
 function createMockVenue(overrides: Partial<VenueInterface> = {}): VenueInterface {
   return {
@@ -25,6 +26,8 @@ function createMockVenue(overrides: Partial<VenueInterface> = {}): VenueInterfac
     didDocument: jest.fn().mockResolvedValue({ id: 'did:web:example.com' }),
     mcpDiscovery: jest.fn().mockResolvedValue({}),
     agentCard: jest.fn().mockResolvedValue({}),
+    streamJobEvents: jest.fn(),
+    close: jest.fn(),
     ...overrides,
   };
 }
@@ -205,5 +208,33 @@ describe('Job.result', () => {
     const job = new Job('j1', venue, { status: RunStatus.STARTED });
 
     await expect(job.result({ timeout: 5000 })).rejects.toThrow(JobFailedError);
+  });
+});
+
+describe('Job.stream', () => {
+  it('delegates to venue.streamJobEvents', async () => {
+    const fakeEvents: SSEEvent[] = [
+      createSSEEvent({ event: 'status', data: '{"status":"STARTED"}' }),
+      createSSEEvent({ event: 'status', data: '{"status":"COMPLETE"}' }),
+    ];
+    async function* fakeGenerator(): AsyncGenerator<SSEEvent> {
+      for (const evt of fakeEvents) {
+        yield evt;
+      }
+    }
+    const venue = createMockVenue({
+      streamJobEvents: jest.fn().mockReturnValue(fakeGenerator()),
+    });
+    const job = new Job('j1', venue, { status: RunStatus.STARTED });
+
+    const collected: SSEEvent[] = [];
+    for await (const evt of job.stream()) {
+      collected.push(evt);
+    }
+
+    expect(venue.streamJobEvents).toHaveBeenCalledWith('j1');
+    expect(collected).toHaveLength(2);
+    expect(collected[0].json()).toEqual({ status: 'STARTED' });
+    expect(collected[1].json()).toEqual({ status: 'COMPLETE' });
   });
 });
