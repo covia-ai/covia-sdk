@@ -17,13 +17,20 @@ export interface VenueConstructor {
   connect(venueId: string | Venue, auth?: Auth):Promise<Venue>;
 }
 
+export interface InvokeOptions {
+  ucans?: string[];
+}
+
 export interface VenueInterface {
   baseUrl: string;
   venueId: string;
   metadata: VenueData;
-  
+
   cancelJob(jobId:string):Promise<number>;
   deleteJob(jobId:string):Promise<number>;
+  sendJobMessage(jobId: string, message: any): Promise<any>;
+  pauseJob(jobId: string): Promise<number>;
+  resumeJob(jobId: string): Promise<number>;
   status():Promise<StatusData>;
   getJob(jobId:string):Promise<Job>;
   listJobs():Promise<string[]>;
@@ -33,8 +40,8 @@ export interface VenueInterface {
   readStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> ;
   putContent(assetId:string, content:BodyInit):Promise<ReadableStream<Uint8Array> | null>;
   getContent(assetId:string):Promise<ReadableStream<Uint8Array> | null>;
-  run(assetId:string, input:any):Promise<any>;
-  invoke(assetId:string, input:any):Promise<Job>;
+  run(assetId:string, input:any, options?: InvokeOptions):Promise<any>;
+  invoke(assetId:string, input:any, options?: InvokeOptions):Promise<Job>;
   listAssets(options?: AssetListOptions): Promise<AssetList>;
   listOperations(): Promise<OperationInfo[]>;
   getOperation(name: string): Promise<OperationInfo>;
@@ -42,6 +49,9 @@ export interface VenueInterface {
   mcpDiscovery(): Promise<MCPDiscovery>;
   agentCard(): Promise<AgentCard>;
   streamJobEvents(jobId: string): AsyncGenerator<SSEEvent>;
+  listSecrets(): Promise<string[]>;
+  putSecret(name: string, value: string): Promise<void>;
+  deleteSecret(name: string): Promise<void>;
   close(): void;
 
 }
@@ -187,6 +197,247 @@ export interface SSEEvent {
   retry: number | null;
   /** Parse the event data as JSON. */
   json: () => any;
+}
+
+// ── Agent Types ──
+
+export enum AgentStatus {
+  SLEEPING = "SLEEPING",
+  RUNNING = "RUNNING",
+  SUSPENDED = "SUSPENDED",
+  TERMINATED = "TERMINATED"
+}
+
+export interface AgentCreateInput {
+  agentId: string;
+  config?: Record<string, any>;
+  state?: Record<string, any>;
+  overwrite?: boolean;
+}
+
+export interface AgentCreateResult {
+  agentId: string;
+  status: string;
+  created: boolean;
+}
+
+export interface AgentRequestInput {
+  agentId: string;
+  input?: any;
+  wait?: boolean | number;
+}
+
+export interface AgentRequestResult {
+  id: string;
+  status: string;
+  output?: any;
+}
+
+export interface AgentMessageInput {
+  agentId: string;
+  message: any;
+}
+
+export interface AgentMessageResult {
+  agentId: string;
+  delivered: boolean;
+}
+
+export interface AgentTriggerInput {
+  agentId: string;
+}
+
+export interface AgentTriggerResult {
+  agentId: string;
+  status: string;
+  result?: any;
+  taskResults?: any[];
+}
+
+export interface AgentQueryInput {
+  agentId: string;
+}
+
+export interface AgentQueryResult {
+  agentId: string;
+  status: string;
+  state?: Record<string, any>;
+  config?: Record<string, any>;
+  tasks?: any[];
+  [key: string]: any;
+}
+
+export interface AgentListInput {
+  includeTerminated?: boolean;
+}
+
+export interface AgentListResult {
+  agents: Array<{
+    agentId: string;
+    status: string;
+    tasks: number;
+  }>;
+}
+
+export interface AgentDeleteInput {
+  agentId: string;
+  remove?: boolean;
+}
+
+export interface AgentDeleteResult {
+  agentId: string;
+  status: string;
+  removed?: boolean;
+}
+
+export interface AgentSuspendResult {
+  agentId: string;
+  status: string;
+}
+
+export interface AgentResumeInput {
+  agentId: string;
+  autoWake?: boolean;
+}
+
+export interface AgentUpdateInput {
+  agentId: string;
+  config?: Record<string, any>;
+  state?: Record<string, any>;
+}
+
+export interface AgentCancelTaskInput {
+  agentId: string;
+  taskId: string;
+}
+
+// ── Workspace Types ──
+
+export interface WorkspaceReadInput {
+  path: string;
+  maxSize?: number;
+}
+
+export interface WorkspaceReadResult {
+  exists: boolean;
+  value?: any;
+  truncated?: boolean;
+  size?: number;
+}
+
+export interface WorkspaceWriteInput {
+  path: string;
+  value: any;
+}
+
+export interface WorkspaceWriteResult {
+  written: boolean;
+}
+
+export interface WorkspaceDeleteInput {
+  path: string;
+}
+
+export interface WorkspaceDeleteResult {
+  deleted: boolean;
+}
+
+export interface WorkspaceAppendInput {
+  path: string;
+  value: any;
+}
+
+export interface WorkspaceAppendResult {
+  appended: boolean;
+}
+
+export interface WorkspaceListInput {
+  path?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface WorkspaceListResult {
+  exists: boolean;
+  type: string;
+  count?: number;
+  keys?: string[];
+  values?: any[];
+  offset?: number;
+}
+
+export interface WorkspaceSliceInput {
+  path: string;
+  offset?: number;
+  limit?: number;
+}
+
+export interface WorkspaceSliceResult {
+  exists: boolean;
+  type: string;
+  values: any[];
+  count: number;
+  offset: number;
+}
+
+// ── UCAN Types ──
+
+export interface UCANAttenuation {
+  with: string;
+  can: string;
+}
+
+export interface UCANIssueInput {
+  aud: string;
+  att: UCANAttenuation[];
+  exp: number;
+}
+
+export interface UCANIssueResult {
+  [key: string]: any;
+}
+
+// ── Secret Types ──
+
+export interface SecretSetInput {
+  name: string;
+  value: string;
+}
+
+export interface SecretSetResult {
+  name: string;
+  stored: boolean;
+}
+
+export interface SecretExtractInput {
+  name: string;
+}
+
+export interface SecretExtractResult {
+  name: string;
+  value: string;
+}
+
+// ── Discovery Types ──
+
+export interface FunctionInfo {
+  name: string;
+  id: string;
+  description?: string;
+}
+
+export interface FunctionsResult {
+  functions: FunctionInfo[];
+}
+
+export interface AdapterInfo {
+  name: string;
+  description?: string;
+  operations: string[];
+}
+
+export interface AdaptersResult {
+  adapters: AdapterInfo[];
 }
 
 export class CoviaError extends Error {

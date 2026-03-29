@@ -9,6 +9,9 @@ function createMockVenue(overrides: Partial<VenueInterface> = {}): VenueInterfac
     metadata: { name: 'Test Venue' },
     cancelJob: jest.fn().mockResolvedValue(200),
     deleteJob: jest.fn().mockResolvedValue(200),
+    sendJobMessage: jest.fn().mockResolvedValue({ status: 'queued', queueDepth: 1 }),
+    pauseJob: jest.fn().mockResolvedValue(200),
+    resumeJob: jest.fn().mockResolvedValue(200),
     status: jest.fn(),
     getJob: jest.fn(),
     listJobs: jest.fn(),
@@ -27,6 +30,9 @@ function createMockVenue(overrides: Partial<VenueInterface> = {}): VenueInterfac
     mcpDiscovery: jest.fn().mockResolvedValue({}),
     agentCard: jest.fn().mockResolvedValue({}),
     streamJobEvents: jest.fn(),
+    listSecrets: jest.fn().mockResolvedValue([]),
+    putSecret: jest.fn().mockResolvedValue(undefined),
+    deleteSecret: jest.fn().mockResolvedValue(undefined),
     close: jest.fn(),
     ...overrides,
   };
@@ -208,6 +214,70 @@ describe('Job.result', () => {
     const job = new Job('j1', venue, { status: RunStatus.STARTED });
 
     await expect(job.result({ timeout: 5000 })).rejects.toThrow(JobFailedError);
+  });
+});
+
+describe('Job.isPaused / needsInput / needsAuth', () => {
+  it('isPaused returns true for PAUSED status', () => {
+    const venue = createMockVenue();
+    expect(new Job('j', venue, { status: RunStatus.PAUSED }).isPaused).toBe(true);
+  });
+
+  it('isPaused returns true for INPUT_REQUIRED status', () => {
+    const venue = createMockVenue();
+    expect(new Job('j', venue, { status: RunStatus.INPUT_REQUIRED }).isPaused).toBe(true);
+  });
+
+  it('isPaused returns true for AUTH_REQUIRED status', () => {
+    const venue = createMockVenue();
+    expect(new Job('j', venue, { status: RunStatus.AUTH_REQUIRED }).isPaused).toBe(true);
+  });
+
+  it('isPaused returns false for non-paused statuses', () => {
+    const venue = createMockVenue();
+    expect(new Job('j', venue, { status: RunStatus.STARTED }).isPaused).toBe(false);
+    expect(new Job('j', venue, { status: RunStatus.COMPLETE }).isPaused).toBe(false);
+  });
+
+  it('needsInput returns true only for INPUT_REQUIRED', () => {
+    const venue = createMockVenue();
+    expect(new Job('j', venue, { status: RunStatus.INPUT_REQUIRED }).needsInput).toBe(true);
+    expect(new Job('j', venue, { status: RunStatus.PAUSED }).needsInput).toBe(false);
+  });
+
+  it('needsAuth returns true only for AUTH_REQUIRED', () => {
+    const venue = createMockVenue();
+    expect(new Job('j', venue, { status: RunStatus.AUTH_REQUIRED }).needsAuth).toBe(true);
+    expect(new Job('j', venue, { status: RunStatus.PAUSED }).needsAuth).toBe(false);
+  });
+});
+
+describe('Job.sendMessage / pause / resume', () => {
+  it('sendMessage delegates to venue.sendJobMessage', async () => {
+    const venue = createMockVenue();
+    const job = new Job('job-msg', venue, { status: RunStatus.INPUT_REQUIRED });
+
+    const result = await job.sendMessage({ text: 'hello' });
+    expect(venue.sendJobMessage).toHaveBeenCalledWith('job-msg', { text: 'hello' });
+    expect(result).toEqual({ status: 'queued', queueDepth: 1 });
+  });
+
+  it('pause delegates to venue.pauseJob', async () => {
+    const venue = createMockVenue();
+    const job = new Job('job-p', venue, { status: RunStatus.STARTED });
+
+    const result = await job.pause();
+    expect(venue.pauseJob).toHaveBeenCalledWith('job-p');
+    expect(result).toBe(200);
+  });
+
+  it('resume delegates to venue.resumeJob', async () => {
+    const venue = createMockVenue();
+    const job = new Job('job-r', venue, { status: RunStatus.PAUSED });
+
+    const result = await job.resume();
+    expect(venue.resumeJob).toHaveBeenCalledWith('job-r');
+    expect(result).toBe(200);
   });
 });
 

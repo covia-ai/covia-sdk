@@ -11,3 +11,7 @@ export { Asset } from './Asset';
 export { Operation } from './Operation';
 export { DataAsset } from './DataAsset';
 export { Job } from './Job';
+export { AgentManager } from './AgentManager';
+export { WorkspaceManager } from './WorkspaceManager';
+export { UCANManager } from './UCANManager';
+export { SecretManager } from './SecretManager';

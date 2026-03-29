@@ -4,20 +4,27 @@ var didResolver = require('did-resolver');
 var webDidResolver = require('web-did-resolver');
 
 // src/types.ts
-var RunStatus = /* @__PURE__ */ ((RunStatus3) => {
-  RunStatus3["COMPLETE"] = "COMPLETE";
-  RunStatus3["FAILED"] = "FAILED";
-  RunStatus3["PENDING"] = "PENDING";
-  RunStatus3["STARTED"] = "STARTED";
-  RunStatus3["CANCELLED"] = "CANCELLED";
-  RunStatus3["TIMEOUT"] = "TIMEOUT";
-  RunStatus3["REJECTED"] = "REJECTED";
-  RunStatus3["INPUT_REQUIRED"] = "INPUT_REQUIRED";
-  RunStatus3["AUTH_REQUIRED"] = "AUTH_REQUIRED";
-  RunStatus3["PAUSED"] = "PAUSED";
-  return RunStatus3;
+var RunStatus = /* @__PURE__ */ ((RunStatus2) => {
+  RunStatus2["COMPLETE"] = "COMPLETE";
+  RunStatus2["FAILED"] = "FAILED";
+  RunStatus2["PENDING"] = "PENDING";
+  RunStatus2["STARTED"] = "STARTED";
+  RunStatus2["CANCELLED"] = "CANCELLED";
+  RunStatus2["TIMEOUT"] = "TIMEOUT";
+  RunStatus2["REJECTED"] = "REJECTED";
+  RunStatus2["INPUT_REQUIRED"] = "INPUT_REQUIRED";
+  RunStatus2["AUTH_REQUIRED"] = "AUTH_REQUIRED";
+  RunStatus2["PAUSED"] = "PAUSED";
+  return RunStatus2;
 })(RunStatus || {});
 var JobStatus = RunStatus;
+var AgentStatus = /* @__PURE__ */ ((AgentStatus2) => {
+  AgentStatus2["SLEEPING"] = "SLEEPING";
+  AgentStatus2["RUNNING"] = "RUNNING";
+  AgentStatus2["SUSPENDED"] = "SUSPENDED";
+  AgentStatus2["TERMINATED"] = "TERMINATED";
+  return AgentStatus2;
+})(AgentStatus || {});
 var CoviaError = class extends Error {
   constructor(message, code = null) {
     super(message);
@@ -321,6 +328,117 @@ async function* parseSSEStream(response) {
   }
 }
 
+// src/AgentManager.ts
+var AgentManager = class {
+  constructor(venue) {
+    this.venue = venue;
+  }
+  async create(input) {
+    return this.venue.run("agent:create", input);
+  }
+  async request(agentId, input, wait) {
+    return this.venue.run("agent:request", { agentId, input, wait });
+  }
+  async message(agentId, message) {
+    return this.venue.run("agent:message", { agentId, message });
+  }
+  async trigger(agentId) {
+    return this.venue.run("agent:trigger", { agentId });
+  }
+  async query(agentId) {
+    return this.venue.run("agent:query", { agentId });
+  }
+  async list(includeTerminated) {
+    return this.venue.run("agent:list", { includeTerminated });
+  }
+  async delete(agentId, remove) {
+    return this.venue.run("agent:delete", { agentId, remove });
+  }
+  async suspend(agentId) {
+    return this.venue.run("agent:suspend", { agentId });
+  }
+  async resume(agentId, autoWake) {
+    return this.venue.run("agent:resume", { agentId, autoWake });
+  }
+  async update(input) {
+    return this.venue.run("agent:update", input);
+  }
+  async cancelTask(agentId, taskId) {
+    return this.venue.run("agent:cancelTask", { agentId, taskId });
+  }
+};
+
+// src/WorkspaceManager.ts
+var WorkspaceManager = class {
+  constructor(venue) {
+    this.venue = venue;
+  }
+  async read(path, maxSize) {
+    return this.venue.run("covia:read", { path, maxSize });
+  }
+  async write(path, value) {
+    return this.venue.run("covia:write", { path, value });
+  }
+  async delete(path) {
+    return this.venue.run("covia:delete", { path });
+  }
+  async append(path, value) {
+    return this.venue.run("covia:append", { path, value });
+  }
+  async list(path, limit, offset) {
+    return this.venue.run("covia:list", { path, limit, offset });
+  }
+  async slice(path, offset, limit) {
+    return this.venue.run("covia:slice", { path, offset, limit });
+  }
+  async functions() {
+    return this.venue.run("covia:functions", {});
+  }
+  async describe(name) {
+    return this.venue.run("covia:describe", { name });
+  }
+  async adapters() {
+    return this.venue.run("covia:adapters", {});
+  }
+};
+
+// src/UCANManager.ts
+var UCANManager = class {
+  constructor(venue) {
+    this.venue = venue;
+  }
+  async issue(aud, att, exp) {
+    return this.venue.run("ucan:issue", { aud, att, exp });
+  }
+};
+
+// src/SecretManager.ts
+var SecretManager = class {
+  constructor(venue) {
+    this.venue = venue;
+  }
+  async set(name, value) {
+    return this.venue.run("secret:set", { name, value });
+  }
+  /**
+   * Extract a secret value by name.
+   * NOTE: This operation requires a UCAN capability grant. The backend
+   * may reject requests that lack the appropriate capability proof.
+   */
+  async extract(name) {
+    return this.venue.run("secret:extract", { name });
+  }
+  async list() {
+    return this.venue.listSecrets();
+  }
+  async put(name, value) {
+    return this.venue.putSecret(name, value);
+  }
+  async delete(name) {
+    return this.venue.deleteSecret(name);
+  }
+};
+
 // src/Asset.ts
 var cache = /* @__PURE__ */ new Map();
 var Asset = class {
@@ -496,6 +614,46 @@ var Job = class {
     yield* this.venue.streamJobEvents(this.id);
   }
   /**
+   * Whether the job is paused (PAUSED, INPUT_REQUIRED, or AUTH_REQUIRED)
+   */
+  get isPaused() {
+    return this.metadata.status != null && isJobPaused(this.metadata.status);
+  }
+  /**
+   * Whether the job requires user input
+   */
+  get needsInput() {
+    return this.metadata.status === "INPUT_REQUIRED" /* INPUT_REQUIRED */;
+  }
+  /**
+   * Whether the job requires authentication
+   */
+  get needsAuth() {
+    return this.metadata.status === "AUTH_REQUIRED" /* AUTH_REQUIRED */;
+  }
+  /**
+   * Send a message to the running job
+   * @param message - Message payload
+   * @returns {Promise<any>}
+   */
+  async sendMessage(message) {
+    return this.venue.sendJobMessage(this.id, message);
+  }
+  /**
+   * Pause the job
+   * @returns {Promise<number>}
+   */
+  async pause() {
+    return this.venue.pauseJob(this.id);
+  }
+  /**
+   * Resume the job
+   * @returns {Promise<number>}
+   */
+  async resume() {
+    return this.venue.resumeJob(this.id);
+  }
+  /**
    * Cancels the execution of the job
    * @returns {Promise<number>}
    */
@@ -516,6 +674,18 @@ var webResolver = webDidResolver.getResolver();
 var resolver = new didResolver.Resolver(webResolver);
 var cache2 = /* @__PURE__ */ new Map();
 var Venue = class _Venue {
+  get agents() {
+    return this._agents ?? (this._agents = new AgentManager(this));
+  }
+  get workspace() {
+    return this._workspace ?? (this._workspace = new WorkspaceManager(this));
+  }
+  get ucan() {
+    return this._ucan ?? (this._ucan = new UCANManager(this));
+  }
+  get secrets() {
+    return this._secrets ?? (this._secrets = new SecretManager(this));
+  }
   constructor(options = {}) {
     this.baseUrl = options.baseUrl || "";
     this.venueId = options.venueId || "";
@@ -693,6 +863,96 @@ var Venue = class _Venue {
     }
   }
   /**
+   * Send a message to a running job
+   * @param jobId - Job identifier
+   * @param message - Message payload
+   * @returns {Promise<any>}
+   */
+  async sendJobMessage(jobId, message) {
+    try {
+      return await fetchWithError(`${this.baseUrl}/api/v1/jobs/${jobId}`, {
+        method: "POST",
+        headers: this._buildHeaders(),
+        body: JSON.stringify(message)
+      });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw new JobNotFoundError(jobId);
+      }
+      throw error;
+    }
+  }
+  /**
+   * Pause a running job
+   * @param jobId - Job identifier
+   * @returns {Promise<number>}
+   */
+  async pauseJob(jobId) {
+    try {
+      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/pause`, {
+        method: "PUT",
+        headers: this._buildHeaders()
+      });
+      return response.status;
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw new JobNotFoundError(jobId);
+      }
+      throw error;
+    }
+  }
+  /**
+   * Resume a paused job
+   * @param jobId - Job identifier
+   * @returns {Promise<number>}
+   */
+  async resumeJob(jobId) {
+    try {
+      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/resume`, {
+        method: "PUT",
+        headers: this._buildHeaders()
+      });
+      return response.status;
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw new JobNotFoundError(jobId);
+      }
+      throw error;
+    }
+  }
+  /**
+   * List secret names
+   * @returns {Promise<string[]>}
+   */
+  async listSecrets() {
+    const result = await fetchWithError(`${this.baseUrl}/api/v1/secrets`, {
+      headers: this._buildHeaders()
+    });
+    return result.items;
+  }
+  /**
+   * Store a secret value
+   * @param name - Secret name
+   * @param value - Secret value
+   */
+  async putSecret(name, value) {
+    await fetchWithError(`${this.baseUrl}/api/v1/secrets/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      headers: this._buildHeaders(),
+      body: JSON.stringify({ value })
+    });
+  }
+  /**
+   * Delete a secret
+   * @param name - Secret name
+   */
+  async deleteSecret(name) {
+    await fetchStreamWithError(`${this.baseUrl}/api/v1/secrets/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+      headers: this._buildHeaders()
+    });
+  }
+  /**
    * Get venue status
    * @returns {Promise<StatusData>}
    */
@@ -789,13 +1049,16 @@ var Venue = class _Venue {
      * @param input - Operation input parameters
      * @returns {Promise<any>}
      */
-  async run(assetId, input) {
+  async run(assetId, input, options) {
     const payload = {
       operation: assetId,
       input
     };
+    if (options?.ucans) {
+      payload.ucans = options.ucans;
+    }
     try {
-      const response = await fetchWithError(`${this.baseUrl}/api/v1/invoke/`, {
+      const response = await fetchWithError(`${this.baseUrl}/api/v1/invoke`, {
         method: "POST",
         headers: this._buildHeaders(),
         body: JSON.stringify(payload)
@@ -810,13 +1073,16 @@ var Venue = class _Venue {
   * @param input - Operation input parameters
   * @returns {Promise<Job>}
   */
-  async invoke(assetId, input) {
+  async invoke(assetId, input, options) {
     const payload = {
       operation: assetId,
       input
     };
+    if (options?.ucans) {
+      payload.ucans = options.ucans;
+    }
     try {
-      const response = await fetchWithError(`${this.baseUrl}/api/v1/invoke/`, {
+      const response = await fetchWithError(`${this.baseUrl}/api/v1/invoke`, {
         method: "POST",
         headers: this._buildHeaders(),
         body: JSON.stringify(payload)
@@ -875,6 +1141,8 @@ var Grid = class {
   }
 };
 
+exports.AgentManager = AgentManager;
+exports.AgentStatus = AgentStatus;
 exports.Asset = Asset;
 exports.AssetNotFoundError = AssetNotFoundError;
 exports.Auth = Auth;
@@ -896,7 +1164,10 @@ exports.NoAuth = NoAuth;
 exports.NotFoundError = NotFoundError;
 exports.Operation = Operation;
 exports.RunStatus = RunStatus;
+exports.SecretManager = SecretManager;
+exports.UCANManager = UCANManager;
 exports.Venue = Venue;
+exports.WorkspaceManager = WorkspaceManager;
 exports.createSSEEvent = createSSEEvent;
 exports.fetchStreamWithError = fetchStreamWithError;
 exports.fetchWithError = fetchWithError;

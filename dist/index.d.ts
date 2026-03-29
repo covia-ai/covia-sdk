@@ -47,6 +47,34 @@ declare class Job {
      */
     stream(): AsyncGenerator<SSEEvent>;
     /**
+     * Whether the job is paused (PAUSED, INPUT_REQUIRED, or AUTH_REQUIRED)
+     */
+    get isPaused(): boolean;
+    /**
+     * Whether the job requires user input
+     */
+    get needsInput(): boolean;
+    /**
+     * Whether the job requires authentication
+     */
+    get needsAuth(): boolean;
+    /**
+     * Send a message to the running job
+     * @param message - Message payload
+     * @returns {Promise<any>}
+     */
+    sendMessage(message: any): Promise<any>;
+    /**
+     * Pause the job
+     * @returns {Promise<number>}
+     */
+    pause(): Promise<number>;
+    /**
+     * Resume the job
+     * @returns {Promise<number>}
+     */
+    resume(): Promise<number>;
+    /**
      * Cancels the execution of the job
      * @returns {Promise<number>}
      */
@@ -169,11 +197,70 @@ declare class CredentialsHTTP implements Credentials {
     constructor(venueId: string, apiKey: string, userId: string);
 }
 
+declare class AgentManager {
+    private venue;
+    constructor(venue: VenueInterface);
+    create(input: AgentCreateInput): Promise<AgentCreateResult>;
+    request(agentId: string, input?: any, wait?: boolean | number): Promise<AgentRequestResult>;
+    message(agentId: string, message: any): Promise<AgentMessageResult>;
+    trigger(agentId: string): Promise<AgentTriggerResult>;
+    query(agentId: string): Promise<AgentQueryResult>;
+    list(includeTerminated?: boolean): Promise<AgentListResult>;
+    delete(agentId: string, remove?: boolean): Promise<AgentDeleteResult>;
+    suspend(agentId: string): Promise<AgentSuspendResult>;
+    resume(agentId: string, autoWake?: boolean): Promise<AgentSuspendResult>;
+    update(input: AgentUpdateInput): Promise<any>;
+    cancelTask(agentId: string, taskId: string): Promise<any>;
+}
+
+declare class WorkspaceManager {
+    private venue;
+    constructor(venue: VenueInterface);
+    read(path: string, maxSize?: number): Promise<WorkspaceReadResult>;
+    write(path: string, value: any): Promise<WorkspaceWriteResult>;
+    delete(path: string): Promise<WorkspaceDeleteResult>;
+    append(path: string, value: any): Promise<WorkspaceAppendResult>;
+    list(path?: string, limit?: number, offset?: number): Promise<WorkspaceListResult>;
+    slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult>;
+    functions(): Promise<FunctionsResult>;
+    describe(name: string): Promise<any>;
+    adapters(): Promise<AdaptersResult>;
+}
+
+declare class UCANManager {
+    private venue;
+    constructor(venue: VenueInterface);
+    issue(aud: string, att: UCANAttenuation[], exp: number): Promise<UCANIssueResult>;
+}
+
+declare class SecretManager {
+    private venue;
+    constructor(venue: VenueInterface);
+    set(name: string, value: string): Promise<SecretSetResult>;
+    /**
+     * Extract a secret value by name.
+     * NOTE: This operation requires a UCAN capability grant. The backend
+     * may reject requests that lack the appropriate capability proof.
+     */
+    extract(name: string): Promise<SecretExtractResult>;
+    list(): Promise<string[]>;
+    put(name: string, value: string): Promise<void>;
+    delete(name: string): Promise<void>;
+}
+
 declare class Venue implements VenueInterface {
     baseUrl: string;
     venueId: string;
     auth: Auth;
     metadata: VenueData;
+    private _agents?;
+    private _workspace?;
+    private _ucan?;
+    private _secrets?;
+    get agents(): AgentManager;
+    get workspace(): WorkspaceManager;
+    get ucan(): UCANManager;
+    get secrets(): SecretManager;
     constructor(options?: VenueOptions);
     /**
      * Static method to connect to a venue
@@ -229,6 +316,41 @@ declare class Venue implements VenueInterface {
     */
     deleteJob(jobId: string): Promise<number>;
     /**
+     * Send a message to a running job
+     * @param jobId - Job identifier
+     * @param message - Message payload
+     * @returns {Promise<any>}
+     */
+    sendJobMessage(jobId: string, message: any): Promise<any>;
+    /**
+     * Pause a running job
+     * @param jobId - Job identifier
+     * @returns {Promise<number>}
+     */
+    pauseJob(jobId: string): Promise<number>;
+    /**
+     * Resume a paused job
+     * @param jobId - Job identifier
+     * @returns {Promise<number>}
+     */
+    resumeJob(jobId: string): Promise<number>;
+    /**
+     * List secret names
+     * @returns {Promise<string[]>}
+     */
+    listSecrets(): Promise<string[]>;
+    /**
+     * Store a secret value
+     * @param name - Secret name
+     * @param value - Secret value
+     */
+    putSecret(name: string, value: string): Promise<void>;
+    /**
+     * Delete a secret
+     * @param name - Secret name
+     */
+    deleteSecret(name: string): Promise<void>;
+    /**
      * Get venue status
      * @returns {Promise<StatusData>}
      */
@@ -280,13 +402,13 @@ declare class Venue implements VenueInterface {
        * @param input - Operation input parameters
        * @returns {Promise<any>}
        */
-    run(assetId: string, input: any): Promise<any>;
+    run(assetId: string, input: any, options?: InvokeOptions): Promise<any>;
     /**
     * Execute the operation
     * @param input - Operation input parameters
     * @returns {Promise<Job>}
     */
-    invoke(assetId: string, input: any): Promise<Job>;
+    invoke(assetId: string, input: any, options?: InvokeOptions): Promise<Job>;
     /**
      * Stream server-sent events for a job.
      * @param jobId - Job identifier
@@ -316,12 +438,18 @@ interface VenueConstructor {
     new (): VenueInterface;
     connect(venueId: string | Venue, auth?: Auth): Promise<Venue>;
 }
+interface InvokeOptions {
+    ucans?: string[];
+}
 interface VenueInterface {
     baseUrl: string;
     venueId: string;
     metadata: VenueData;
     cancelJob(jobId: string): Promise<number>;
     deleteJob(jobId: string): Promise<number>;
+    sendJobMessage(jobId: string, message: any): Promise<any>;
+    pauseJob(jobId: string): Promise<number>;
+    resumeJob(jobId: string): Promise<number>;
     status(): Promise<StatusData>;
     getJob(jobId: string): Promise<Job>;
     listJobs(): Promise<string[]>;
@@ -331,8 +459,8 @@ interface VenueInterface {
     readStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void>;
     putContent(assetId: string, content: BodyInit): Promise<ReadableStream<Uint8Array> | null>;
     getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null>;
-    run(assetId: string, input: any): Promise<any>;
-    invoke(assetId: string, input: any): Promise<Job>;
+    run(assetId: string, input: any, options?: InvokeOptions): Promise<any>;
+    invoke(assetId: string, input: any, options?: InvokeOptions): Promise<Job>;
     listAssets(options?: AssetListOptions): Promise<AssetList>;
     listOperations(): Promise<OperationInfo[]>;
     getOperation(name: string): Promise<OperationInfo>;
@@ -340,6 +468,9 @@ interface VenueInterface {
     mcpDiscovery(): Promise<MCPDiscovery>;
     agentCard(): Promise<AgentCard>;
     streamJobEvents(jobId: string): AsyncGenerator<SSEEvent>;
+    listSecrets(): Promise<string[]>;
+    putSecret(name: string, value: string): Promise<void>;
+    deleteSecret(name: string): Promise<void>;
     close(): void;
 }
 type AssetID = string;
@@ -466,6 +597,195 @@ interface SSEEvent {
     retry: number | null;
     /** Parse the event data as JSON. */
     json: () => any;
+}
+declare enum AgentStatus {
+    SLEEPING = "SLEEPING",
+    RUNNING = "RUNNING",
+    SUSPENDED = "SUSPENDED",
+    TERMINATED = "TERMINATED"
+}
+interface AgentCreateInput {
+    agentId: string;
+    config?: Record<string, any>;
+    state?: Record<string, any>;
+    overwrite?: boolean;
+}
+interface AgentCreateResult {
+    agentId: string;
+    status: string;
+    created: boolean;
+}
+interface AgentRequestInput {
+    agentId: string;
+    input?: any;
+    wait?: boolean | number;
+}
+interface AgentRequestResult {
+    id: string;
+    status: string;
+    output?: any;
+}
+interface AgentMessageInput {
+    agentId: string;
+    message: any;
+}
+interface AgentMessageResult {
+    agentId: string;
+    delivered: boolean;
+}
+interface AgentTriggerInput {
+    agentId: string;
+}
+interface AgentTriggerResult {
+    agentId: string;
+    status: string;
+    result?: any;
+    taskResults?: any[];
+}
+interface AgentQueryInput {
+    agentId: string;
+}
+interface AgentQueryResult {
+    agentId: string;
+    status: string;
+    state?: Record<string, any>;
+    config?: Record<string, any>;
+    tasks?: any[];
+    [key: string]: any;
+}
+interface AgentListInput {
+    includeTerminated?: boolean;
+}
+interface AgentListResult {
+    agents: Array<{
+        agentId: string;
+        status: string;
+        tasks: number;
+    }>;
+}
+interface AgentDeleteInput {
+    agentId: string;
+    remove?: boolean;
+}
+interface AgentDeleteResult {
+    agentId: string;
+    status: string;
+    removed?: boolean;
+}
+interface AgentSuspendResult {
+    agentId: string;
+    status: string;
+}
+interface AgentResumeInput {
+    agentId: string;
+    autoWake?: boolean;
+}
+interface AgentUpdateInput {
+    agentId: string;
+    config?: Record<string, any>;
+    state?: Record<string, any>;
+}
+interface AgentCancelTaskInput {
+    agentId: string;
+    taskId: string;
+}
+interface WorkspaceReadInput {
+    path: string;
+    maxSize?: number;
+}
+interface WorkspaceReadResult {
+    exists: boolean;
+    value?: any;
+    truncated?: boolean;
+    size?: number;
+}
+interface WorkspaceWriteInput {
+    path: string;
+    value: any;
+}
+interface WorkspaceWriteResult {
+    written: boolean;
+}
+interface WorkspaceDeleteInput {
+    path: string;
+}
+interface WorkspaceDeleteResult {
+    deleted: boolean;
+}
+interface WorkspaceAppendInput {
+    path: string;
+    value: any;
+}
+interface WorkspaceAppendResult {
+    appended: boolean;
+}
+interface WorkspaceListInput {
+    path?: string;
+    limit?: number;
+    offset?: number;
+}
+interface WorkspaceListResult {
+    exists: boolean;
+    type: string;
+    count?: number;
+    keys?: string[];
+    values?: any[];
+    offset?: number;
+}
+interface WorkspaceSliceInput {
+    path: string;
+    offset?: number;
+    limit?: number;
+}
+interface WorkspaceSliceResult {
+    exists: boolean;
+    type: string;
+    values: any[];
+    count: number;
+    offset: number;
+}
+interface UCANAttenuation {
+    with: string;
+    can: string;
+}
+interface UCANIssueInput {
+    aud: string;
+    att: UCANAttenuation[];
+    exp: number;
+}
+interface UCANIssueResult {
+    [key: string]: any;
+}
+interface SecretSetInput {
+    name: string;
+    value: string;
+}
+interface SecretSetResult {
+    name: string;
+    stored: boolean;
+}
+interface SecretExtractInput {
+    name: string;
+}
+interface SecretExtractResult {
+    name: string;
+    value: string;
+}
+interface FunctionInfo {
+    name: string;
+    id: string;
+    description?: string;
+}
+interface FunctionsResult {
+    functions: FunctionInfo[];
+}
+interface AdapterInfo {
+    name: string;
+    description?: string;
+    operations: string[];
+}
+interface AdaptersResult {
+    adapters: AdapterInfo[];
 }
 declare class CoviaError extends Error {
     code: number | null;
@@ -602,4 +922,4 @@ declare class DataAsset extends Asset {
     constructor(id: AssetID, venue: VenueInterface, metadata?: AssetMetadata);
 }
 
-export { type AgentCard, Asset, type AssetID, type AssetList, type AssetListOptions, type AssetMetadata, AssetNotFoundError, Auth, BasicAuth, BearerAuth, type ContentDetails, CoviaConnectionError, CoviaError, CoviaTimeoutError, CoviaUserAuth, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, Grid, GridError, type InvokePayload, Job, JobFailedError, type JobMetadata, JobNotFoundError, JobStatus, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, type OperationPayload, RunStatus, type SSEEvent, type StatsData, type StatusData, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, createSSEEvent, fetchStreamWithError, fetchWithError, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream };
+export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, type AssetMetadata, AssetNotFoundError, Auth, BasicAuth, BearerAuth, type ContentDetails, CoviaConnectionError, CoviaError, CoviaTimeoutError, CoviaUserAuth, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, type JobMetadata, JobNotFoundError, JobStatus, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, fetchStreamWithError, fetchWithError, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream };

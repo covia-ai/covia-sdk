@@ -329,7 +329,7 @@ describe('Venue.invoke and run', () => {
     expect(job.id).toBe('job-new');
 
     const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe('https://test.com/api/v1/invoke/');
+    expect(url).toBe('https://test.com/api/v1/invoke');
     expect(options.method).toBe('POST');
     const body = JSON.parse(options.body);
     expect(body.operation).toBe('op-1');
@@ -460,6 +460,125 @@ describe('Venue.getMetadata', () => {
   it('throws AssetNotFoundError on 404', async () => {
     mockFetchError(404);
     await expect(venue.getMetadata('missing')).rejects.toThrow(AssetNotFoundError);
+  });
+});
+
+describe('Venue.sendJobMessage / pauseJob / resumeJob', () => {
+  let venue: Venue;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    venue = new Venue({ baseUrl: 'https://test.com', venueId: 'did:web:test.com' });
+  });
+
+  it('sendJobMessage sends POST to job endpoint', async () => {
+    mockFetchSuccess({ status: 'queued', queueDepth: 1 });
+
+    const result = await venue.sendJobMessage('job-1', { text: 'hello' });
+    expect(result).toEqual({ status: 'queued', queueDepth: 1 });
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/jobs/job-1');
+    expect(mockFetch.mock.calls[0][1]?.method).toBe('POST');
+  });
+
+  it('sendJobMessage throws JobNotFoundError on 404', async () => {
+    mockFetchError(404);
+    await expect(venue.sendJobMessage('missing', {})).rejects.toThrow(JobNotFoundError);
+  });
+
+  it('pauseJob sends PUT and returns status', async () => {
+    mockFetchStreamSuccess(200);
+
+    const status = await venue.pauseJob('job-1');
+    expect(status).toBe(200);
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/jobs/job-1/pause');
+    expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
+  });
+
+  it('pauseJob throws JobNotFoundError on 404', async () => {
+    mockFetchError(404);
+    await expect(venue.pauseJob('missing')).rejects.toThrow(JobNotFoundError);
+  });
+
+  it('resumeJob sends PUT and returns status', async () => {
+    mockFetchStreamSuccess(200);
+
+    const status = await venue.resumeJob('job-1');
+    expect(status).toBe(200);
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/jobs/job-1/resume');
+    expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
+  });
+
+  it('resumeJob throws JobNotFoundError on 404', async () => {
+    mockFetchError(404);
+    await expect(venue.resumeJob('missing')).rejects.toThrow(JobNotFoundError);
+  });
+});
+
+describe('Venue.secrets REST', () => {
+  let venue: Venue;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    venue = new Venue({ baseUrl: 'https://test.com', venueId: 'did:web:test.com' });
+  });
+
+  it('listSecrets returns array of names', async () => {
+    mockFetchSuccess({ items: ['API_KEY', 'DB_PASS'], total: 2 });
+
+    const names = await venue.listSecrets();
+    expect(names).toEqual(['API_KEY', 'DB_PASS']);
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/secrets');
+  });
+
+  it('putSecret sends PUT with value', async () => {
+    mockFetchSuccess({ name: 'API_KEY', stored: true });
+
+    await venue.putSecret('API_KEY', 'secret-value');
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/secrets/API_KEY');
+    expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
+    const body = JSON.parse(mockFetch.mock.calls[0][1]?.body);
+    expect(body.value).toBe('secret-value');
+  });
+
+  it('deleteSecret sends DELETE', async () => {
+    mockFetchStreamSuccess(200);
+
+    await venue.deleteSecret('API_KEY');
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/secrets/API_KEY');
+    expect(mockFetch.mock.calls[0][1]?.method).toBe('DELETE');
+  });
+});
+
+describe('Venue.invoke and run with ucans', () => {
+  let venue: Venue;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    venue = new Venue({ baseUrl: 'https://test.com', venueId: 'did:web:test.com' });
+  });
+
+  it('run includes ucans in payload when provided', async () => {
+    mockFetchSuccess({ output: { answer: 42 } });
+
+    await venue.run('op-1', { q: 'test' }, { ucans: ['token1', 'token2'] });
+    const body = JSON.parse(mockFetch.mock.calls[0][1]?.body);
+    expect(body.ucans).toEqual(['token1', 'token2']);
+  });
+
+  it('run omits ucans when not provided', async () => {
+    mockFetchSuccess({ output: { answer: 42 } });
+
+    await venue.run('op-1', { q: 'test' });
+    const body = JSON.parse(mockFetch.mock.calls[0][1]?.body);
+    expect(body.ucans).toBeUndefined();
+  });
+
+  it('invoke includes ucans in payload when provided', async () => {
+    mockFetchSuccess({ id: 'job-1', status: 'COMPLETE' });
+
+    await venue.invoke('op-1', {}, { ucans: ['token1'] });
+    const body = JSON.parse(mockFetch.mock.calls[0][1]?.body);
+    expect(body.ucans).toEqual(['token1']);
   });
 });
 

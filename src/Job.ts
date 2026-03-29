@@ -1,5 +1,5 @@
 import { JobMetadata, RunStatus, CoviaTimeoutError, JobFailedError, VenueInterface, SSEEvent } from "./types";
-import { isJobFinished, isJobComplete } from "./Utils";
+import { isJobFinished, isJobComplete, isJobPaused } from "./Utils";
 import { logger } from "./Logger";
 
 const INITIAL_POLL_DELAY = 300;   // ms
@@ -100,6 +100,52 @@ export class Job {
    */
   async *stream(): AsyncGenerator<SSEEvent> {
     yield* this.venue.streamJobEvents(this.id);
+  }
+
+  /**
+   * Whether the job is paused (PAUSED, INPUT_REQUIRED, or AUTH_REQUIRED)
+   */
+  get isPaused(): boolean {
+    return this.metadata.status != null && isJobPaused(this.metadata.status);
+  }
+
+  /**
+   * Whether the job requires user input
+   */
+  get needsInput(): boolean {
+    return this.metadata.status === RunStatus.INPUT_REQUIRED;
+  }
+
+  /**
+   * Whether the job requires authentication
+   */
+  get needsAuth(): boolean {
+    return this.metadata.status === RunStatus.AUTH_REQUIRED;
+  }
+
+  /**
+   * Send a message to the running job
+   * @param message - Message payload
+   * @returns {Promise<any>}
+   */
+  async sendMessage(message: any): Promise<any> {
+    return this.venue.sendJobMessage(this.id, message);
+  }
+
+  /**
+   * Pause the job
+   * @returns {Promise<number>}
+   */
+  async pause(): Promise<number> {
+    return this.venue.pauseJob(this.id);
+  }
+
+  /**
+   * Resume the job
+   * @returns {Promise<number>}
+   */
+  async resume(): Promise<number> {
+    return this.venue.resumeJob(this.id);
   }
 
   /**

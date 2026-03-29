@@ -1,4 +1,8 @@
-import { CoviaError, VenueOptions, VenueData, AssetMetadata, VenueInterface, AssetID, StatusData, OperationInfo, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard, NotFoundError, AssetNotFoundError, JobNotFoundError, SSEEvent } from './types';
+import { CoviaError, VenueOptions, VenueData, AssetMetadata, VenueInterface, AssetID, StatusData, OperationInfo, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard, NotFoundError, AssetNotFoundError, JobNotFoundError, SSEEvent, InvokeOptions } from './types';
+import { AgentManager } from './AgentManager';
+import { WorkspaceManager } from './WorkspaceManager';
+import { UCANManager } from './UCANManager';
+import { SecretManager } from './SecretManager';
 import { Asset } from './Asset';
 import { Operation } from './Operation';
 import { DataAsset } from './DataAsset';
@@ -19,6 +23,16 @@ export class Venue implements VenueInterface {
   public venueId: string;
   public auth: Auth;
   public metadata: VenueData;
+
+  private _agents?: AgentManager;
+  private _workspace?: WorkspaceManager;
+  private _ucan?: UCANManager;
+  private _secrets?: SecretManager;
+
+  get agents(): AgentManager { return this._agents ??= new AgentManager(this); }
+  get workspace(): WorkspaceManager { return this._workspace ??= new WorkspaceManager(this); }
+  get ucan(): UCANManager { return this._ucan ??= new UCANManager(this); }
+  get secrets(): SecretManager { return this._secrets ??= new SecretManager(this); }
   
   constructor(options: VenueOptions = {}) {
     
@@ -222,6 +236,102 @@ export class Venue implements VenueInterface {
 
 
   /**
+   * Send a message to a running job
+   * @param jobId - Job identifier
+   * @param message - Message payload
+   * @returns {Promise<any>}
+   */
+  async sendJobMessage(jobId: string, message: any): Promise<any> {
+    try {
+      return await fetchWithError<any>(`${this.baseUrl}/api/v1/jobs/${jobId}`, {
+        method: 'POST',
+        headers: this._buildHeaders(),
+        body: JSON.stringify(message),
+      });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw new JobNotFoundError(jobId);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Pause a running job
+   * @param jobId - Job identifier
+   * @returns {Promise<number>}
+   */
+  async pauseJob(jobId: string): Promise<number> {
+    try {
+      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/pause`, {
+        method: 'PUT',
+        headers: this._buildHeaders(),
+      });
+      return response.status;
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw new JobNotFoundError(jobId);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Resume a paused job
+   * @param jobId - Job identifier
+   * @returns {Promise<number>}
+   */
+  async resumeJob(jobId: string): Promise<number> {
+    try {
+      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/resume`, {
+        method: 'PUT',
+        headers: this._buildHeaders(),
+      });
+      return response.status;
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw new JobNotFoundError(jobId);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * List secret names
+   * @returns {Promise<string[]>}
+   */
+  async listSecrets(): Promise<string[]> {
+    const result = await fetchWithError<{ items: string[]; total: number }>(`${this.baseUrl}/api/v1/secrets`, {
+      headers: this._buildHeaders(),
+    });
+    return result.items;
+  }
+
+  /**
+   * Store a secret value
+   * @param name - Secret name
+   * @param value - Secret value
+   */
+  async putSecret(name: string, value: string): Promise<void> {
+    await fetchWithError(`${this.baseUrl}/api/v1/secrets/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: this._buildHeaders(),
+      body: JSON.stringify({ value }),
+    });
+  }
+
+  /**
+   * Delete a secret
+   * @param name - Secret name
+   */
+  async deleteSecret(name: string): Promise<void> {
+    await fetchStreamWithError(`${this.baseUrl}/api/v1/secrets/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+      headers: this._buildHeaders(),
+    });
+  }
+
+  /**
    * Get venue status
    * @returns {Promise<StatusData>}
    */
@@ -328,14 +438,17 @@ export class Venue implements VenueInterface {
      * @param input - Operation input parameters
      * @returns {Promise<any>}
      */
-    async run(assetId:string,input: any ): Promise<any> {
-      const payload = {
+    async run(assetId:string,input: any, options?: InvokeOptions ): Promise<any> {
+      const payload: Record<string, any> = {
         operation: assetId,
         input: input
       };
-  
+      if (options?.ucans) {
+        payload.ucans = options.ucans;
+      }
+
       try {
-        const response =   await fetchWithError<any>(`${this.baseUrl}/api/v1/invoke/`, {
+        const response =   await fetchWithError<any>(`${this.baseUrl}/api/v1/invoke`, {
           method: 'POST',
           headers: this._buildHeaders(),
           body: JSON.stringify(payload),
@@ -351,13 +464,16 @@ export class Venue implements VenueInterface {
      * @param input - Operation input parameters
      * @returns {Promise<Job>}
      */
-    async invoke(assetId:string,input: any ): Promise<Job> {
-      const payload = {
+    async invoke(assetId:string,input: any, options?: InvokeOptions ): Promise<Job> {
+      const payload: Record<string, any> = {
         operation: assetId,
         input: input
       };
+      if (options?.ucans) {
+        payload.ucans = options.ucans;
+      }
         try {
-        const response =   await fetchWithError<any>(`${this.baseUrl}/api/v1/invoke/`, {
+        const response =   await fetchWithError<any>(`${this.baseUrl}/api/v1/invoke`, {
           method: 'POST',
           headers: this._buildHeaders(),
           body: JSON.stringify(payload),
