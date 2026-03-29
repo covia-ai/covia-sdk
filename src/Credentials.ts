@@ -46,6 +46,9 @@ export class BearerAuth extends Auth {
 /**
  * HTTP Basic authentication.
  * Adds `Authorization: Basic <base64(username:password)>` to every request.
+ *
+ * **Warning:** The Covia venue server does not support Basic authentication.
+ * Use {@link BearerAuth} with a JWT token instead for authenticated requests.
  */
 export class BasicAuth extends Auth {
   private _encoded: string;
@@ -62,6 +65,10 @@ export class BasicAuth extends Auth {
 
 /**
  * Custom auth that sets the X-Covia-User header for user identity tracking.
+ *
+ * **Warning:** The Covia venue server does not process the X-Covia-User header
+ * for authentication. Requests using this auth type will be treated as
+ * unauthenticated. Use {@link BearerAuth} with a JWT token instead.
  */
 export class CoviaUserAuth extends Auth {
   private _userId: string;

@@ -26,11 +26,11 @@ export interface VenueInterface {
   venueId: string;
   metadata: VenueData;
 
-  cancelJob(jobId:string):Promise<number>;
-  deleteJob(jobId:string):Promise<number>;
+  cancelJob(jobId:string):Promise<JobMetadata>;
+  deleteJob(jobId:string):Promise<void>;
   sendJobMessage(jobId: string, message: any): Promise<any>;
-  pauseJob(jobId: string): Promise<number>;
-  resumeJob(jobId: string): Promise<number>;
+  pauseJob(jobId: string): Promise<JobMetadata>;
+  resumeJob(jobId: string): Promise<JobMetadata>;
   status():Promise<StatusData>;
   getJob(jobId:string):Promise<Job>;
   listJobs():Promise<string[]>;
@@ -38,7 +38,7 @@ export interface VenueInterface {
   register(assetData: any): Promise<Asset>;
   getMetadata(assetId:string): Promise<AssetMetadata>;
   readStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> ;
-  putContent(assetId:string, content:BodyInit):Promise<ReadableStream<Uint8Array> | null>;
+  putContent(assetId:string, content:BodyInit):Promise<ContentHashResult>;
   getContent(assetId:string):Promise<ReadableStream<Uint8Array> | null>;
   run(assetId:string, input:any, options?: InvokeOptions):Promise<any>;
   invoke(assetId:string, input:any, options?: InvokeOptions):Promise<Job>;
@@ -95,6 +95,10 @@ export interface OperationPayload {
   [key: string]: any;
 }
 
+export interface ContentHashResult {
+  hash: string;
+}
+
 export interface JobMetadata {
   name?:string;
   status?: RunStatus;
@@ -102,7 +106,9 @@ export interface JobMetadata {
   updated?: string;
   input?: any;
   output?: any;
-  op?:string;
+  operation?:string;
+  caller?: string;
+  error?: string;
   [key: string]: any;
 }
 

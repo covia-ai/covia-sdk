@@ -1,4 +1,4 @@
-import { CoviaError, VenueOptions, VenueData, AssetMetadata, VenueInterface, AssetID, StatusData, OperationInfo, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard, NotFoundError, AssetNotFoundError, JobNotFoundError, SSEEvent, InvokeOptions } from './types';
+import { CoviaError, VenueOptions, VenueData, AssetMetadata, VenueInterface, AssetID, StatusData, OperationInfo, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard, NotFoundError, AssetNotFoundError, JobNotFoundError, JobMetadata, ContentHashResult, SSEEvent, InvokeOptions } from './types';
 import { AgentManager } from './AgentManager';
 import { WorkspaceManager } from './WorkspaceManager';
 import { UCANManager } from './UCANManager';
@@ -108,7 +108,7 @@ export class Venue implements VenueInterface {
    * @returns {Promise<Asset>}
    */
   async register(assetData: any): Promise<Asset> {
-    return fetchWithError<any>(`${this.baseUrl}/api/v1/assets/`, {
+    return fetchWithError<any>(`${this.baseUrl}/api/v1/assets`, {
       method: 'POST',
       headers: this._buildHeaders(),
       body: JSON.stringify(assetData),
@@ -171,7 +171,7 @@ export class Venue implements VenueInterface {
     if (options.limit !== undefined) {
       params.set('limit', String(options.limit));
     }
-    return fetchWithError<AssetList>(`${this.baseUrl}/api/v1/assets/?${params.toString()}`);
+    return fetchWithError<AssetList>(`${this.baseUrl}/api/v1/assets?${params.toString()}`);
   }
 
 
@@ -203,12 +203,14 @@ export class Venue implements VenueInterface {
    /**
    * Cancel job by ID
    * @param jobId - Job identifier
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
-  async cancelJob(jobId: string):  Promise<number> {
+  async cancelJob(jobId: string):  Promise<JobMetadata> {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/cancel`, { method: 'PUT'});
-      return response.status;
+      return await fetchWithError<JobMetadata>(`${this.baseUrl}/api/v1/jobs/${jobId}/cancel`, {
+        method: 'PUT',
+        headers: this._buildHeaders(),
+      });
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new JobNotFoundError(jobId);
@@ -220,12 +222,13 @@ export class Venue implements VenueInterface {
    /**
    * Delete job by ID
    * @param jobId - Job identifier
-   * @returns {Promise<number>}
    */
-  async deleteJob(jobId: string):  Promise<number> {
+  async deleteJob(jobId: string):  Promise<void> {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/delete`, { method: 'PUT'});
-      return response.status;
+      await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/delete`, {
+        method: 'PUT',
+        headers: this._buildHeaders(),
+      });
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new JobNotFoundError(jobId);
@@ -259,15 +262,14 @@ export class Venue implements VenueInterface {
   /**
    * Pause a running job
    * @param jobId - Job identifier
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
-  async pauseJob(jobId: string): Promise<number> {
+  async pauseJob(jobId: string): Promise<JobMetadata> {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/pause`, {
+      return await fetchWithError<JobMetadata>(`${this.baseUrl}/api/v1/jobs/${jobId}/pause`, {
         method: 'PUT',
         headers: this._buildHeaders(),
       });
-      return response.status;
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new JobNotFoundError(jobId);
@@ -279,15 +281,14 @@ export class Venue implements VenueInterface {
   /**
    * Resume a paused job
    * @param jobId - Job identifier
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
-  async resumeJob(jobId: string): Promise<number> {
+  async resumeJob(jobId: string): Promise<JobMetadata> {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/resume`, {
+      return await fetchWithError<JobMetadata>(`${this.baseUrl}/api/v1/jobs/${jobId}/resume`, {
         method: 'PUT',
         headers: this._buildHeaders(),
       });
-      return response.status;
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new JobNotFoundError(jobId);
@@ -399,16 +400,15 @@ export class Venue implements VenueInterface {
   /**
    * Put content to asset
    * @param content - Content to upload
-   * @returns {Promise<ReadableStream<Uint8Array> | null>}
+   * @returns {Promise<ContentHashResult>} The content hash returned by the server
    */
-  async putContent(assetId:string, content: BodyInit ): Promise<ReadableStream<Uint8Array> | null> {
+  async putContent(assetId:string, content: BodyInit ): Promise<ContentHashResult> {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/assets/${assetId}/content`, {
+      return await fetchWithError<ContentHashResult>(`${this.baseUrl}/api/v1/assets/${assetId}/content`, {
         method: 'PUT',
         headers: this._buildHeaders(),
         body: content,
       });
-      return response.body;
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new AssetNotFoundError(assetId);
@@ -439,24 +439,8 @@ export class Venue implements VenueInterface {
      * @returns {Promise<any>}
      */
     async run(assetId:string,input: any, options?: InvokeOptions ): Promise<any> {
-      const payload: Record<string, any> = {
-        operation: assetId,
-        input: input
-      };
-      if (options?.ucans) {
-        payload.ucans = options.ucans;
-      }
-
-      try {
-        const response =   await fetchWithError<any>(`${this.baseUrl}/api/v1/invoke`, {
-          method: 'POST',
-          headers: this._buildHeaders(),
-          body: JSON.stringify(payload),
-        });
-        return response?.output;
-      } catch (error) {
-        throw error;
-      }
+      const job = await this.invoke(assetId, input, options);
+      return job.result();
     }
 
      /**

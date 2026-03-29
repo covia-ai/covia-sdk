@@ -66,24 +66,23 @@ declare class Job {
     sendMessage(message: any): Promise<any>;
     /**
      * Pause the job
-     * @returns {Promise<number>}
+     * @returns {Promise<JobMetadata>} Updated job metadata
      */
-    pause(): Promise<number>;
+    pause(): Promise<JobMetadata>;
     /**
      * Resume the job
-     * @returns {Promise<number>}
+     * @returns {Promise<JobMetadata>} Updated job metadata
      */
-    resume(): Promise<number>;
+    resume(): Promise<JobMetadata>;
     /**
      * Cancels the execution of the job
-     * @returns {Promise<number>}
+     * @returns {Promise<JobMetadata>} Updated job metadata
      */
-    cancelJob(): Promise<number>;
+    cancelJob(): Promise<JobMetadata>;
     /**
      * Delete the job
-     * @returns {Promise<number>}
      */
-    deleteJob(): Promise<number>;
+    deleteJob(): Promise<void>;
 }
 
 declare abstract class Asset {
@@ -106,9 +105,9 @@ declare abstract class Asset {
     /**
      * Put content to asset
      * @param content - Content to upload
-     * @returns {Promise<ReadableStream<Uint8Array> | null>}
+     * @returns {Promise<ContentHashResult>} The content hash returned by the server
      */
-    putContent(content: BodyInit): Promise<ReadableStream<Uint8Array> | null>;
+    putContent(content: BodyInit): Promise<ContentHashResult>;
     /**
      * Get asset content
      * @returns {Promise<ReadableStream<Uint8Array> | null>}
@@ -169,6 +168,9 @@ declare class BearerAuth extends Auth {
 /**
  * HTTP Basic authentication.
  * Adds `Authorization: Basic <base64(username:password)>` to every request.
+ *
+ * **Warning:** The Covia venue server does not support Basic authentication.
+ * Use {@link BearerAuth} with a JWT token instead for authenticated requests.
  */
 declare class BasicAuth extends Auth {
     private _encoded;
@@ -177,6 +179,10 @@ declare class BasicAuth extends Auth {
 }
 /**
  * Custom auth that sets the X-Covia-User header for user identity tracking.
+ *
+ * **Warning:** The Covia venue server does not process the X-Covia-User header
+ * for authentication. Requests using this auth type will be treated as
+ * unauthenticated. Use {@link BearerAuth} with a JWT token instead.
  */
 declare class CoviaUserAuth extends Auth {
     private _userId;
@@ -306,15 +312,14 @@ declare class Venue implements VenueInterface {
     /**
     * Cancel job by ID
     * @param jobId - Job identifier
-    * @returns {Promise<number>}
+    * @returns {Promise<JobMetadata>} Updated job metadata
     */
-    cancelJob(jobId: string): Promise<number>;
+    cancelJob(jobId: string): Promise<JobMetadata>;
     /**
     * Delete job by ID
     * @param jobId - Job identifier
-    * @returns {Promise<number>}
     */
-    deleteJob(jobId: string): Promise<number>;
+    deleteJob(jobId: string): Promise<void>;
     /**
      * Send a message to a running job
      * @param jobId - Job identifier
@@ -325,15 +330,15 @@ declare class Venue implements VenueInterface {
     /**
      * Pause a running job
      * @param jobId - Job identifier
-     * @returns {Promise<number>}
+     * @returns {Promise<JobMetadata>} Updated job metadata
      */
-    pauseJob(jobId: string): Promise<number>;
+    pauseJob(jobId: string): Promise<JobMetadata>;
     /**
      * Resume a paused job
      * @param jobId - Job identifier
-     * @returns {Promise<number>}
+     * @returns {Promise<JobMetadata>} Updated job metadata
      */
-    resumeJob(jobId: string): Promise<number>;
+    resumeJob(jobId: string): Promise<JobMetadata>;
     /**
      * List secret names
      * @returns {Promise<string[]>}
@@ -389,9 +394,9 @@ declare class Venue implements VenueInterface {
     /**
      * Put content to asset
      * @param content - Content to upload
-     * @returns {Promise<ReadableStream<Uint8Array> | null>}
+     * @returns {Promise<ContentHashResult>} The content hash returned by the server
      */
-    putContent(assetId: string, content: BodyInit): Promise<ReadableStream<Uint8Array> | null>;
+    putContent(assetId: string, content: BodyInit): Promise<ContentHashResult>;
     /**
      * Get asset content
      * @returns {Promise<ReadableStream<Uint8Array> | null>}
@@ -445,11 +450,11 @@ interface VenueInterface {
     baseUrl: string;
     venueId: string;
     metadata: VenueData;
-    cancelJob(jobId: string): Promise<number>;
-    deleteJob(jobId: string): Promise<number>;
+    cancelJob(jobId: string): Promise<JobMetadata>;
+    deleteJob(jobId: string): Promise<void>;
     sendJobMessage(jobId: string, message: any): Promise<any>;
-    pauseJob(jobId: string): Promise<number>;
-    resumeJob(jobId: string): Promise<number>;
+    pauseJob(jobId: string): Promise<JobMetadata>;
+    resumeJob(jobId: string): Promise<JobMetadata>;
     status(): Promise<StatusData>;
     getJob(jobId: string): Promise<Job>;
     listJobs(): Promise<string[]>;
@@ -457,7 +462,7 @@ interface VenueInterface {
     register(assetData: any): Promise<Asset>;
     getMetadata(assetId: string): Promise<AssetMetadata>;
     readStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void>;
-    putContent(assetId: string, content: BodyInit): Promise<ReadableStream<Uint8Array> | null>;
+    putContent(assetId: string, content: BodyInit): Promise<ContentHashResult>;
     getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null>;
     run(assetId: string, input: any, options?: InvokeOptions): Promise<any>;
     invoke(assetId: string, input: any, options?: InvokeOptions): Promise<Job>;
@@ -506,6 +511,9 @@ interface ContentDetails {
 interface OperationPayload {
     [key: string]: any;
 }
+interface ContentHashResult {
+    hash: string;
+}
 interface JobMetadata {
     name?: string;
     status?: RunStatus;
@@ -513,7 +521,9 @@ interface JobMetadata {
     updated?: string;
     input?: any;
     output?: any;
-    op?: string;
+    operation?: string;
+    caller?: string;
+    error?: string;
     [key: string]: any;
 }
 interface InvokePayload {
@@ -922,4 +932,4 @@ declare class DataAsset extends Asset {
     constructor(id: AssetID, venue: VenueInterface, metadata?: AssetMetadata);
 }
 
-export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, type AssetMetadata, AssetNotFoundError, Auth, BasicAuth, BearerAuth, type ContentDetails, CoviaConnectionError, CoviaError, CoviaTimeoutError, CoviaUserAuth, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, type JobMetadata, JobNotFoundError, JobStatus, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, fetchStreamWithError, fetchWithError, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream };
+export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, type AssetMetadata, AssetNotFoundError, Auth, BasicAuth, BearerAuth, type ContentDetails, type ContentHashResult, CoviaConnectionError, CoviaError, CoviaTimeoutError, CoviaUserAuth, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, type JobMetadata, JobNotFoundError, JobStatus, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, fetchStreamWithError, fetchWithError, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream };

@@ -134,33 +134,35 @@ export class Job {
 
   /**
    * Pause the job
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
-  async pause(): Promise<number> {
-    return this.venue.pauseJob(this.id);
+  async pause(): Promise<JobMetadata> {
+    this.metadata = await this.venue.pauseJob(this.id);
+    return this.metadata;
   }
 
   /**
    * Resume the job
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
-  async resume(): Promise<number> {
-    return this.venue.resumeJob(this.id);
+  async resume(): Promise<JobMetadata> {
+    this.metadata = await this.venue.resumeJob(this.id);
+    return this.metadata;
   }
 
   /**
    * Cancels the execution of the job
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
-  async cancelJob(): Promise<number> {
-   return this.venue.cancelJob(this.id);
+  async cancelJob(): Promise<JobMetadata> {
+    this.metadata = await this.venue.cancelJob(this.id);
+    return this.metadata;
   }
 
   /**
    * Delete the job
-   * @returns {Promise<number>}
    */
-  async deleteJob():  Promise<number> {
+  async deleteJob():  Promise<void> {
      return this.venue.deleteJob(this.id);
   }
 }

@@ -470,7 +470,7 @@ var Asset = class {
   /**
    * Put content to asset
    * @param content - Content to upload
-   * @returns {Promise<ReadableStream<Uint8Array> | null>}
+   * @returns {Promise<ContentHashResult>} The content hash returned by the server
    */
   putContent(content) {
     return this.venue.putContent(this.id, content);
@@ -639,28 +639,30 @@ var Job = class {
   }
   /**
    * Pause the job
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
   async pause() {
-    return this.venue.pauseJob(this.id);
+    this.metadata = await this.venue.pauseJob(this.id);
+    return this.metadata;
   }
   /**
    * Resume the job
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
   async resume() {
-    return this.venue.resumeJob(this.id);
+    this.metadata = await this.venue.resumeJob(this.id);
+    return this.metadata;
   }
   /**
    * Cancels the execution of the job
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
   async cancelJob() {
-    return this.venue.cancelJob(this.id);
+    this.metadata = await this.venue.cancelJob(this.id);
+    return this.metadata;
   }
   /**
    * Delete the job
-   * @returns {Promise<number>}
    */
   async deleteJob() {
     return this.venue.deleteJob(this.id);
@@ -743,7 +745,7 @@ var Venue = class _Venue {
    * @returns {Promise<Asset>}
    */
   async register(assetData) {
-    return fetchWithError(`${this.baseUrl}/api/v1/assets/`, {
+    return fetchWithError(`${this.baseUrl}/api/v1/assets`, {
       method: "POST",
       headers: this._buildHeaders(),
       body: JSON.stringify(assetData)
@@ -803,7 +805,7 @@ var Venue = class _Venue {
     if (options.limit !== void 0) {
       params.set("limit", String(options.limit));
     }
-    return fetchWithError(`${this.baseUrl}/api/v1/assets/?${params.toString()}`);
+    return fetchWithError(`${this.baseUrl}/api/v1/assets?${params.toString()}`);
   }
   /**
    * List all jobs
@@ -831,12 +833,14 @@ var Venue = class _Venue {
   /**
   * Cancel job by ID
   * @param jobId - Job identifier
-  * @returns {Promise<number>}
+  * @returns {Promise<JobMetadata>} Updated job metadata
   */
   async cancelJob(jobId) {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/cancel`, { method: "PUT" });
-      return response.status;
+      return await fetchWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/cancel`, {
+        method: "PUT",
+        headers: this._buildHeaders()
+      });
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new JobNotFoundError(jobId);
@@ -847,12 +851,13 @@ var Venue = class _Venue {
   /**
   * Delete job by ID
   * @param jobId - Job identifier
-  * @returns {Promise<number>}
   */
   async deleteJob(jobId) {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/delete`, { method: "PUT" });
-      return response.status;
+      await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/delete`, {
+        method: "PUT",
+        headers: this._buildHeaders()
+      });
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new JobNotFoundError(jobId);
@@ -883,15 +888,14 @@ var Venue = class _Venue {
   /**
    * Pause a running job
    * @param jobId - Job identifier
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
   async pauseJob(jobId) {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/pause`, {
+      return await fetchWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/pause`, {
         method: "PUT",
         headers: this._buildHeaders()
       });
-      return response.status;
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new JobNotFoundError(jobId);
@@ -902,15 +906,14 @@ var Venue = class _Venue {
   /**
    * Resume a paused job
    * @param jobId - Job identifier
-   * @returns {Promise<number>}
+   * @returns {Promise<JobMetadata>} Updated job metadata
    */
   async resumeJob(jobId) {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/resume`, {
+      return await fetchWithError(`${this.baseUrl}/api/v1/jobs/${jobId}/resume`, {
         method: "PUT",
         headers: this._buildHeaders()
       });
-      return response.status;
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new JobNotFoundError(jobId);
@@ -1010,16 +1013,15 @@ var Venue = class _Venue {
   /**
    * Put content to asset
    * @param content - Content to upload
-   * @returns {Promise<ReadableStream<Uint8Array> | null>}
+   * @returns {Promise<ContentHashResult>} The content hash returned by the server
    */
   async putContent(assetId, content) {
     try {
-      const response = await fetchStreamWithError(`${this.baseUrl}/api/v1/assets/${assetId}/content`, {
+      return await fetchWithError(`${this.baseUrl}/api/v1/assets/${assetId}/content`, {
         method: "PUT",
         headers: this._buildHeaders(),
         body: content
       });
-      return response.body;
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new AssetNotFoundError(assetId);
@@ -1048,23 +1050,8 @@ var Venue = class _Venue {
      * @returns {Promise<any>}
      */
   async run(assetId, input, options) {
-    const payload = {
-      operation: assetId,
-      input
-    };
-    if (options?.ucans) {
-      payload.ucans = options.ucans;
-    }
-    try {
-      const response = await fetchWithError(`${this.baseUrl}/api/v1/invoke`, {
-        method: "POST",
-        headers: this._buildHeaders(),
-        body: JSON.stringify(payload)
-      });
-      return response?.output;
-    } catch (error) {
-      throw error;
-    }
+    const job = await this.invoke(assetId, input, options);
+    return job.result();
   }
   /**
   * Execute the operation

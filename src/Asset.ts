@@ -1,5 +1,5 @@
 import { Job } from './Job';
-import {  AssetMetadata, RunStatus, VenueInterface, AssetID } from './types';
+import {  AssetMetadata, ContentHashResult, RunStatus, VenueInterface, AssetID } from './types';
 
 // Cache for storing asset data
 const cache = new Map<AssetID, AssetMetadata>();
@@ -44,9 +44,9 @@ export abstract class Asset {
   /**
    * Put content to asset
    * @param content - Content to upload
-   * @returns {Promise<ReadableStream<Uint8Array> | null>}
+   * @returns {Promise<ContentHashResult>} The content hash returned by the server
    */
-  putContent(content: BodyInit): Promise<ReadableStream<Uint8Array> | null> {
+  putContent(content: BodyInit): Promise<ContentHashResult> {
     return this.venue.putContent(this.id, content);
   }
 
