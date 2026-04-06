@@ -12,6 +12,13 @@ export { Operation } from './Operation';
 export { DataAsset } from './DataAsset';
 export { Job } from './Job';
 export { AgentManager } from './AgentManager';
+export { AssetManager } from './AssetManager';
+export { JobManager } from './JobManager';
+export { OperationManager } from './OperationManager';
 export { WorkspaceManager } from './WorkspaceManager';
 export { UCANManager } from './UCANManager';
 export { SecretManager } from './SecretManager';
+
+// Crypto utilities
+export { generateKeyPair, privateKeyToHex, hexToPrivateKey } from './crypto/keys';
+export { didFromPublicKey, encodePublicKey, decodePublicKey } from './crypto/multikey';

@@ -7,6 +7,10 @@ module.exports = {
   testEnvironment: "node",
   setupFiles: ["dotenv/config"],
   transform: {
-    ...tsJestTransformCfg,
+    "^.+\\.tsx?$": ["ts-jest", { useESM: false }],
+    "^.+\\.jsx?$": ["ts-jest", { useESM: false }],
   },
+  transformIgnorePatterns: [
+    "node_modules/(?!(@noble/ed25519|@noble/hashes)/)",
+  ],
 };

@@ -1,8 +1,21 @@
 import { Job } from './Job';
-import {  AssetMetadata, ContentHashResult, RunStatus, VenueInterface, AssetID } from './types';
+import { AssetMetadata, ContentHashResult, RunStatus, VenueInterface, AssetID, InvokeOptions } from './types';
 
 // Cache for storing asset data
 const cache = new Map<AssetID, AssetMetadata>();
+
+/** Minimal interface for asset operations from the venue's AssetManager. */
+interface AssetOps {
+  getMetadata(assetId: string): Promise<AssetMetadata>;
+  putContent(assetId: string, content: BodyInit): Promise<ContentHashResult>;
+  getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null>;
+}
+
+/** Minimal interface for operation execution from the venue's OperationManager. */
+interface OpOps {
+  run(assetId: string, input: any, options?: InvokeOptions): Promise<any>;
+  invoke(assetId: string, input: any, options?: InvokeOptions): Promise<Job>;
+}
 
 export abstract class Asset {
   public id: AssetID;
@@ -10,11 +23,15 @@ export abstract class Asset {
   public metadata: AssetMetadata;
   public status?: RunStatus;
   public error?: string;
+  private _assets: AssetOps;
+  private _operations: OpOps;
 
   constructor(id: AssetID, venue: VenueInterface, metadata: AssetMetadata = {}) {
     this.id = id;
     this.venue = venue;
     this.metadata = metadata;
+    this._assets = (venue as any).assets;
+    this._operations = (venue as any).operations;
   }
 
   /**
@@ -25,7 +42,7 @@ export abstract class Asset {
     if (cache.has(this.id)) {
       return Promise.resolve(cache.get(this.id)!);
     } else {
-      const data = this.venue.getMetadata(this.id)
+      const data = this._assets.getMetadata(this.id)
       if (data) {
         cache.set(this.id, data);
       }
@@ -34,20 +51,12 @@ export abstract class Asset {
   }
 
   /**
-   * Read stream from asset
-   * @param reader - ReadableStreamDefaultReader
-   */
-  async readStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
-    return this.readStream(reader);
-  }
-
-  /**
    * Put content to asset
    * @param content - Content to upload
    * @returns {Promise<ContentHashResult>} The content hash returned by the server
    */
   putContent(content: BodyInit): Promise<ContentHashResult> {
-    return this.venue.putContent(this.id, content);
+    return this._assets.putContent(this.id, content);
   }
 
   /**
@@ -55,7 +64,7 @@ export abstract class Asset {
    * @returns {Promise<ReadableStream<Uint8Array> | null>}
    */
   getContent(): Promise<ReadableStream<Uint8Array> | null> {
-    return this.venue.getContent(this.id);
+    return this._assets.getContent(this.id);
   }
 
   /**
@@ -72,18 +81,15 @@ export abstract class Asset {
    * @returns {Promise<any>}
    */
   run(input: any): Promise<any> {
-
-    return this.venue.run( this.id, input);
+    return this._operations.run(this.id, input);
   }
 
    /**
    * Execute the operation
    * @param input - Operation input parameters
-   * @returns {Promise<any>}
+   * @returns {Promise<Job>}
    */
   invoke(input: any): Promise<Job> {
-
-    return this.venue.invoke( this.id, input);
+    return this._operations.invoke(this.id, input);
   }
 }
-

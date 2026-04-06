@@ -1,45 +1,31 @@
 import { SecretManager } from '../SecretManager';
-import { VenueInterface } from '../types';
 
-function createMockVenue(): VenueInterface {
+function createMockVenue() {
   return {
-    baseUrl: 'https://example.com',
-    venueId: 'did:web:example.com',
-    metadata: { name: 'Test' },
-    run: jest.fn().mockResolvedValue({}),
-    invoke: jest.fn(),
-    cancelJob: jest.fn(), deleteJob: jest.fn(), sendJobMessage: jest.fn(),
-    pauseJob: jest.fn(), resumeJob: jest.fn(), status: jest.fn(),
-    getJob: jest.fn(), listJobs: jest.fn(), getAsset: jest.fn(),
-    register: jest.fn(), getMetadata: jest.fn(), readStream: jest.fn(),
-    putContent: jest.fn(), getContent: jest.fn(),
-    listAssets: jest.fn(), listOperations: jest.fn(), getOperation: jest.fn(),
-    didDocument: jest.fn(), mcpDiscovery: jest.fn(), agentCard: jest.fn(),
-    streamJobEvents: jest.fn(),
+    operations: { run: jest.fn().mockResolvedValue({}) },
     listSecrets: jest.fn().mockResolvedValue(['API_KEY', 'DB_PASS']),
     putSecret: jest.fn().mockResolvedValue(undefined),
     deleteSecret: jest.fn().mockResolvedValue(undefined),
-    close: jest.fn(),
-  } as unknown as VenueInterface;
+  };
 }
 
 describe('SecretManager', () => {
-  let venue: VenueInterface;
+  let venue: ReturnType<typeof createMockVenue>;
   let secrets: SecretManager;
 
   beforeEach(() => {
     venue = createMockVenue();
-    secrets = new SecretManager(venue);
+    secrets = new SecretManager(venue as any);
   });
 
-  it('set calls secret:set via run', async () => {
+  it('set calls secret:set via operations.run', async () => {
     await secrets.set('API_KEY', 'my-secret');
-    expect(venue.run).toHaveBeenCalledWith('secret:set', { name: 'API_KEY', value: 'my-secret' });
+    expect(venue.operations.run).toHaveBeenCalledWith('secret:set', { name: 'API_KEY', value: 'my-secret' });
   });
 
-  it('extract calls secret:extract via run', async () => {
+  it('extract calls secret:extract via operations.run', async () => {
     await secrets.extract('API_KEY');
-    expect(venue.run).toHaveBeenCalledWith('secret:extract', { name: 'API_KEY' });
+    expect(venue.operations.run).toHaveBeenCalledWith('secret:extract', { name: 'API_KEY' });
   });
 
   it('list delegates to venue.listSecrets', async () => {

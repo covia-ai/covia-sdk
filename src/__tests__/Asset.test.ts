@@ -3,40 +3,51 @@ import { DataAsset } from '../DataAsset';
 import { RunStatus, VenueInterface } from '../types';
 import { Job } from '../Job';
 
-function createMockVenue(overrides: Partial<VenueInterface> = {}): VenueInterface {
+function createMockVenue(overrides: Record<string, any> = {}): VenueInterface {
   return {
     baseUrl: 'https://venue.example.com',
     venueId: 'did:web:venue.example.com',
     metadata: { name: 'Test Venue' },
-    cancelJob: jest.fn(),
-    deleteJob: jest.fn(),
-    sendJobMessage: jest.fn(),
-    pauseJob: jest.fn(),
-    resumeJob: jest.fn(),
+    auth: { apply: jest.fn() },
     status: jest.fn(),
     getJob: jest.fn(),
     listJobs: jest.fn(),
     getAsset: jest.fn(),
-    register: jest.fn(),
     listAssets: jest.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 100 }),
-    getMetadata: jest.fn().mockResolvedValue({ name: 'Test Asset', type: 'data' }),
-    readStream: jest.fn(),
-    putContent: jest.fn().mockResolvedValue(null),
-    getContent: jest.fn().mockResolvedValue(null),
-    run: jest.fn().mockResolvedValue({ result: 42 }),
-    invoke: jest.fn().mockResolvedValue(new Job('j1', {} as VenueInterface, { status: RunStatus.COMPLETE })),
-    listOperations: jest.fn().mockResolvedValue([]),
-    getOperation: jest.fn().mockResolvedValue({ name: 'test:echo', asset: 'op-1' }),
     didDocument: jest.fn().mockResolvedValue({ id: 'did:web:venue.example.com' }),
     mcpDiscovery: jest.fn().mockResolvedValue({}),
     agentCard: jest.fn().mockResolvedValue({}),
-    streamJobEvents: jest.fn(),
     listSecrets: jest.fn().mockResolvedValue([]),
     putSecret: jest.fn().mockResolvedValue(undefined),
     deleteSecret: jest.fn().mockResolvedValue(undefined),
     close: jest.fn(),
+    assets: {
+      getMetadata: jest.fn().mockResolvedValue({ name: 'Test Asset', type: 'data' }),
+      putContent: jest.fn().mockResolvedValue(null),
+      getContent: jest.fn().mockResolvedValue(null),
+    },
+    operations: {
+      run: jest.fn().mockResolvedValue({ result: 42 }),
+      invoke: jest.fn().mockResolvedValue(new Job('j1', {} as VenueInterface, { status: RunStatus.COMPLETE })),
+    },
+    jobs: {
+      cancel: jest.fn(),
+      delete: jest.fn(),
+      pause: jest.fn(),
+      resume: jest.fn(),
+      sendMessage: jest.fn(),
+      stream: jest.fn(),
+    },
     ...overrides,
-  };
+  } as any;
+}
+
+function getAssets(venue: VenueInterface) {
+  return (venue as any).assets;
+}
+
+function getOps(venue: VenueInterface) {
+  return (venue as any).operations;
 }
 
 describe('Asset (via Operation subclass)', () => {
@@ -67,56 +78,56 @@ describe('Asset (via Operation subclass)', () => {
   });
 
   describe('putContent', () => {
-    it('delegates to venue.putContent with asset id', async () => {
+    it('delegates to assets.putContent with asset id', async () => {
       const venue = createMockVenue();
       const asset = new DataAsset('asset-1', venue);
       const content = new Blob(['data']);
 
       await asset.putContent(content);
-      expect(venue.putContent).toHaveBeenCalledWith('asset-1', content);
+      expect(getAssets(venue).putContent).toHaveBeenCalledWith('asset-1', content);
     });
   });
 
   describe('getContent', () => {
-    it('delegates to venue.getContent with asset id', async () => {
+    it('delegates to assets.getContent with asset id', async () => {
       const venue = createMockVenue();
       const asset = new DataAsset('asset-2', venue);
 
       await asset.getContent();
-      expect(venue.getContent).toHaveBeenCalledWith('asset-2');
+      expect(getAssets(venue).getContent).toHaveBeenCalledWith('asset-2');
     });
   });
 
   describe('run', () => {
-    it('delegates to venue.run with asset id and input', async () => {
+    it('delegates to operations.run with asset id and input', async () => {
       const venue = createMockVenue();
       const op = new Operation('op-3', venue);
       const input = { param: 'value' };
 
       const result = await op.run(input);
-      expect(venue.run).toHaveBeenCalledWith('op-3', input);
+      expect(getOps(venue).run).toHaveBeenCalledWith('op-3', input);
       expect(result).toEqual({ result: 42 });
     });
   });
 
   describe('invoke', () => {
-    it('delegates to venue.invoke with asset id and input', async () => {
+    it('delegates to operations.invoke with asset id and input', async () => {
       const venue = createMockVenue();
       const op = new Operation('op-4', venue);
 
       const result = await op.invoke({ x: 1 });
-      expect(venue.invoke).toHaveBeenCalledWith('op-4', { x: 1 });
+      expect(getOps(venue).invoke).toHaveBeenCalledWith('op-4', { x: 1 });
       expect(result).toBeInstanceOf(Job);
     });
   });
 
   describe('getMetadata', () => {
-    it('fetches metadata from venue on first call', async () => {
+    it('fetches metadata from assets manager on first call', async () => {
       const venue = createMockVenue();
       const asset = new DataAsset('meta-1', venue);
 
       const meta = await asset.getMetadata();
-      expect(venue.getMetadata).toHaveBeenCalledWith('meta-1');
+      expect(getAssets(venue).getMetadata).toHaveBeenCalledWith('meta-1');
       expect(meta).toEqual({ name: 'Test Asset', type: 'data' });
     });
   });

@@ -6,15 +6,27 @@ const INITIAL_POLL_DELAY = 300;   // ms
 const BACKOFF_FACTOR = 1.5;
 const MAX_POLL_DELAY = 10000;     // ms
 
+/** Minimal interface for the job operations Job needs from the venue's JobManager. */
+interface JobOps {
+  cancel(jobId: string): Promise<JobMetadata>;
+  delete(jobId: string): Promise<void>;
+  pause(jobId: string): Promise<JobMetadata>;
+  resume(jobId: string): Promise<JobMetadata>;
+  sendMessage(jobId: string, message: any): Promise<any>;
+  stream(jobId: string): AsyncGenerator<SSEEvent>;
+}
+
 export class Job {
   public id: string;
   public venue: VenueInterface;
   public metadata: JobMetadata;
+  private _jobs: JobOps;
 
   constructor(id: string, venue: VenueInterface, metadata: JobMetadata) {
     this.id = id;
     this.venue = venue;
     this.metadata = metadata;
+    this._jobs = (venue as any).jobs;
   }
 
   /**
@@ -99,7 +111,7 @@ export class Job {
    * @returns AsyncGenerator yielding SSEEvent objects
    */
   async *stream(): AsyncGenerator<SSEEvent> {
-    yield* this.venue.streamJobEvents(this.id);
+    yield* this._jobs.stream(this.id);
   }
 
   /**
@@ -129,7 +141,7 @@ export class Job {
    * @returns {Promise<any>}
    */
   async sendMessage(message: any): Promise<any> {
-    return this.venue.sendJobMessage(this.id, message);
+    return this._jobs.sendMessage(this.id, message);
   }
 
   /**
@@ -137,7 +149,7 @@ export class Job {
    * @returns {Promise<JobMetadata>} Updated job metadata
    */
   async pause(): Promise<JobMetadata> {
-    this.metadata = await this.venue.pauseJob(this.id);
+    this.metadata = await this._jobs.pause(this.id);
     return this.metadata;
   }
 
@@ -146,23 +158,23 @@ export class Job {
    * @returns {Promise<JobMetadata>} Updated job metadata
    */
   async resume(): Promise<JobMetadata> {
-    this.metadata = await this.venue.resumeJob(this.id);
+    this.metadata = await this._jobs.resume(this.id);
     return this.metadata;
   }
 
   /**
-   * Cancels the execution of the job
+   * Cancel the job
    * @returns {Promise<JobMetadata>} Updated job metadata
    */
-  async cancelJob(): Promise<JobMetadata> {
-    this.metadata = await this.venue.cancelJob(this.id);
+  async cancel(): Promise<JobMetadata> {
+    this.metadata = await this._jobs.cancel(this.id);
     return this.metadata;
   }
 
   /**
    * Delete the job
    */
-  async deleteJob():  Promise<void> {
-     return this.venue.deleteJob(this.id);
+  async delete(): Promise<void> {
+    return this._jobs.delete(this.id);
   }
 }

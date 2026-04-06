@@ -1,55 +1,35 @@
-# Covialib Node.js Examples
+# @covia/covia-sdk Node.js Example
 
-Simple examples demonstrating how to use the [covialib](https://github.com/covia-ai/covialib) TypeScript API for AI orchestration and multi-agent workflows.
+Demonstrates the main features of the [@covia/covia-sdk](https://www.npmjs.com/package/@covia/covia-sdk):
 
-## What is Covialib?
-
-Covialib is a TypeScript API for the Covia grid platform, which provides:
-- **AI Orchestration**: Coordinate multi-agent workflows and AI models
-- **Asset Management**: Work with Operations (executable tasks) and DataAssets (data objects)
-- **Federated Execution**: Execute across clouds, teams, and organizations
-- **Type Safety**: Full TypeScript support with proper interfaces
-
-## Files Included
-
-- `covialib-example.js` - JavaScript example (Node.js)
-- `package.json` - Project dependencies and scripts
+- Connecting to a venue (with or without authentication)
+- Running and invoking operations
+- Registering assets and uploading/downloading content
+- Job lifecycle (list, get, status helpers)
+- Workspace read/write
+- Agents, secrets, and discovery
 
 ## Prerequisites
 
-- Node.js 16+ installed
-- A running Covia server (or access to one)
-- npm or yarn package manager
+- Node.js >= 18
+- A running Covia venue (or access to one)
 
-## Installation
+## Setup
 
-1. Clone or download these example files
-
-2. Install dependencies:
 ```bash
 npm install
 ```
 
-3. Configure your Covia server connection:
-   - Edit the Grid.connect to provide the venue you want to connect and use
+Edit `covialib-js-example.js` and set `VENUE_URL` to your venue's URL.
 
-## Running the Examples
+## Run
 
-### JavaScript Example
 ```bash
 npm start
 ```
 
 ## Resources
 
-- [Covia.ai Platform](https://www.covia.ai)
-- [Covia Documentation](https://docs.covia.ai)
-- [GitHub Repository](https://github.com/covia-ai/covialib)
-
-## License
-
-MIT
-
-## Notes
-
-- Make sure your Covia server is running before executing the examples
+- [Covia.ai](https://covia.ai)
+- [Documentation](https://docs.covia.ai)
+- [GitHub](https://github.com/covia-ai/covia-sdk)
