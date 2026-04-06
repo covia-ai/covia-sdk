@@ -2,40 +2,44 @@ import { Job } from '../Job';
 import { RunStatus, VenueInterface, CoviaTimeoutError, JobFailedError, SSEEvent } from '../types';
 import { createSSEEvent } from '../Utils';
 
-function createMockVenue(overrides: Partial<VenueInterface> = {}): VenueInterface {
+function createMockJobs() {
+  return {
+    cancel: jest.fn().mockResolvedValue({ status: RunStatus.CANCELLED }),
+    delete: jest.fn().mockResolvedValue(undefined),
+    sendMessage: jest.fn().mockResolvedValue({ status: 'queued', queueDepth: 1 }),
+    pause: jest.fn().mockResolvedValue({ status: RunStatus.PAUSED }),
+    resume: jest.fn().mockResolvedValue({ status: RunStatus.STARTED }),
+    stream: jest.fn(),
+  };
+}
+
+function createMockVenue(overrides: Record<string, any> = {}): VenueInterface {
   return {
     baseUrl: 'https://example.com',
     venueId: 'did:web:example.com',
     metadata: { name: 'Test Venue' },
-    cancelJob: jest.fn().mockResolvedValue(200),
-    deleteJob: jest.fn().mockResolvedValue(200),
-    sendJobMessage: jest.fn().mockResolvedValue({ status: 'queued', queueDepth: 1 }),
-    pauseJob: jest.fn().mockResolvedValue(200),
-    resumeJob: jest.fn().mockResolvedValue(200),
+    auth: { apply: jest.fn() },
     status: jest.fn(),
     getJob: jest.fn(),
     listJobs: jest.fn(),
     getAsset: jest.fn(),
-    register: jest.fn(),
     listAssets: jest.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 100 }),
-    getMetadata: jest.fn(),
-    readStream: jest.fn(),
-    putContent: jest.fn(),
-    getContent: jest.fn(),
-    run: jest.fn(),
-    invoke: jest.fn(),
-    listOperations: jest.fn().mockResolvedValue([]),
-    getOperation: jest.fn().mockResolvedValue({ name: 'test:echo', asset: 'op-1' }),
     didDocument: jest.fn().mockResolvedValue({ id: 'did:web:example.com' }),
     mcpDiscovery: jest.fn().mockResolvedValue({}),
     agentCard: jest.fn().mockResolvedValue({}),
-    streamJobEvents: jest.fn(),
     listSecrets: jest.fn().mockResolvedValue([]),
     putSecret: jest.fn().mockResolvedValue(undefined),
     deleteSecret: jest.fn().mockResolvedValue(undefined),
     close: jest.fn(),
+    jobs: createMockJobs(),
+    assets: { get: jest.fn(), list: jest.fn(), getMetadata: jest.fn(), putContent: jest.fn(), getContent: jest.fn(), register: jest.fn(), clearCache: jest.fn() },
+    operations: { run: jest.fn(), invoke: jest.fn(), list: jest.fn(), get: jest.fn() },
     ...overrides,
-  };
+  } as any;
+}
+
+function getJobs(venue: VenueInterface) {
+  return (venue as any).jobs;
 }
 
 describe('Job', () => {
@@ -49,40 +53,39 @@ describe('Job', () => {
     expect(job.metadata).toBe(meta);
   });
 
-  it('cancelJob delegates to venue.cancelJob', async () => {
+  it('cancel delegates to jobs.cancel', async () => {
     const venue = createMockVenue();
     const job = new Job('job-2', venue, { status: RunStatus.STARTED });
 
-    const result = await job.cancelJob();
-    expect(result).toBe(200);
-    expect(venue.cancelJob).toHaveBeenCalledWith('job-2');
+    const result = await job.cancel();
+    expect(result).toEqual({ status: RunStatus.CANCELLED });
+    expect(getJobs(venue).cancel).toHaveBeenCalledWith('job-2');
   });
 
-  it('deleteJob delegates to venue.deleteJob', async () => {
+  it('delete delegates to jobs.delete', async () => {
     const venue = createMockVenue();
     const job = new Job('job-3', venue, { status: RunStatus.COMPLETE });
 
-    const result = await job.deleteJob();
-    expect(result).toBe(200);
-    expect(venue.deleteJob).toHaveBeenCalledWith('job-3');
+    await job.delete();
+    expect(getJobs(venue).delete).toHaveBeenCalledWith('job-3');
   });
 
-  it('propagates errors from venue.cancelJob', async () => {
-    const venue = createMockVenue({
-      cancelJob: jest.fn().mockRejectedValue(new Error('cancel failed')),
-    });
+  it('propagates errors from jobs.cancel', async () => {
+    const jobs = createMockJobs();
+    jobs.cancel.mockRejectedValue(new Error('cancel failed'));
+    const venue = createMockVenue({ jobs } as any);
     const job = new Job('job-4', venue, { status: RunStatus.STARTED });
 
-    await expect(job.cancelJob()).rejects.toThrow('cancel failed');
+    await expect(job.cancel()).rejects.toThrow('cancel failed');
   });
 
-  it('propagates errors from venue.deleteJob', async () => {
-    const venue = createMockVenue({
-      deleteJob: jest.fn().mockRejectedValue(new Error('delete failed')),
-    });
+  it('propagates errors from jobs.delete', async () => {
+    const jobs = createMockJobs();
+    jobs.delete.mockRejectedValue(new Error('delete failed'));
+    const venue = createMockVenue({ jobs } as any);
     const job = new Job('job-5', venue, { status: RunStatus.COMPLETE });
 
-    await expect(job.deleteJob()).rejects.toThrow('delete failed');
+    await expect(job.delete()).rejects.toThrow('delete failed');
   });
 });
 
@@ -133,10 +136,9 @@ describe('Job.output', () => {
 
 describe('Job.refresh', () => {
   it('calls venue.getJob and updates metadata', async () => {
-    const updatedJob = new Job('j1', {} as VenueInterface, { status: RunStatus.COMPLETE, output: { x: 1 } });
-    const venue = createMockVenue({
-      getJob: jest.fn().mockResolvedValue(updatedJob),
-    });
+    const venue = createMockVenue();
+    const updatedJob = new Job('j1', venue, { status: RunStatus.COMPLETE, output: { x: 1 } });
+    (venue.getJob as jest.Mock).mockResolvedValue(updatedJob);
     const job = new Job('j1', venue, { status: RunStatus.STARTED });
 
     await job.refresh();
@@ -166,9 +168,9 @@ describe('Job.wait', () => {
       getJob: jest.fn().mockImplementation(() => {
         callCount++;
         const status = callCount >= 2 ? RunStatus.COMPLETE : RunStatus.STARTED;
-        return Promise.resolve(new Job('j1', {} as VenueInterface, { status }));
+        return Promise.resolve(new Job('j1', venue, { status }));
       }),
-    });
+    } as any);
     const job = new Job('j1', venue, { status: RunStatus.STARTED });
 
     await job.wait({ timeout: 5000 });
@@ -178,10 +180,10 @@ describe('Job.wait', () => {
 
   it('throws CoviaTimeoutError when timeout exceeded', async () => {
     const venue = createMockVenue({
-      getJob: jest.fn().mockResolvedValue(
-        new Job('j1', {} as VenueInterface, { status: RunStatus.STARTED })
+      getJob: jest.fn().mockImplementation(() =>
+        Promise.resolve(new Job('j1', venue, { status: RunStatus.STARTED }))
       ),
-    });
+    } as any);
     const job = new Job('j1', venue, { status: RunStatus.STARTED });
 
     await expect(job.wait({ timeout: 100 })).rejects.toThrow(CoviaTimeoutError);
@@ -190,13 +192,12 @@ describe('Job.wait', () => {
 
 describe('Job.result', () => {
   it('waits and returns output on success', async () => {
-    const completedJob = new Job('j1', {} as VenueInterface, {
+    const venue = createMockVenue();
+    const completedJob = new Job('j1', venue, {
       status: RunStatus.COMPLETE,
       output: { answer: 42 },
     });
-    const venue = createMockVenue({
-      getJob: jest.fn().mockResolvedValue(completedJob),
-    });
+    (venue.getJob as jest.Mock).mockResolvedValue(completedJob);
     const job = new Job('j1', venue, { status: RunStatus.STARTED });
 
     const result = await job.result({ timeout: 5000 });
@@ -204,13 +205,12 @@ describe('Job.result', () => {
   });
 
   it('throws JobFailedError when job fails', async () => {
-    const failedJob = new Job('j1', {} as VenueInterface, {
+    const venue = createMockVenue();
+    const failedJob = new Job('j1', venue, {
       status: RunStatus.FAILED,
       output: { error: 'something broke' },
     });
-    const venue = createMockVenue({
-      getJob: jest.fn().mockResolvedValue(failedJob),
-    });
+    (venue.getJob as jest.Mock).mockResolvedValue(failedJob);
     const job = new Job('j1', venue, { status: RunStatus.STARTED });
 
     await expect(job.result({ timeout: 5000 })).rejects.toThrow(JobFailedError);
@@ -253,36 +253,36 @@ describe('Job.isPaused / needsInput / needsAuth', () => {
 });
 
 describe('Job.sendMessage / pause / resume', () => {
-  it('sendMessage delegates to venue.sendJobMessage', async () => {
+  it('sendMessage delegates to jobs.sendMessage', async () => {
     const venue = createMockVenue();
     const job = new Job('job-msg', venue, { status: RunStatus.INPUT_REQUIRED });
 
     const result = await job.sendMessage({ text: 'hello' });
-    expect(venue.sendJobMessage).toHaveBeenCalledWith('job-msg', { text: 'hello' });
+    expect(getJobs(venue).sendMessage).toHaveBeenCalledWith('job-msg', { text: 'hello' });
     expect(result).toEqual({ status: 'queued', queueDepth: 1 });
   });
 
-  it('pause delegates to venue.pauseJob', async () => {
+  it('pause delegates to jobs.pause', async () => {
     const venue = createMockVenue();
     const job = new Job('job-p', venue, { status: RunStatus.STARTED });
 
     const result = await job.pause();
-    expect(venue.pauseJob).toHaveBeenCalledWith('job-p');
-    expect(result).toBe(200);
+    expect(getJobs(venue).pause).toHaveBeenCalledWith('job-p');
+    expect(result).toEqual({ status: RunStatus.PAUSED });
   });
 
-  it('resume delegates to venue.resumeJob', async () => {
+  it('resume delegates to jobs.resume', async () => {
     const venue = createMockVenue();
     const job = new Job('job-r', venue, { status: RunStatus.PAUSED });
 
     const result = await job.resume();
-    expect(venue.resumeJob).toHaveBeenCalledWith('job-r');
-    expect(result).toBe(200);
+    expect(getJobs(venue).resume).toHaveBeenCalledWith('job-r');
+    expect(result).toEqual({ status: RunStatus.STARTED });
   });
 });
 
 describe('Job.stream', () => {
-  it('delegates to venue.streamJobEvents', async () => {
+  it('delegates to jobs.stream', async () => {
     const fakeEvents: SSEEvent[] = [
       createSSEEvent({ event: 'status', data: '{"status":"STARTED"}' }),
       createSSEEvent({ event: 'status', data: '{"status":"COMPLETE"}' }),
@@ -292,9 +292,9 @@ describe('Job.stream', () => {
         yield evt;
       }
     }
-    const venue = createMockVenue({
-      streamJobEvents: jest.fn().mockReturnValue(fakeGenerator()),
-    });
+    const jobs = createMockJobs();
+    jobs.stream.mockReturnValue(fakeGenerator());
+    const venue = createMockVenue({ jobs } as any);
     const job = new Job('j1', venue, { status: RunStatus.STARTED });
 
     const collected: SSEEvent[] = [];
@@ -302,7 +302,7 @@ describe('Job.stream', () => {
       collected.push(evt);
     }
 
-    expect(venue.streamJobEvents).toHaveBeenCalledWith('j1');
+    expect(jobs.stream).toHaveBeenCalledWith('j1');
     expect(collected).toHaveLength(2);
     expect(collected[0].json()).toEqual({ status: 'STARTED' });
     expect(collected[1].json()).toEqual({ status: 'COMPLETE' });

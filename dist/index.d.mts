@@ -2,6 +2,7 @@ declare class Job {
     id: string;
     venue: VenueInterface;
     metadata: JobMetadata;
+    private _jobs;
     constructor(id: string, venue: VenueInterface, metadata: JobMetadata);
     /**
      * Whether the job has reached a terminal state
@@ -75,14 +76,14 @@ declare class Job {
      */
     resume(): Promise<JobMetadata>;
     /**
-     * Cancels the execution of the job
+     * Cancel the job
      * @returns {Promise<JobMetadata>} Updated job metadata
      */
-    cancelJob(): Promise<JobMetadata>;
+    cancel(): Promise<JobMetadata>;
     /**
      * Delete the job
      */
-    deleteJob(): Promise<void>;
+    delete(): Promise<void>;
 }
 
 declare abstract class Asset {
@@ -91,17 +92,14 @@ declare abstract class Asset {
     metadata: AssetMetadata;
     status?: RunStatus;
     error?: string;
+    private _assets;
+    private _operations;
     constructor(id: AssetID, venue: VenueInterface, metadata?: AssetMetadata);
     /**
      * Get asset metadata
      * @returns {Promise<AssetMetadata>}
      */
     getMetadata(): Promise<AssetMetadata>;
-    /**
-     * Read stream from asset
-     * @param reader - ReadableStreamDefaultReader
-     */
-    readStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void>;
     /**
      * Put content to asset
      * @param content - Content to upload
@@ -127,7 +125,7 @@ declare abstract class Asset {
     /**
     * Execute the operation
     * @param input - Operation input parameters
-    * @returns {Promise<any>}
+    * @returns {Promise<Job>}
     */
     invoke(input: any): Promise<Job>;
 }
@@ -166,36 +164,43 @@ declare class BearerAuth extends Auth {
     apply(headers: Record<string, string>): void;
 }
 /**
- * HTTP Basic authentication.
- * Adds `Authorization: Basic <base64(username:password)>` to every request.
+ * Ed25519 keypair authentication (self-issued EdDSA JWT).
+ * Generates a fresh short-lived JWT for every request, signed with the
+ * client's Ed25519 private key.  The server verifies the signature and
+ * extracts the caller's DID from the `sub` claim.
  *
- * **Warning:** The Covia venue server does not support Basic authentication.
- * Use {@link BearerAuth} with a JWT token instead for authenticated requests.
+ * Example:
+ *   const auth = KeyPairAuth.generate();
+ *   console.log(auth.getDID()); // did:key:z6Mk...
+ *   const venue = await Grid.connect("https://venue.covia.ai", auth);
  */
-declare class BasicAuth extends Auth {
-    private _encoded;
-    constructor(username: string, password: string);
+declare class KeyPairAuth extends Auth {
+    private _privateKey;
+    private _publicKey;
+    private _did;
+    private _lifetime;
+    /**
+     * @param privateKey - 32-byte Ed25519 private key
+     * @param tokenLifetimeSeconds - JWT lifetime in seconds (default 300 = 5 min)
+     */
+    constructor(privateKey: Uint8Array, tokenLifetimeSeconds?: number);
     apply(headers: Record<string, string>): void;
+    /** The caller's DID derived from the public key. */
+    getDID(): string;
+    /** The 32-byte Ed25519 public key. */
+    getPublicKey(): Uint8Array;
+    /** Generate a new random keypair and return a KeyPairAuth instance. */
+    static generate(tokenLifetimeSeconds?: number): KeyPairAuth;
+    /** Create from a hex-encoded private key string. */
+    static fromHex(privateKeyHex: string, tokenLifetimeSeconds?: number): KeyPairAuth;
 }
-/**
- * Custom auth that sets the X-Covia-User header for user identity tracking.
- *
- * **Warning:** The Covia venue server does not process the X-Covia-User header
- * for authentication. Requests using this auth type will be treated as
- * unauthenticated. Use {@link BearerAuth} with a JWT token instead.
- */
-declare class CoviaUserAuth extends Auth {
-    private _userId;
-    constructor(userId: string);
-    apply(headers: Record<string, string>): void;
-}
-/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, BasicAuth, CoviaUserAuth). */
+/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, KeyPairAuth). */
 interface Credentials {
     venueId: string;
     apiKey: string;
     userId: string;
 }
-/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, BasicAuth, CoviaUserAuth). */
+/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, KeyPairAuth). */
 declare class CredentialsHTTP implements Credentials {
     venueId: string;
     apiKey: string;
@@ -203,9 +208,14 @@ declare class CredentialsHTTP implements Credentials {
     constructor(venueId: string, apiKey: string, userId: string);
 }
 
+interface AgentManagerVenue {
+    operations: {
+        run(assetId: string, input: any): Promise<any>;
+    };
+}
 declare class AgentManager {
     private venue;
-    constructor(venue: VenueInterface);
+    constructor(venue: AgentManagerVenue);
     create(input: AgentCreateInput): Promise<AgentCreateResult>;
     request(agentId: string, input?: any, wait?: boolean | number): Promise<AgentRequestResult>;
     message(agentId: string, message: any): Promise<AgentMessageResult>;
@@ -219,9 +229,118 @@ declare class AgentManager {
     cancelTask(agentId: string, taskId: string): Promise<any>;
 }
 
+interface JobManagerVenue {
+    baseUrl: string;
+    auth: {
+        apply(headers: Record<string, string>): void;
+    };
+}
+declare class JobManager {
+    private venue;
+    constructor(venue: JobManagerVenue);
+    list(): Promise<string[]>;
+    get(jobId: string): Promise<Job>;
+    cancel(jobId: string): Promise<JobMetadata>;
+    delete(jobId: string): Promise<void>;
+    pause(jobId: string): Promise<JobMetadata>;
+    resume(jobId: string): Promise<JobMetadata>;
+    sendMessage(jobId: string, message: any): Promise<any>;
+    stream(jobId: string): AsyncGenerator<SSEEvent>;
+    private _buildHeaders;
+}
+
+interface AssetManagerVenue {
+    baseUrl: string;
+    auth: {
+        apply(headers: Record<string, string>): void;
+    };
+}
+declare class AssetManager {
+    private venue;
+    constructor(venue: AssetManagerVenue);
+    /**
+     * Get asset by ID
+     * @param assetId - Asset identifier
+     * @returns Returns either an Operation or DataAsset based on the asset's metadata
+     */
+    get(assetId: AssetID): Promise<Asset>;
+    /**
+     * List assets with pagination support
+     * @param options - Pagination options (offset, limit)
+     */
+    list(options?: AssetListOptions): Promise<AssetList>;
+    /**
+     * Register a new asset
+     * @param assetData - Asset configuration
+     */
+    register(assetData: any): Promise<Asset>;
+    /**
+     * Get asset metadata
+     * @param assetId - Asset identifier
+     */
+    getMetadata(assetId: string): Promise<AssetMetadata>;
+    /**
+     * Put content to asset
+     * @param assetId - Asset identifier
+     * @param content - Content to upload
+     * @returns The content hash returned by the server
+     */
+    putContent(assetId: string, content: BodyInit): Promise<ContentHashResult>;
+    /**
+     * Get asset content
+     * @param assetId - Asset identifier
+     */
+    getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null>;
+    /**
+     * Clear the asset cache.
+     */
+    clearCache(): void;
+    private _buildHeaders;
+}
+
+interface OperationManagerVenue {
+    baseUrl: string;
+    auth: {
+        apply(headers: Record<string, string>): void;
+    };
+}
+declare class OperationManager {
+    private venue;
+    constructor(venue: OperationManagerVenue);
+    /**
+     * List all named operations available on this venue
+     */
+    list(): Promise<OperationInfo[]>;
+    /**
+     * Get details of a named operation
+     * @param name - Operation name (e.g., "test:echo")
+     */
+    get(name: string): Promise<OperationInfo>;
+    /**
+     * Execute an operation and wait for the result
+     * @param assetId - Operation asset ID or named operation
+     * @param input - Operation input parameters
+     * @param options - Invoke options (e.g., ucans)
+     */
+    run(assetId: string, input: any, options?: InvokeOptions): Promise<any>;
+    /**
+     * Execute an operation and return a Job for tracking
+     * @param assetId - Operation asset ID or named operation
+     * @param input - Operation input parameters
+     * @param options - Invoke options (e.g., ucans)
+     */
+    invoke(assetId: string, input: any, options?: InvokeOptions): Promise<Job>;
+    private _buildHeaders;
+}
+
+interface WorkspaceManagerVenue {
+    operations: {
+        run(assetId: string, input: any): Promise<any>;
+    };
+}
 declare class WorkspaceManager {
     private venue;
-    constructor(venue: VenueInterface);
+    constructor(venue: WorkspaceManagerVenue);
     read(path: string, maxSize?: number): Promise<WorkspaceReadResult>;
     write(path: string, value: any): Promise<WorkspaceWriteResult>;
     delete(path: string): Promise<WorkspaceDeleteResult>;
@@ -233,15 +352,28 @@ declare class WorkspaceManager {
     adapters(): Promise<AdaptersResult>;
 }
 
+interface UCANManagerVenue {
+    operations: {
+        run(assetId: string, input: any): Promise<any>;
+    };
+}
 declare class UCANManager {
     private venue;
-    constructor(venue: VenueInterface);
+    constructor(venue: UCANManagerVenue);
     issue(aud: string, att: UCANAttenuation[], exp: number): Promise<UCANIssueResult>;
 }
 
+interface SecretManagerVenue {
+    operations: {
+        run(assetId: string, input: any): Promise<any>;
+    };
+    listSecrets(): Promise<string[]>;
+    putSecret(name: string, value: string): Promise<void>;
+    deleteSecret(name: string): Promise<void>;
+}
 declare class SecretManager {
     private venue;
-    constructor(venue: VenueInterface);
+    constructor(venue: SecretManagerVenue);
     set(name: string, value: string): Promise<SecretSetResult>;
     /**
      * Extract a secret value by name.
@@ -260,10 +392,16 @@ declare class Venue implements VenueInterface {
     auth: Auth;
     metadata: VenueData;
     private _agents?;
+    private _jobs?;
+    private _assets?;
+    private _operations?;
     private _workspace?;
     private _ucan?;
     private _secrets?;
     get agents(): AgentManager;
+    get jobs(): JobManager;
+    get assets(): AssetManager;
+    get operations(): OperationManager;
     get workspace(): WorkspaceManager;
     get ucan(): UCANManager;
     get secrets(): SecretManager;
@@ -276,24 +414,13 @@ declare class Venue implements VenueInterface {
      */
     static connect(venueId: string | Venue, auth?: Auth): Promise<Venue>;
     /**
-     * Register a new asset
-     * @param assetData - Asset configuration
-     * @returns {Promise<Asset>}
-     */
-    register(assetData: any): Promise<Asset>;
-    /**
-     * Read stream from asset
-     * @param reader - ReadableStreamDefaultReader
-     */
-    readStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void>;
-    /**
-     * Get asset by ID
+     * Get asset by ID (convenience delegate to venue.assets.get)
      * @param assetId - Asset identifier
      * @returns {Promise<Asset>} Returns either an Operation or DataAsset based on the asset's metadata
      */
     getAsset(assetId: AssetID): Promise<Asset>;
     /**
-     * List assets with pagination support
+     * List assets with pagination support (convenience delegate to venue.assets.list)
      * @param options - Pagination options (offset, limit)
      * @returns {Promise<AssetList>} Paginated list of asset IDs with metadata
      */
@@ -309,36 +436,6 @@ declare class Venue implements VenueInterface {
      * @returns {Promise<Job>}
      */
     getJob(jobId: string): Promise<Job>;
-    /**
-    * Cancel job by ID
-    * @param jobId - Job identifier
-    * @returns {Promise<JobMetadata>} Updated job metadata
-    */
-    cancelJob(jobId: string): Promise<JobMetadata>;
-    /**
-    * Delete job by ID
-    * @param jobId - Job identifier
-    */
-    deleteJob(jobId: string): Promise<void>;
-    /**
-     * Send a message to a running job
-     * @param jobId - Job identifier
-     * @param message - Message payload
-     * @returns {Promise<any>}
-     */
-    sendJobMessage(jobId: string, message: any): Promise<any>;
-    /**
-     * Pause a running job
-     * @param jobId - Job identifier
-     * @returns {Promise<JobMetadata>} Updated job metadata
-     */
-    pauseJob(jobId: string): Promise<JobMetadata>;
-    /**
-     * Resume a paused job
-     * @param jobId - Job identifier
-     * @returns {Promise<JobMetadata>} Updated job metadata
-     */
-    resumeJob(jobId: string): Promise<JobMetadata>;
     /**
      * List secret names
      * @returns {Promise<string[]>}
@@ -361,17 +458,6 @@ declare class Venue implements VenueInterface {
      */
     status(): Promise<StatusData>;
     /**
-     * List all named operations available on this venue
-     * @returns {Promise<OperationInfo[]>}
-     */
-    listOperations(): Promise<OperationInfo[]>;
-    /**
-     * Get details of a named operation
-     * @param name - Operation name (e.g., "test:echo")
-     * @returns {Promise<OperationInfo>}
-     */
-    getOperation(name: string): Promise<OperationInfo>;
-    /**
      * Get the full DID document for this venue
      * @returns {Promise<DIDDocument>}
      */
@@ -386,40 +472,6 @@ declare class Venue implements VenueInterface {
      * @returns {Promise<AgentCard>}
      */
     agentCard(): Promise<AgentCard>;
-    /**
-     * Get asset metadata
-     * @returns {Promise<AssetMetadata>}
-     */
-    getMetadata(assetId: string): Promise<AssetMetadata>;
-    /**
-     * Put content to asset
-     * @param content - Content to upload
-     * @returns {Promise<ContentHashResult>} The content hash returned by the server
-     */
-    putContent(assetId: string, content: BodyInit): Promise<ContentHashResult>;
-    /**
-     * Get asset content
-     * @returns {Promise<ReadableStream<Uint8Array> | null>}
-     */
-    getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null>;
-    /**
-       * Execute the operation
-       * @param input - Operation input parameters
-       * @returns {Promise<any>}
-       */
-    run(assetId: string, input: any, options?: InvokeOptions): Promise<any>;
-    /**
-    * Execute the operation
-    * @param input - Operation input parameters
-    * @returns {Promise<Job>}
-    */
-    invoke(assetId: string, input: any, options?: InvokeOptions): Promise<Job>;
-    /**
-     * Stream server-sent events for a job.
-     * @param jobId - Job identifier
-     * @returns AsyncGenerator yielding SSEEvent objects
-     */
-    streamJobEvents(jobId: string): AsyncGenerator<SSEEvent>;
     /**
      * Close the venue and release resources.
      * Clears cached asset data for this venue.
@@ -450,29 +502,15 @@ interface VenueInterface {
     baseUrl: string;
     venueId: string;
     metadata: VenueData;
-    cancelJob(jobId: string): Promise<JobMetadata>;
-    deleteJob(jobId: string): Promise<void>;
-    sendJobMessage(jobId: string, message: any): Promise<any>;
-    pauseJob(jobId: string): Promise<JobMetadata>;
-    resumeJob(jobId: string): Promise<JobMetadata>;
+    auth: Auth;
     status(): Promise<StatusData>;
     getJob(jobId: string): Promise<Job>;
     listJobs(): Promise<string[]>;
     getAsset(assetId: AssetID): Promise<Asset>;
-    register(assetData: any): Promise<Asset>;
-    getMetadata(assetId: string): Promise<AssetMetadata>;
-    readStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void>;
-    putContent(assetId: string, content: BodyInit): Promise<ContentHashResult>;
-    getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null>;
-    run(assetId: string, input: any, options?: InvokeOptions): Promise<any>;
-    invoke(assetId: string, input: any, options?: InvokeOptions): Promise<Job>;
     listAssets(options?: AssetListOptions): Promise<AssetList>;
-    listOperations(): Promise<OperationInfo[]>;
-    getOperation(name: string): Promise<OperationInfo>;
     didDocument(): Promise<DIDDocument>;
     mcpDiscovery(): Promise<MCPDiscovery>;
     agentCard(): Promise<AgentCard>;
-    streamJobEvents(jobId: string): AsyncGenerator<SSEEvent>;
     listSecrets(): Promise<string[]>;
     putSecret(name: string, value: string): Promise<void>;
     deleteSecret(name: string): Promise<void>;
@@ -918,7 +956,7 @@ declare class Grid {
     /**
     * Static method to connect to a venue
     * @param venueId - Can be a HTTP base URL, DNS name, or existing Venue instance
-    * @param auth - Optional authentication provider (BearerAuth, BasicAuth, etc.)
+    * @param auth - Optional authentication provider (BearerAuth, KeyPairAuth, etc.)
     * @returns {Promise<Venue>} A new Venue instance configured appropriately
     */
     static connect(venueId: string, auth?: Auth): Promise<Venue>;
@@ -932,4 +970,47 @@ declare class DataAsset extends Asset {
     constructor(id: AssetID, venue: VenueInterface, metadata?: AssetMetadata);
 }
 
-export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, type AssetMetadata, AssetNotFoundError, Auth, BasicAuth, BearerAuth, type ContentDetails, type ContentHashResult, CoviaConnectionError, CoviaError, CoviaTimeoutError, CoviaUserAuth, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, type JobMetadata, JobNotFoundError, JobStatus, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, fetchStreamWithError, fetchWithError, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream };
+/**
+ * Ed25519 keypair generation and utility functions.
+ */
+/**
+ * Generate a random Ed25519 keypair.
+ * @returns Object with privateKey (32 bytes) and publicKey (32 bytes)
+ */
+declare function generateKeyPair(): {
+    privateKey: Uint8Array;
+    publicKey: Uint8Array;
+};
+/**
+ * Convert a private key to hex string for storage.
+ */
+declare function privateKeyToHex(key: Uint8Array): string;
+/**
+ * Convert a hex string back to a private key Uint8Array.
+ */
+declare function hexToPrivateKey(hex: string): Uint8Array;
+
+/**
+ * Multikey encoding for Ed25519 public keys.
+ * Follows the did:key spec with multicodec prefix 0xed01 for Ed25519.
+ */
+/**
+ * Encode an Ed25519 public key as a multikey string (z-prefixed base58-btc).
+ * @param publicKey - 32-byte Ed25519 public key
+ * @returns Multikey string like "z6MkhaXgBZD..."
+ */
+declare function encodePublicKey(publicKey: Uint8Array): string;
+/**
+ * Decode a multikey string back to a 32-byte Ed25519 public key.
+ * @param multikey - Multikey string starting with "z"
+ * @returns 32-byte Ed25519 public key
+ */
+declare function decodePublicKey(multikey: string): Uint8Array;
+/**
+ * Create a did:key DID from an Ed25519 public key.
+ * @param publicKey - 32-byte Ed25519 public key
+ * @returns DID string like "did:key:z6MkhaXgBZD..."
+ */
+declare function didFromPublicKey(publicKey: Uint8Array): string;
+
+export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, AssetManager, type AssetMetadata, AssetNotFoundError, Auth, BearerAuth, type ContentDetails, type ContentHashResult, CoviaConnectionError, CoviaError, CoviaTimeoutError, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, JobManager, type JobMetadata, JobNotFoundError, JobStatus, KeyPairAuth, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, OperationManager, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, decodePublicKey, didFromPublicKey, encodePublicKey, fetchStreamWithError, fetchWithError, generateKeyPair, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, hexToPrivateKey, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream, privateKeyToHex };

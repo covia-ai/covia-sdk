@@ -1,21 +1,18 @@
 {
-  "name": "covialib-example",
+  "name": "covia-sdk-example",
   "version": "1.0.0",
-  "description": "Simple examples for using the covialib TypeScript API",
-  "main": "covialib-js-example",
+  "description": "Example usage of @covia/covia-sdk",
+  "type": "module",
+  "main": "covialib-js-example.js",
   "scripts": {
-    "start": "node covialib-js-example"
+    "start": "node covialib-js-example.js"
   },
   "keywords": [
     "covia",
-    "covialib"
+    "covia-sdk"
   ],
-  "author": "",
   "license": "MIT",
   "dependencies": {
-    "@covia-ai/covialib": "github:covia-ai/covialib"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0"
+    "@covia/covia-sdk": "^1.2.0"
   }
 }

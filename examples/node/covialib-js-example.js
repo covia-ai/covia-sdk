@@ -1,90 +1,152 @@
-// Simple Node.js example for using covialib
-// This demonstrates basic usage of the Covia TypeScript API
+// Node.js example for using @covia/covia-sdk
+// Demonstrates the main SDK features: operations, assets, jobs, agents, workspace, and secrets
 
-// Import the covialib classes
-// Note: You'll need to install the package first
-// npm install @covia-ai/covialib (or the appropriate package name)
-const {  Grid } = require('@covia-ai/covialib');
+import { Grid, Venue, KeyPairAuth, RunStatus } from "@covia/covia-sdk";
 
+const VENUE_URL = "https://venue-test.covia.ai";
 
-const getSHA256Hash = async (input) => {
-      const textAsBuffer = new TextEncoder().encode(input.toString());
-      const hashBuffer = await crypto.subtle.digest("SHA-256", textAsBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hash = hashArray
-        .map((item) => item.toString(16).padStart(2, "0"))
-        .join("");
-      return hash;
-};
-
-async function main() {
-
-
-  try {
-    // 1. Create a Venue instance to connect to the Covia grid
-    const venue = await Grid.connect('https://venue-test.covia.ai');
-    console.log('Connected to '+venue.metadata.name);
-
-    // 2. Get an Operation asset
-    // Operations represent executable tasks/functions in the Covia grid
-    const operationId = '1821e02f84f24623cd8c05456230b457f475d7836147b9a88511577b3371bdac';
-    const operation = await venue.getAsset(operationId);
-    
-    console.log(`Retrieved operation: ${operationId}`);
-
-    // 3. Invoke the operation with parameters
-    const result = await operation.invoke({
-      'length': '10'
-    });
-
-    console.log('Operation result:', result);
-
-    // 4. Lookup job created by operation invoke
-    console.log('Looking up the job created by this operation invoke '+result.id)
-    venue.getJob(result.id).then((job => {
-      console.log(job)
-    }))
-
-     //Text content asset creation
-     const contentData = 'Hello World from example code', contentType = 'text/plain';
-     getSHA256Hash(Buffer.from(contentData)).then((hash) => {
-         const metadata = 
-            {
-            "name":"Test Metadata",
-            "creator":"Test",
-            "description":"Test data to upload and check content.",
-            "dateCreated":"2025-08-12",
-            "keywords":["test"],
-            "content": {
-                     "sha256" : hash,
-                     "contentType" : contentType, 
-                  }
-         }
-         venue.createAsset(metadata).then((asset) => {
-            console.log(asset.id)
-            const content = new Blob([contentData], { type: contentType });
-            asset.uploadContent(content).then((response)=> {    
-                  response?.getReader().read().then(({done,value}) => {
-                  
-                     const decoder = new TextDecoder('utf-8'); 
-                     const str = decoder.decode(value);
-                     
-                   })
-            }).catch((error) => {
-              console.log(error)
-            })
-         }) 
-    })
-
-  } catch (error) {
-    console.error('Error:', error.message);
-    
-    // Handle Covia-specific errors
-    if (error.name === 'CoviaError') {
-      console.error('Covia error code:', error.code);
-    }
-  }
+async function getSHA256Hash(input) {
+  const textAsBuffer = new TextEncoder().encode(input.toString());
+  const hashBuffer = await crypto.subtle.digest("SHA-256", textAsBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Run the example
-main();
+async function main() {
+  // ── Connect ──
+  // Connect without auth
+  const venue = await Grid.connect(VENUE_URL);
+  console.log(`Connected to ${venue.metadata.name} (${venue.venueId})`);
+
+  // Or connect with Ed25519 keypair auth
+  // const auth = KeyPairAuth.generate();
+  // console.log(`DID: ${auth.getDID()}`);
+  // const venue = await Venue.connect(VENUE_URL, auth);
+
+  // ── Venue Status ──
+  const status = await venue.status();
+  console.log(`Status: ${status.status}`);
+  console.log(`Stats:`, status.stats);
+
+  // ── Operations ──
+  // List available operations
+  const ops = await venue.operations.list();
+  console.log(`\nOperations: ${ops.length}`);
+  ops.slice(0, 5).forEach((op) => {
+    console.log(`  - ${op.name}: ${op.description || "(no description)"}`);
+  });
+
+  // Run an operation synchronously (invoke + wait for result)
+  console.log(`\nRunning test:echo...`);
+  const echoResult = await venue.operations.run("test:echo", {
+    message: "Hello from covia-sdk!",
+  });
+  console.log(`Echo result:`, echoResult);
+
+  // Invoke an operation asynchronously (returns a Job)
+  console.log(`\nInvoking test:echo async...`);
+  const job = await venue.operations.invoke("test:echo", {
+    message: "async hello",
+  });
+  console.log(`Job ID: ${job.id}, Status: ${job.metadata.status}`);
+
+  // Wait for the job to complete and get the result
+  const result = await job.result({ timeout: 10000 });
+  console.log(`Job result:`, result);
+
+  // ── Assets ──
+  // List assets
+  const assetList = await venue.listAssets({ limit: 10 });
+  console.log(`\nAssets: ${assetList.total} total`);
+
+  // Get a specific asset (returns Operation or DataAsset)
+  if (assetList.items.length > 0) {
+    const asset = await venue.getAsset(assetList.items[0]);
+    console.log(`Asset: ${asset.id}`);
+    const meta = await asset.getMetadata();
+    console.log(`  Name: ${meta.name}`);
+  }
+
+  // Register a new data asset and upload content
+  const contentData = "Hello World from example code";
+  const contentType = "text/plain";
+  const hash = await getSHA256Hash(Buffer.from(contentData));
+
+  const newAsset = await venue.assets.register({
+    name: "SDK Example Asset",
+    creator: "covia-sdk-example",
+    description: "Test data uploaded from the Node.js example.",
+    dateCreated: new Date().toISOString().slice(0, 10),
+    keywords: ["test", "example"],
+    content: { sha256: hash, contentType },
+  });
+  console.log(`\nRegistered asset: ${newAsset.id}`);
+
+  // Upload content
+  const blob = new Blob([contentData], { type: contentType });
+  const uploadResult = await newAsset.putContent(blob);
+  console.log(`Upload hash: ${uploadResult.hash}`);
+
+  // Download content
+  const stream = await newAsset.getContent();
+  if (stream) {
+    const { value } = await stream.getReader().read();
+    const text = new TextDecoder().decode(value);
+    console.log(`Downloaded: "${text}"`);
+  }
+
+  // Content URL
+  console.log(`Content URL: ${newAsset.getContentURL()}`);
+
+  // ── Jobs ──
+  // List jobs
+  const jobIds = await venue.jobs.list();
+  console.log(`\nJobs: ${jobIds.length}`);
+
+  // Get a job by ID
+  if (jobIds.length > 0) {
+    const fetched = await venue.jobs.get(jobIds[0]);
+    console.log(`Job ${fetched.id}: ${fetched.metadata.status}`);
+
+    // Job status helpers
+    console.log(`  isFinished: ${fetched.isFinished}`);
+    console.log(`  isComplete: ${fetched.isComplete}`);
+    console.log(`  isPaused: ${fetched.isPaused}`);
+  }
+
+  // ── Workspace ──
+  console.log(`\nWorkspace operations...`);
+  await venue.workspace.write("w/sdk-example/greeting", "Hello World");
+  const readResult = await venue.workspace.read("w/sdk-example/greeting");
+  console.log(`Read: ${readResult.value}`);
+  await venue.workspace.delete("w/sdk-example/greeting");
+
+  // List functions and adapters
+  const funcs = await venue.workspace.functions();
+  console.log(`Functions: ${funcs.functions?.length || 0}`);
+
+  const adapters = await venue.workspace.adapters();
+  console.log(`Adapters: ${adapters.adapters?.length || 0}`);
+
+  // ── Agents ──
+  console.log(`\nListing agents...`);
+  const agentList = await venue.agents.list();
+  console.log(`Agents: ${agentList.agents?.length || 0}`);
+
+  // ── Secrets ──
+  console.log(`\nListing secrets...`);
+  const secrets = await venue.secrets.list();
+  console.log(`Secrets: ${secrets.length} stored`);
+
+  // ── Clean up ──
+  venue.close();
+  console.log(`\nDone.`);
+}
+
+main().catch((err) => {
+  console.error("Error:", err.message);
+  if (err.name === "GridError") {
+    console.error(`HTTP ${err.statusCode}:`, err.responseBody);
+  }
+  process.exit(1);
+});

@@ -44,55 +44,75 @@ export class BearerAuth extends Auth {
 }
 
 /**
- * HTTP Basic authentication.
- * Adds `Authorization: Basic <base64(username:password)>` to every request.
+ * Ed25519 keypair authentication (self-issued EdDSA JWT).
+ * Generates a fresh short-lived JWT for every request, signed with the
+ * client's Ed25519 private key.  The server verifies the signature and
+ * extracts the caller's DID from the `sub` claim.
  *
- * **Warning:** The Covia venue server does not support Basic authentication.
- * Use {@link BearerAuth} with a JWT token instead for authenticated requests.
+ * Example:
+ *   const auth = KeyPairAuth.generate();
+ *   console.log(auth.getDID()); // did:key:z6Mk...
+ *   const venue = await Grid.connect("https://venue.covia.ai", auth);
  */
-export class BasicAuth extends Auth {
-  private _encoded: string;
+export class KeyPairAuth extends Auth {
+  private _privateKey: Uint8Array;
+  private _publicKey: Uint8Array;
+  private _did: string;
+  private _lifetime: number;
 
-  constructor(username: string, password: string) {
+  /**
+   * @param privateKey - 32-byte Ed25519 private key
+   * @param tokenLifetimeSeconds - JWT lifetime in seconds (default 300 = 5 min)
+   */
+  constructor(privateKey: Uint8Array, tokenLifetimeSeconds: number = 300) {
     super();
-    this._encoded = btoa(`${username}:${password}`);
+    // Lazy imports to avoid top-level side effects for consumers that don't use KeyPairAuth
+    const { getPublicKey } = require('./crypto/keys');
+    const { didFromPublicKey } = require('./crypto/multikey');
+    this._privateKey = privateKey;
+    this._publicKey = getPublicKey(privateKey);
+    this._did = didFromPublicKey(this._publicKey);
+    this._lifetime = tokenLifetimeSeconds;
   }
 
   apply(headers: Record<string, string>): void {
-    headers["Authorization"] = `Basic ${this._encoded}`;
+    const { createEdDSAJWT } = require('./crypto/jwt');
+    const jwt = createEdDSAJWT(this._privateKey, this._lifetime);
+    headers['Authorization'] = `Bearer ${jwt}`;
+  }
+
+  /** The caller's DID derived from the public key. */
+  getDID(): string {
+    return this._did;
+  }
+
+  /** The 32-byte Ed25519 public key. */
+  getPublicKey(): Uint8Array {
+    return this._publicKey;
+  }
+
+  /** Generate a new random keypair and return a KeyPairAuth instance. */
+  static generate(tokenLifetimeSeconds: number = 300): KeyPairAuth {
+    const { generateKeyPair } = require('./crypto/keys');
+    const { privateKey } = generateKeyPair();
+    return new KeyPairAuth(privateKey, tokenLifetimeSeconds);
+  }
+
+  /** Create from a hex-encoded private key string. */
+  static fromHex(privateKeyHex: string, tokenLifetimeSeconds: number = 300): KeyPairAuth {
+    const { hexToPrivateKey } = require('./crypto/keys');
+    return new KeyPairAuth(hexToPrivateKey(privateKeyHex), tokenLifetimeSeconds);
   }
 }
 
-/**
- * Custom auth that sets the X-Covia-User header for user identity tracking.
- *
- * **Warning:** The Covia venue server does not process the X-Covia-User header
- * for authentication. Requests using this auth type will be treated as
- * unauthenticated. Use {@link BearerAuth} with a JWT token instead.
- */
-export class CoviaUserAuth extends Auth {
-  private _userId: string;
-
-  constructor(userId: string) {
-    super();
-    this._userId = userId;
-  }
-
-  apply(headers: Record<string, string>): void {
-    if (this._userId && this._userId !== "") {
-      headers["X-Covia-User"] = this._userId;
-    }
-  }
-}
-
-/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, BasicAuth, CoviaUserAuth). */
+/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, KeyPairAuth). */
 export interface Credentials {
   venueId: string;
   apiKey: string;
   userId: string;
 }
 
-/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, BasicAuth, CoviaUserAuth). */
+/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, KeyPairAuth). */
 export class CredentialsHTTP implements Credentials {
   constructor(public venueId: string, public apiKey: string, public userId: string) {}
 }

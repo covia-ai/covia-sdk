@@ -28,8 +28,8 @@ describe('Grid', () => {
   });
 
   it('connect passes auth to Venue.connect', async () => {
-    const { CoviaUserAuth } = jest.requireActual('../Credentials');
-    const auth = new CoviaUserAuth('u');
+    const { BearerAuth } = jest.requireActual('../Credentials');
+    const auth = new BearerAuth('my-token');
     await Grid.connect('https://auth-venue.example.com', auth);
     expect(Venue.connect).toHaveBeenCalledWith('https://auth-venue.example.com', auth);
   });

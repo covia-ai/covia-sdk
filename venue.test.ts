@@ -63,7 +63,7 @@ test('venueDataAsset', async () => {
       "contentType" : contentType,
     }
   };
-  const asset = await venue.register(metadata);
+  const asset = await venue.assets.register(metadata);
   expect(asset.id).not.toBeNull();
   const content = new Blob([contentData], { type: contentType });
   const uploadResponse = await asset.putContent(content);
@@ -91,8 +91,8 @@ test('venueRunOpAndCancel', async () => {
   const result = await operation.invoke(process.env.VALID_OP2_INPUT!);
   if(result.metadata.status == 'STARTED' || result.metadata.status == 'PENDING') {
     const jobId = result.id;
-    const status = await venue.cancelJob(jobId);
-    expect(status).toBe(200);
+    const status = await venue.jobs.cancel(jobId);
+    expect(status.status).toBe('CANCELLED');
   }
 });
 
@@ -103,8 +103,8 @@ test('venueInvokeOpAndCancel', async () => {
   const result = await operation.invoke(process.env.VALID_OP2_INPUT!);
   if(result.metadata.status == 'STARTED' || result.metadata.status == 'PENDING') {
     const jobId = result.id;
-    const status = await venue.cancelJob(jobId);
-    expect(status).toBe(200);
+    const status = await venue.jobs.cancel(jobId);
+    expect(status.status).toBe('CANCELLED');
   }
 });
 

@@ -1,6 +1,6 @@
 import { Venue } from '../Venue';
 import { CoviaError, RunStatus, AssetNotFoundError, JobNotFoundError, NotFoundError, GridError } from '../types';
-import { CoviaUserAuth, BearerAuth, NoAuth } from '../Credentials';
+import { BearerAuth, NoAuth } from '../Credentials';
 import { Operation } from '../Operation';
 import { DataAsset } from '../DataAsset';
 import { Job } from '../Job';
@@ -81,9 +81,9 @@ describe('Venue constructor', () => {
   });
 
   it('uses provided auth', () => {
-    const auth = new CoviaUserAuth('user@test.com');
+    const auth = new BearerAuth('my-token');
     const venue = new Venue({ auth });
-    expect(venue.auth).toBeInstanceOf(CoviaUserAuth);
+    expect(venue.auth).toBeInstanceOf(BearerAuth);
   });
 });
 
@@ -139,10 +139,10 @@ describe('Venue.connect', () => {
 
   it('passes auth when connecting with Venue instance', async () => {
     const original = new Venue({ baseUrl: 'https://x.com', venueId: 'v' });
-    const auth = new CoviaUserAuth('user');
+    const auth = new BearerAuth('my-token');
 
     const cloned = await Venue.connect(original, auth);
-    expect(cloned.auth).toBeInstanceOf(CoviaUserAuth);
+    expect(cloned.auth).toBeInstanceOf(BearerAuth);
   });
 
   it('throws CoviaError on fetch failure during connect', async () => {
@@ -199,7 +199,7 @@ describe('Venue.getAsset', () => {
   });
 });
 
-describe('Venue.register', () => {
+describe('venue.assets.register', () => {
   let venue: Venue;
 
   beforeEach(() => {
@@ -213,11 +213,11 @@ describe('Venue.register', () => {
     // Second fetch: getAsset fetches the created asset
     mockFetchSuccess({ metadata: { name: 'New Asset' } });
 
-    const asset = await venue.register({ name: 'New Asset' });
+    const asset = await venue.assets.register({ name: 'New Asset' });
     expect(asset).toBeInstanceOf(DataAsset);
 
     // Verify POST was called
-    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/assets/');
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/assets');
     expect(mockFetch.mock.calls[0][1]?.method).toBe('POST');
   });
 });
@@ -259,7 +259,7 @@ describe('Venue.listJobs and getJob', () => {
   });
 });
 
-describe('Venue.cancelJob and deleteJob', () => {
+describe('venue.jobs.cancel and venue.jobs.delete', () => {
   let venue: Venue;
 
   beforeEach(() => {
@@ -267,36 +267,31 @@ describe('Venue.cancelJob and deleteJob', () => {
     venue = new Venue({ baseUrl: 'https://test.com', venueId: 'did:web:test.com' });
   });
 
-  it('cancelJob sends PUT and returns status', async () => {
+  it('cancel sends PUT and returns metadata', async () => {
+    mockFetchSuccess({ status: 'CANCELLED' });
+
+    const result = await venue.jobs.cancel('job-1');
+    expect(result).toEqual({ status: 'CANCELLED' });
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/jobs/job-1/cancel');
+    expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
+  });
+
+  it('delete sends PUT', async () => {
     mockFetchStreamSuccess(200);
 
-    const status = await venue.cancelJob('job-1');
-    expect(status).toBe(200);
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://test.com/api/v1/jobs/job-1/cancel',
-      { method: 'PUT' }
-    );
+    await venue.jobs.delete('job-1');
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/jobs/job-1/delete');
+    expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
   });
 
-  it('deleteJob sends PUT and returns status', async () => {
-    mockFetchStreamSuccess(200);
-
-    const status = await venue.deleteJob('job-1');
-    expect(status).toBe(200);
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://test.com/api/v1/jobs/job-1/delete',
-      { method: 'PUT' }
-    );
-  });
-
-  it('cancelJob throws JobNotFoundError on 404', async () => {
+  it('cancel throws JobNotFoundError on 404', async () => {
     mockFetchError(404);
-    await expect(venue.cancelJob('missing')).rejects.toThrow(JobNotFoundError);
+    await expect(venue.jobs.cancel('missing')).rejects.toThrow(JobNotFoundError);
   });
 
-  it('deleteJob throws JobNotFoundError on 404', async () => {
+  it('delete throws JobNotFoundError on 404', async () => {
     mockFetchError(404);
-    await expect(venue.deleteJob('missing')).rejects.toThrow(JobNotFoundError);
+    await expect(venue.jobs.delete('missing')).rejects.toThrow(JobNotFoundError);
   });
 });
 
@@ -313,7 +308,7 @@ describe('Venue.status', () => {
   });
 });
 
-describe('Venue.invoke and run', () => {
+describe('venue.operations.invoke and run', () => {
   let venue: Venue;
 
   beforeEach(() => {
@@ -324,7 +319,7 @@ describe('Venue.invoke and run', () => {
   it('invoke sends POST with operation payload and returns Job', async () => {
     mockFetchSuccess({ id: 'job-new', status: RunStatus.COMPLETE, output: { x: 1 } });
 
-    const job = await venue.invoke('op-1', { param: 'val' });
+    const job = await venue.operations.invoke('op-1', { param: 'val' });
     expect(job).toBeInstanceOf(Job);
     expect(job.id).toBe('job-new');
 
@@ -336,23 +331,10 @@ describe('Venue.invoke and run', () => {
     expect(body.input).toEqual({ param: 'val' });
   });
 
-  it('run sends POST and returns output', async () => {
-    mockFetchSuccess({ output: { answer: 42 } });
-
-    const result = await venue.run('op-2', { q: 'test' });
-    expect(result).toEqual({ answer: 42 });
-  });
-
   it('invoke throws CoviaError on failure', async () => {
     mockFetchError(500);
 
-    await expect(venue.invoke('op-x', {})).rejects.toThrow(CoviaError);
-  });
-
-  it('run throws CoviaError on failure', async () => {
-    mockFetchError(500);
-
-    await expect(venue.run('op-x', {})).rejects.toThrow(CoviaError);
+    await expect(venue.operations.invoke('op-x', {})).rejects.toThrow(CoviaError);
   });
 });
 
@@ -361,24 +343,12 @@ describe('Venue auth headers', () => {
     mockFetch.mockReset();
   });
 
-  it('includes X-Covia-User header when CoviaUserAuth is used', async () => {
-    const auth = new CoviaUserAuth('user@test.com');
-    const venue = new Venue({ baseUrl: 'https://test.com', venueId: 'v', auth });
-    mockFetchSuccess({ id: 'j1', status: 'COMPLETE' });
-
-    await venue.invoke('op-1', {});
-
-    const headers = mockFetch.mock.calls[0][1].headers;
-    expect(headers['X-Covia-User']).toBe('user@test.com');
-    expect(headers['Content-Type']).toBe('application/json');
-  });
-
   it('includes Authorization header when BearerAuth is used', async () => {
     const auth = new BearerAuth('my-token');
     const venue = new Venue({ baseUrl: 'https://test.com', venueId: 'v', auth });
     mockFetchSuccess({ id: 'j1', status: 'COMPLETE' });
 
-    await venue.invoke('op-1', {});
+    await venue.operations.invoke('op-1', {});
 
     const headers = mockFetch.mock.calls[0][1].headers;
     expect(headers['Authorization']).toBe('Bearer my-token');
@@ -389,10 +359,9 @@ describe('Venue auth headers', () => {
     const venue = new Venue({ baseUrl: 'https://test.com', venueId: 'v' });
     mockFetchSuccess({ id: 'j1', status: 'COMPLETE' });
 
-    await venue.invoke('op-1', {});
+    await venue.operations.invoke('op-1', {});
 
     const headers = mockFetch.mock.calls[0][1].headers;
-    expect(headers['X-Covia-User']).toBeUndefined();
     expect(headers['Authorization']).toBeUndefined();
     expect(headers['Content-Type']).toBe('application/json');
   });
@@ -411,7 +380,7 @@ describe('Venue.listAssets', () => {
   });
 });
 
-describe('Venue.putContent and getContent', () => {
+describe('venue.assets.putContent and getContent', () => {
   let venue: Venue;
 
   beforeEach(() => {
@@ -419,14 +388,14 @@ describe('Venue.putContent and getContent', () => {
     venue = new Venue({
       baseUrl: 'https://test.com',
       venueId: 'did:web:test.com',
-      auth: new CoviaUserAuth('user'),
+      auth: new BearerAuth('user-token'),
     });
   });
 
   it('putContent sends PUT with content', async () => {
-    mockFetchStreamSuccess(200);
+    mockFetchSuccess({ hash: 'abc123' });
 
-    await venue.putContent('asset-1', 'file-data');
+    await venue.assets.putContent('asset-1', 'file-data');
     expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/assets/asset-1/content');
     expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
   });
@@ -434,22 +403,22 @@ describe('Venue.putContent and getContent', () => {
   it('getContent sends GET for content', async () => {
     mockFetchStreamSuccess(200);
 
-    await venue.getContent('asset-1');
+    await venue.assets.getContent('asset-1');
     expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/assets/asset-1/content');
   });
 
   it('putContent throws AssetNotFoundError on 404', async () => {
     mockFetchError(404);
-    await expect(venue.putContent('missing', 'data')).rejects.toThrow(AssetNotFoundError);
+    await expect(venue.assets.putContent('missing', 'data')).rejects.toThrow(AssetNotFoundError);
   });
 
   it('getContent throws AssetNotFoundError on 404', async () => {
     mockFetchError(404);
-    await expect(venue.getContent('missing')).rejects.toThrow(AssetNotFoundError);
+    await expect(venue.assets.getContent('missing')).rejects.toThrow(AssetNotFoundError);
   });
 });
 
-describe('Venue.getMetadata', () => {
+describe('venue.assets.getMetadata', () => {
   let venue: Venue;
 
   beforeEach(() => {
@@ -459,11 +428,11 @@ describe('Venue.getMetadata', () => {
 
   it('throws AssetNotFoundError on 404', async () => {
     mockFetchError(404);
-    await expect(venue.getMetadata('missing')).rejects.toThrow(AssetNotFoundError);
+    await expect(venue.assets.getMetadata('missing')).rejects.toThrow(AssetNotFoundError);
   });
 });
 
-describe('Venue.sendJobMessage / pauseJob / resumeJob', () => {
+describe('venue.jobs.sendMessage / pause / resume', () => {
   let venue: Venue;
 
   beforeEach(() => {
@@ -471,46 +440,46 @@ describe('Venue.sendJobMessage / pauseJob / resumeJob', () => {
     venue = new Venue({ baseUrl: 'https://test.com', venueId: 'did:web:test.com' });
   });
 
-  it('sendJobMessage sends POST to job endpoint', async () => {
+  it('sendMessage sends POST to job endpoint', async () => {
     mockFetchSuccess({ status: 'queued', queueDepth: 1 });
 
-    const result = await venue.sendJobMessage('job-1', { text: 'hello' });
+    const result = await venue.jobs.sendMessage('job-1', { text: 'hello' });
     expect(result).toEqual({ status: 'queued', queueDepth: 1 });
     expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/jobs/job-1');
     expect(mockFetch.mock.calls[0][1]?.method).toBe('POST');
   });
 
-  it('sendJobMessage throws JobNotFoundError on 404', async () => {
+  it('sendMessage throws JobNotFoundError on 404', async () => {
     mockFetchError(404);
-    await expect(venue.sendJobMessage('missing', {})).rejects.toThrow(JobNotFoundError);
+    await expect(venue.jobs.sendMessage('missing', {})).rejects.toThrow(JobNotFoundError);
   });
 
-  it('pauseJob sends PUT and returns status', async () => {
-    mockFetchStreamSuccess(200);
+  it('pause sends PUT and returns metadata', async () => {
+    mockFetchSuccess({ status: 'PAUSED' });
 
-    const status = await venue.pauseJob('job-1');
-    expect(status).toBe(200);
+    const result = await venue.jobs.pause('job-1');
+    expect(result).toEqual({ status: 'PAUSED' });
     expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/jobs/job-1/pause');
     expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
   });
 
-  it('pauseJob throws JobNotFoundError on 404', async () => {
+  it('pause throws JobNotFoundError on 404', async () => {
     mockFetchError(404);
-    await expect(venue.pauseJob('missing')).rejects.toThrow(JobNotFoundError);
+    await expect(venue.jobs.pause('missing')).rejects.toThrow(JobNotFoundError);
   });
 
-  it('resumeJob sends PUT and returns status', async () => {
-    mockFetchStreamSuccess(200);
+  it('resume sends PUT and returns metadata', async () => {
+    mockFetchSuccess({ status: 'STARTED' });
 
-    const status = await venue.resumeJob('job-1');
-    expect(status).toBe(200);
+    const result = await venue.jobs.resume('job-1');
+    expect(result).toEqual({ status: 'STARTED' });
     expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/jobs/job-1/resume');
     expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
   });
 
-  it('resumeJob throws JobNotFoundError on 404', async () => {
+  it('resume throws JobNotFoundError on 404', async () => {
     mockFetchError(404);
-    await expect(venue.resumeJob('missing')).rejects.toThrow(JobNotFoundError);
+    await expect(venue.jobs.resume('missing')).rejects.toThrow(JobNotFoundError);
   });
 });
 
@@ -549,7 +518,7 @@ describe('Venue.secrets REST', () => {
   });
 });
 
-describe('Venue.invoke and run with ucans', () => {
+describe('venue.operations with ucans', () => {
   let venue: Venue;
 
   beforeEach(() => {
@@ -557,28 +526,20 @@ describe('Venue.invoke and run with ucans', () => {
     venue = new Venue({ baseUrl: 'https://test.com', venueId: 'did:web:test.com' });
   });
 
-  it('run includes ucans in payload when provided', async () => {
-    mockFetchSuccess({ output: { answer: 42 } });
-
-    await venue.run('op-1', { q: 'test' }, { ucans: ['token1', 'token2'] });
-    const body = JSON.parse(mockFetch.mock.calls[0][1]?.body);
-    expect(body.ucans).toEqual(['token1', 'token2']);
-  });
-
-  it('run omits ucans when not provided', async () => {
-    mockFetchSuccess({ output: { answer: 42 } });
-
-    await venue.run('op-1', { q: 'test' });
-    const body = JSON.parse(mockFetch.mock.calls[0][1]?.body);
-    expect(body.ucans).toBeUndefined();
-  });
-
   it('invoke includes ucans in payload when provided', async () => {
     mockFetchSuccess({ id: 'job-1', status: 'COMPLETE' });
 
-    await venue.invoke('op-1', {}, { ucans: ['token1'] });
+    await venue.operations.invoke('op-1', {}, { ucans: ['token1'] });
     const body = JSON.parse(mockFetch.mock.calls[0][1]?.body);
     expect(body.ucans).toEqual(['token1']);
+  });
+
+  it('invoke omits ucans when not provided', async () => {
+    mockFetchSuccess({ id: 'job-2', status: 'COMPLETE' });
+
+    await venue.operations.invoke('op-1', {});
+    const body = JSON.parse(mockFetch.mock.calls[0][1]?.body);
+    expect(body.ucans).toBeUndefined();
   });
 });
 
