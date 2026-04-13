@@ -1,3 +1,7 @@
+import { getPublicKey, generateKeyPair, hexToPrivateKey } from './crypto/keys';
+import { didFromPublicKey } from './crypto/multikey';
+import { createEdDSAJWT } from './crypto/jwt';
+
 /**
  * Abstract base class for authentication strategies.
  * Subclass this to implement custom authentication.
@@ -66,9 +70,6 @@ export class KeyPairAuth extends Auth {
    */
   constructor(privateKey: Uint8Array, tokenLifetimeSeconds: number = 300) {
     super();
-    // Lazy imports to avoid top-level side effects for consumers that don't use KeyPairAuth
-    const { getPublicKey } = require('./crypto/keys');
-    const { didFromPublicKey } = require('./crypto/multikey');
     this._privateKey = privateKey;
     this._publicKey = getPublicKey(privateKey);
     this._did = didFromPublicKey(this._publicKey);
@@ -76,7 +77,6 @@ export class KeyPairAuth extends Auth {
   }
 
   apply(headers: Record<string, string>): void {
-    const { createEdDSAJWT } = require('./crypto/jwt');
     const jwt = createEdDSAJWT(this._privateKey, this._lifetime);
     headers['Authorization'] = `Bearer ${jwt}`;
   }
@@ -93,14 +93,12 @@ export class KeyPairAuth extends Auth {
 
   /** Generate a new random keypair and return a KeyPairAuth instance. */
   static generate(tokenLifetimeSeconds: number = 300): KeyPairAuth {
-    const { generateKeyPair } = require('./crypto/keys');
     const { privateKey } = generateKeyPair();
     return new KeyPairAuth(privateKey, tokenLifetimeSeconds);
   }
 
   /** Create from a hex-encoded private key string. */
   static fromHex(privateKeyHex: string, tokenLifetimeSeconds: number = 300): KeyPairAuth {
-    const { hexToPrivateKey } = require('./crypto/keys');
     return new KeyPairAuth(hexToPrivateKey(privateKeyHex), tokenLifetimeSeconds);
   }
 }
