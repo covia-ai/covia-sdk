@@ -20,7 +20,7 @@ describe('UCANManager', () => {
     const exp = Math.floor(Date.now() / 1000) + 3600;
 
     await ucan.issue('did:key:z6MkBob', att, exp);
-    expect(venue.operations.run).toHaveBeenCalledWith('ucan:issue', {
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/ucan/issue', {
       aud: 'did:key:z6MkBob',
       att,
       exp,

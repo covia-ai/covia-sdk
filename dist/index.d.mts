@@ -347,9 +347,6 @@ declare class WorkspaceManager {
     append(path: string, value: any): Promise<WorkspaceAppendResult>;
     list(path?: string, limit?: number, offset?: number): Promise<WorkspaceListResult>;
     slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult>;
-    functions(): Promise<FunctionsResult>;
-    describe(name: string): Promise<any>;
-    adapters(): Promise<AdaptersResult>;
 }
 
 interface UCANManagerVenue {

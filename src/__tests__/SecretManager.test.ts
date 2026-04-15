@@ -20,12 +20,12 @@ describe('SecretManager', () => {
 
   it('set calls secret:set via operations.run', async () => {
     await secrets.set('API_KEY', 'my-secret');
-    expect(venue.operations.run).toHaveBeenCalledWith('secret:set', { name: 'API_KEY', value: 'my-secret' });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/secret/set', { name: 'API_KEY', value: 'my-secret' });
   });
 
   it('extract calls secret:extract via operations.run', async () => {
     await secrets.extract('API_KEY');
-    expect(venue.operations.run).toHaveBeenCalledWith('secret:extract', { name: 'API_KEY' });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/secret/extract', { name: 'API_KEY' });
   });
 
   it('list delegates to venue.listSecrets', async () => {

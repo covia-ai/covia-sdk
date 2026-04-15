@@ -11,7 +11,7 @@ export class SecretManager {
   constructor(private venue: SecretManagerVenue) {}
 
   async set(name: string, value: string): Promise<SecretSetResult> {
-    return this.venue.operations.run('secret:set', { name, value });
+    return this.venue.operations.run('v/ops/secret/set', { name, value });
   }
 
   /**
@@ -20,7 +20,7 @@ export class SecretManager {
    * may reject requests that lack the appropriate capability proof.
    */
   async extract(name: string): Promise<SecretExtractResult> {
-    return this.venue.operations.run('secret:extract', { name });
+    return this.venue.operations.run('v/ops/secret/extract', { name });
   }
 
   async list(): Promise<string[]> {

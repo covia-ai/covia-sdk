@@ -91,7 +91,7 @@ var JobNotFoundError = class extends NotFoundError {
   }
 };
 
-// node_modules/@noble/ed25519/index.js
+// node_modules/.pnpm/@noble+ed25519@2.3.0/node_modules/@noble/ed25519/index.js
 var ed25519_CURVE = {
   p: 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffedn,
   n: 0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3edn,
@@ -537,7 +537,7 @@ var wNAF = (n) => {
   return { p, f };
 };
 
-// node_modules/@noble/hashes/esm/utils.js
+// node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/utils.js
 function isBytes2(a) {
   return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array";
 }
@@ -590,7 +590,7 @@ function createHasher(hashCons) {
   return hashC;
 }
 
-// node_modules/@noble/hashes/esm/_md.js
+// node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/_md.js
 function setBigUint64(view, byteOffset, value, isLE) {
   if (typeof view.setBigUint64 === "function")
     return view.setBigUint64(byteOffset, value, isLE);
@@ -712,7 +712,7 @@ var SHA512_IV = /* @__PURE__ */ Uint32Array.from([
   327033209
 ]);
 
-// node_modules/@noble/hashes/esm/_u64.js
+// node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/_u64.js
 var U32_MASK64 = /* @__PURE__ */ BigInt(2 ** 32 - 1);
 var _32n = /* @__PURE__ */ BigInt(32);
 function fromBig(n, le = false) {
@@ -747,7 +747,7 @@ var add4H = (low, Ah, Bh, Ch, Dh) => Ah + Bh + Ch + Dh + (low / 2 ** 32 | 0) | 0
 var add5L = (Al, Bl, Cl, Dl, El) => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0) + (El >>> 0);
 var add5H = (low, Ah, Bh, Ch, Dh, Eh) => Ah + Bh + Ch + Dh + Eh + (low / 2 ** 32 | 0) | 0;
 
-// node_modules/@noble/hashes/esm/sha2.js
+// node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/sha2.js
 var K512 = /* @__PURE__ */ (() => split([
   "0x428a2f98d728ae22",
   "0x7137449123ef65cd",
@@ -947,7 +947,7 @@ var SHA512 = class extends HashMD {
 };
 var sha512 = /* @__PURE__ */ createHasher(() => new SHA512());
 
-// node_modules/@noble/hashes/esm/sha512.js
+// node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/sha512.js
 var sha5122 = sha512;
 
 // src/crypto/keys.ts
@@ -1342,37 +1342,37 @@ var AgentManager = class {
     this.venue = venue;
   }
   async create(input) {
-    return this.venue.operations.run("agent:create", input);
+    return this.venue.operations.run("v/ops/agent/create", input);
   }
   async request(agentId, input, wait) {
-    return this.venue.operations.run("agent:request", { agentId, input, wait });
+    return this.venue.operations.run("v/ops/agent/request", { agentId, input, wait });
   }
   async message(agentId, message) {
-    return this.venue.operations.run("agent:message", { agentId, message });
+    return this.venue.operations.run("v/ops/agent/message", { agentId, message });
   }
   async trigger(agentId) {
-    return this.venue.operations.run("agent:trigger", { agentId });
+    return this.venue.operations.run("v/ops/agent/trigger", { agentId });
   }
   async query(agentId) {
-    return this.venue.operations.run("agent:query", { agentId });
+    return this.venue.operations.run("v/ops/agent/info", { agentId });
   }
   async list(includeTerminated) {
-    return this.venue.operations.run("agent:list", { includeTerminated });
+    return this.venue.operations.run("v/ops/agent/list", { includeTerminated });
   }
   async delete(agentId, remove) {
-    return this.venue.operations.run("agent:delete", { agentId, remove });
+    return this.venue.operations.run("v/ops/agent/delete", { agentId, remove });
   }
   async suspend(agentId) {
-    return this.venue.operations.run("agent:suspend", { agentId });
+    return this.venue.operations.run("v/ops/agent/suspend", { agentId });
   }
   async resume(agentId, autoWake) {
-    return this.venue.operations.run("agent:resume", { agentId, autoWake });
+    return this.venue.operations.run("v/ops/agent/resume", { agentId, autoWake });
   }
   async update(input) {
-    return this.venue.operations.run("agent:update", input);
+    return this.venue.operations.run("v/ops/agent/update", input);
   }
   async cancelTask(agentId, taskId) {
-    return this.venue.operations.run("agent:cancelTask", { agentId, taskId });
+    return this.venue.operations.run("v/ops/agent/cancel-task", { agentId, taskId });
   }
 };
 
@@ -1884,31 +1884,22 @@ var WorkspaceManager = class {
     this.venue = venue;
   }
   async read(path, maxSize) {
-    return this.venue.operations.run("covia:read", { path, maxSize });
+    return this.venue.operations.run("v/ops/covia/read", { path, maxSize });
   }
   async write(path, value) {
-    return this.venue.operations.run("covia:write", { path, value });
+    return this.venue.operations.run("v/ops/covia/write", { path, value });
   }
   async delete(path) {
-    return this.venue.operations.run("covia:delete", { path });
+    return this.venue.operations.run("v/ops/covia/delete", { path });
   }
   async append(path, value) {
-    return this.venue.operations.run("covia:append", { path, value });
+    return this.venue.operations.run("v/ops/covia/append", { path, value });
   }
   async list(path, limit, offset) {
-    return this.venue.operations.run("covia:list", { path, limit, offset });
+    return this.venue.operations.run("v/ops/covia/list", { path, limit, offset });
   }
   async slice(path, offset, limit) {
-    return this.venue.operations.run("covia:slice", { path, offset, limit });
-  }
-  async functions() {
-    return this.venue.operations.run("covia:functions", {});
-  }
-  async describe(name) {
-    return this.venue.operations.run("covia:describe", { name });
-  }
-  async adapters() {
-    return this.venue.operations.run("covia:adapters", {});
+    return this.venue.operations.run("v/ops/covia/slice", { path, offset, limit });
   }
 };
 
@@ -1918,7 +1909,7 @@ var UCANManager = class {
     this.venue = venue;
   }
   async issue(aud, att, exp) {
-    return this.venue.operations.run("ucan:issue", { aud, att, exp });
+    return this.venue.operations.run("v/ops/ucan/issue", { aud, att, exp });
   }
 };
 
@@ -1928,7 +1919,7 @@ var SecretManager = class {
     this.venue = venue;
   }
   async set(name, value) {
-    return this.venue.operations.run("secret:set", { name, value });
+    return this.venue.operations.run("v/ops/secret/set", { name, value });
   }
   /**
    * Extract a secret value by name.
@@ -1936,7 +1927,7 @@ var SecretManager = class {
    * may reject requests that lack the appropriate capability proof.
    */
   async extract(name) {
-    return this.venue.operations.run("secret:extract", { name });
+    return this.venue.operations.run("v/ops/secret/extract", { name });
   }
   async list() {
     return this.venue.listSecrets();
