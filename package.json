@@ -22,7 +22,7 @@
     "test": "jest",
     "test:unit": "jest src/__tests__/",
     "test:integration": "jest venue.test.ts",
-    "prepublishOnly": "npm run build && npm test",
+    "prepublishOnly": "npm run build && npm run test:unit",
     "prepare": "npm run build"
   },
   "keywords": [

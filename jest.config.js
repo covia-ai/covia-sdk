@@ -8,9 +8,18 @@ module.exports = {
   setupFiles: ["dotenv/config"],
   transform: {
     "^.+\\.tsx?$": ["ts-jest", { useESM: false }],
-    "^.+\\.jsx?$": ["ts-jest", { useESM: false }],
+    "^.+\\.jsx?$": ["ts-jest", {
+      useESM: false,
+      tsconfig: {
+        allowJs: true,
+        module: "commonjs",
+        target: "ES2020",
+        moduleResolution: "node",
+        esModuleInterop: true,
+      },
+    }],
   },
   transformIgnorePatterns: [
-    "node_modules/(?!(@noble/ed25519|@noble/hashes)/)",
+    "^(?!.*@noble[/+](ed25519|hashes)).*node_modules",
   ],
 };
