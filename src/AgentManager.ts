@@ -1,4 +1,4 @@
-import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentTriggerResult, AgentQueryResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentQueryResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput } from './types';
 
 interface AgentManagerVenue {
   operations: { run(assetId: string, input: any): Promise<any> };
@@ -17,6 +17,26 @@ export class AgentManager {
 
   async message(agentId: string, message: any): Promise<AgentMessageResult> {
     return this.venue.operations.run('v/ops/agent/message', { agentId, message });
+  }
+
+  /**
+   * Send a message to an agent and synchronously await its next response on the session.
+   *
+   * Session lifecycle:
+   * - Omit `sessionId` on the first call — the server mints a new session and returns
+   *   its id in the result. Capture it.
+   * - Pass the returned `sessionId` on every subsequent call to continue the conversation.
+   * - An unknown `sessionId` is rejected (the server will not silently mint one); omit
+   *   the field entirely to start a new session.
+   *
+   * Concurrency: only one chat may be in flight per session. Concurrent calls on the
+   * same session are rejected by the venue.
+   *
+   * Blocking: always blocks until the agent produces its next response on the session.
+   * No polling required.
+   */
+  async chat(agentId: string, message: any, sessionId?: string): Promise<AgentChatResult> {
+    return this.venue.operations.run('v/ops/agent/chat', { agentId, message, sessionId });
   }
 
   async trigger(agentId: string): Promise<AgentTriggerResult> {

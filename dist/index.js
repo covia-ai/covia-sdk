@@ -1350,6 +1350,25 @@ var AgentManager = class {
   async message(agentId, message) {
     return this.venue.operations.run("v/ops/agent/message", { agentId, message });
   }
+  /**
+   * Send a message to an agent and synchronously await its next response on the session.
+   *
+   * Session lifecycle:
+   * - Omit `sessionId` on the first call — the server mints a new session and returns
+   *   its id in the result. Capture it.
+   * - Pass the returned `sessionId` on every subsequent call to continue the conversation.
+   * - An unknown `sessionId` is rejected (the server will not silently mint one); omit
+   *   the field entirely to start a new session.
+   *
+   * Concurrency: only one chat may be in flight per session. Concurrent calls on the
+   * same session are rejected by the venue.
+   *
+   * Blocking: always blocks until the agent produces its next response on the session.
+   * No polling required.
+   */
+  async chat(agentId, message, sessionId) {
+    return this.venue.operations.run("v/ops/agent/chat", { agentId, message, sessionId });
+  }
   async trigger(agentId) {
     return this.venue.operations.run("v/ops/agent/trigger", { agentId });
   }
