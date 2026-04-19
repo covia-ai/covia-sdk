@@ -219,6 +219,23 @@ declare class AgentManager {
     create(input: AgentCreateInput): Promise<AgentCreateResult>;
     request(agentId: string, input?: any, wait?: boolean | number): Promise<AgentRequestResult>;
     message(agentId: string, message: any): Promise<AgentMessageResult>;
+    /**
+     * Send a message to an agent and synchronously await its next response on the session.
+     *
+     * Session lifecycle:
+     * - Omit `sessionId` on the first call — the server mints a new session and returns
+     *   its id in the result. Capture it.
+     * - Pass the returned `sessionId` on every subsequent call to continue the conversation.
+     * - An unknown `sessionId` is rejected (the server will not silently mint one); omit
+     *   the field entirely to start a new session.
+     *
+     * Concurrency: only one chat may be in flight per session. Concurrent calls on the
+     * same session are rejected by the venue.
+     *
+     * Blocking: always blocks until the agent produces its next response on the session.
+     * No polling required.
+     */
+    chat(agentId: string, message: any, sessionId?: string): Promise<AgentChatResult>;
     trigger(agentId: string): Promise<AgentTriggerResult>;
     query(agentId: string): Promise<AgentQueryResult>;
     list(includeTerminated?: boolean): Promise<AgentListResult>;
@@ -678,6 +695,16 @@ interface AgentMessageResult {
     agentId: string;
     delivered: boolean;
 }
+interface AgentChatInput {
+    agentId: string;
+    message: any;
+    sessionId?: string;
+}
+interface AgentChatResult {
+    agentId: string;
+    sessionId: string;
+    response: any;
+}
 interface AgentTriggerInput {
     agentId: string;
 }
@@ -1010,4 +1037,4 @@ declare function decodePublicKey(multikey: string): Uint8Array;
  */
 declare function didFromPublicKey(publicKey: Uint8Array): string;
 
-export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, AssetManager, type AssetMetadata, AssetNotFoundError, Auth, BearerAuth, type ContentDetails, type ContentHashResult, CoviaConnectionError, CoviaError, CoviaTimeoutError, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, JobManager, type JobMetadata, JobNotFoundError, JobStatus, KeyPairAuth, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, OperationManager, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, decodePublicKey, didFromPublicKey, encodePublicKey, fetchStreamWithError, fetchWithError, generateKeyPair, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, hexToPrivateKey, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream, privateKeyToHex };
+export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentChatInput, type AgentChatResult, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, AssetManager, type AssetMetadata, AssetNotFoundError, Auth, BearerAuth, type ContentDetails, type ContentHashResult, CoviaConnectionError, CoviaError, CoviaTimeoutError, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, JobManager, type JobMetadata, JobNotFoundError, JobStatus, KeyPairAuth, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, OperationManager, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, decodePublicKey, didFromPublicKey, encodePublicKey, fetchStreamWithError, fetchWithError, generateKeyPair, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, hexToPrivateKey, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream, privateKeyToHex };

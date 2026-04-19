@@ -235,6 +235,18 @@ export interface AgentMessageResult {
   delivered: boolean;
 }
 
+export interface AgentChatInput {
+  agentId: string;
+  message: any;
+  sessionId?: string;
+}
+
+export interface AgentChatResult {
+  agentId: string;
+  sessionId: string;
+  response: any;
+}
+
 export interface AgentTriggerInput {
   agentId: string;
 }

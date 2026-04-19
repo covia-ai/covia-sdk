@@ -30,6 +30,21 @@ describe('AgentManager', () => {
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/message', { agentId: 'a1', message: { text: 'hello' } });
   });
 
+  it('chat calls v/ops/agent/chat without sessionId on first call', async () => {
+    await agents.chat('a1', 'hello');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/chat', { agentId: 'a1', message: 'hello', sessionId: undefined });
+  });
+
+  it('chat passes sessionId when continuing a session', async () => {
+    await agents.chat('a1', 'follow up', 'deadbeef');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/chat', { agentId: 'a1', message: 'follow up', sessionId: 'deadbeef' });
+  });
+
+  it('chat passes structured message payloads through unchanged', async () => {
+    await agents.chat('a1', { kind: 'tool-result', data: [1, 2, 3] }, 'sid-1');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/chat', { agentId: 'a1', message: { kind: 'tool-result', data: [1, 2, 3] }, sessionId: 'sid-1' });
+  });
+
   it('trigger calls v/ops/agent/trigger', async () => {
     await agents.trigger('a1');
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/trigger', { agentId: 'a1' });
