@@ -337,6 +337,10 @@ await venue.agents.message("my-agent", { event: "update" });
 await venue.agents.trigger("my-agent");
 const state = await venue.agents.query("my-agent");
 
+// Session-scoped chat — mints a session on the first call, continue by echoing sessionId
+const first = await venue.agents.chat("my-agent", "hi");
+const follow = await venue.agents.chat("my-agent", "and now?", first.sessionId);
+
 // Lifecycle
 const agents = await venue.agents.list();
 await venue.agents.suspend("my-agent");
@@ -351,6 +355,7 @@ await venue.agents.delete("my-agent");
 | `agents.create(input)` | `AgentCreateResult` | Create an agent |
 | `agents.request(id, input?, wait?)` | `AgentRequestResult` | Send request to agent |
 | `agents.message(id, message)` | `AgentMessageResult` | Send a message |
+| `agents.chat(id, message, sessionId?)` | `AgentChatResult` | Session-scoped chat — awaits next response on the session |
 | `agents.trigger(id)` | `AgentTriggerResult` | Trigger agent execution |
 | `agents.query(id)` | `AgentQueryResult` | Query agent state |
 | `agents.list(includeTerminated?)` | `AgentListResult` | List agents |
