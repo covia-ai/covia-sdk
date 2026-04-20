@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-`@covia/covialib` — TypeScript SDK for Covia.ai, the Universal Grid for AI Orchestration & Multi-Agent Workflows. Provides APIs to connect to venues, manage assets/operations, execute jobs, and handle streaming content.
+`@covia/covia-sdk` — TypeScript SDK for Covia.ai, the Universal Grid for AI Orchestration & Multi-Agent Workflows. Provides APIs to connect to venues, manage assets/operations, execute jobs, and handle streaming content.
 
 ## Tech Stack
 
@@ -73,6 +73,6 @@ dist/                 # Build output (CJS + ESM + .d.ts)
 
 ## Package Details
 
-- **npm:** `@covia/covialib`
+- **npm:** `@covia/covia-sdk`
 - **Entry points:** `dist/index.js` (CJS), `dist/index.mjs` (ESM), `dist/index.d.ts` (types)
 - **License:** MIT
