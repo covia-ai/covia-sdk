@@ -141,7 +141,7 @@ export class Venue implements VenueInterface {
     const result = await fetchWithError<{ items: string[]; total: number }>(`${this.baseUrl}/api/v1/secrets`, {
       headers: this._buildHeaders(),
     });
-    return result.items;
+    return Array.isArray(result.items) ? result.items : [];
   }
 
   /**

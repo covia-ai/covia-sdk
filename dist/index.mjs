@@ -2084,7 +2084,7 @@ var Venue = class _Venue {
     const result = await fetchWithError(`${this.baseUrl}/api/v1/secrets`, {
       headers: this._buildHeaders()
     });
-    return result.items;
+    return Array.isArray(result.items) ? result.items : [];
   }
   /**
    * Store a secret value
