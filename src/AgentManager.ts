@@ -44,9 +44,9 @@ export class AgentManager {
   }
 
   async query(agentId: string): Promise<AgentQueryResult> {
-    const read = (path: string) => this.venue.operations.run('covia:read', { path }).catch(() => ({ value: null }));
+    const read = (path: string) => this.venue.operations.run('v/ops/covia/read', { path }).catch(() => ({ value: null }));
     const [info, timelineRes, stateRes, inboxRes] = await Promise.all([
-      this.venue.operations.run('agent:info', { agentId }),
+      this.venue.operations.run('v/ops/agent/info', { agentId }),
       read(`g/${agentId}/timeline`),
       read(`g/${agentId}/state`),
       read(`g/${agentId}/inbox`),
