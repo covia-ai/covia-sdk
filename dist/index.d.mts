@@ -1,3 +1,54 @@
+declare class Agent {
+    readonly id: string;
+    readonly venue: VenueInterface;
+    private _agents;
+    constructor(id: string, venue: VenueInterface);
+    request(input?: any, wait?: boolean | number): Promise<AgentRequestResult>;
+    message(message: any): Promise<AgentMessageResult>;
+    chat(message: any, sessionId?: string): Promise<AgentChatResult>;
+    /**
+     * Create a ChatSession bound to this agent.
+     * @param sessionId - Optional session ID to resume an existing session
+     */
+    chatSession(sessionId?: string): ChatSession;
+    trigger(): Promise<AgentTriggerResult>;
+    query(): Promise<AgentQueryResult>;
+    suspend(): Promise<AgentSuspendResult>;
+    resume(autoWake?: boolean): Promise<AgentSuspendResult>;
+    update(options: {
+        config?: Record<string, any>;
+        state?: Record<string, any>;
+    }): Promise<any>;
+    cancelTask(taskId: string): Promise<any>;
+    info(): Promise<AgentInfoResult>;
+    /**
+     * Fork this agent into a new agent.
+     * @param agentId - ID for the new forked agent
+     * @param options - Fork options
+     * @returns A new Agent instance for the forked agent
+     */
+    fork(agentId: string, options?: {
+        config?: Record<string, any>;
+        includeTimeline?: boolean;
+        overwrite?: boolean;
+    }): Promise<Agent>;
+    context(task?: any): Promise<string>;
+    delete(remove?: boolean): Promise<AgentDeleteResult>;
+}
+declare class ChatSession {
+    readonly agent: Agent;
+    private _sessionId;
+    constructor(agent: Agent, sessionId?: string);
+    /** The session ID, or undefined if no message has been sent yet and no ID was provided. */
+    get sessionId(): string | undefined;
+    /**
+     * Send a message on this session.
+     * On the first call (when no sessionId is set), the server mints a new session.
+     * The returned sessionId is captured and reused for all subsequent calls.
+     */
+    send(message: any): Promise<AgentChatResult>;
+}
+
 declare class Job {
     id: string;
     venue: VenueInterface;
@@ -416,57 +467,6 @@ declare class SecretManager {
     delete(name: string): Promise<void>;
 }
 
-declare class Agent {
-    readonly id: string;
-    readonly venue: VenueInterface;
-    private _agents;
-    constructor(id: string, venue: VenueInterface);
-    request(input?: any, wait?: boolean | number): Promise<AgentRequestResult>;
-    message(message: any): Promise<AgentMessageResult>;
-    chat(message: any, sessionId?: string): Promise<AgentChatResult>;
-    /**
-     * Create a ChatSession bound to this agent.
-     * @param sessionId - Optional session ID to resume an existing session
-     */
-    chatSession(sessionId?: string): ChatSession;
-    trigger(): Promise<AgentTriggerResult>;
-    query(): Promise<AgentQueryResult>;
-    suspend(): Promise<AgentSuspendResult>;
-    resume(autoWake?: boolean): Promise<AgentSuspendResult>;
-    update(options: {
-        config?: Record<string, any>;
-        state?: Record<string, any>;
-    }): Promise<any>;
-    cancelTask(taskId: string): Promise<any>;
-    info(): Promise<AgentInfoResult>;
-    /**
-     * Fork this agent into a new agent.
-     * @param agentId - ID for the new forked agent
-     * @param options - Fork options
-     * @returns A new Agent instance for the forked agent
-     */
-    fork(agentId: string, options?: {
-        config?: Record<string, any>;
-        includeTimeline?: boolean;
-        overwrite?: boolean;
-    }): Promise<Agent>;
-    context(task?: any): Promise<string>;
-    delete(remove?: boolean): Promise<AgentDeleteResult>;
-}
-declare class ChatSession {
-    readonly agent: Agent;
-    private _sessionId;
-    constructor(agent: Agent, sessionId?: string);
-    /** The session ID, or undefined if no message has been sent yet and no ID was provided. */
-    get sessionId(): string | undefined;
-    /**
-     * Send a message on this session.
-     * On the first call (when no sessionId is set), the server mints a new session.
-     * The returned sessionId is captured and reused for all subsequent calls.
-     */
-    send(message: any): Promise<AgentChatResult>;
-}
-
 declare class Venue implements VenueInterface {
     baseUrl: string;
     venueId: string;
@@ -602,6 +602,7 @@ interface VenueInterface {
     listSecrets(): Promise<string[]>;
     putSecret(name: string, value: string): Promise<void>;
     deleteSecret(name: string): Promise<void>;
+    agent(agentId: string): Agent;
     close(): void;
 }
 type AssetID = string;
