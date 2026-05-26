@@ -416,6 +416,57 @@ declare class SecretManager {
     delete(name: string): Promise<void>;
 }
 
+declare class Agent {
+    readonly id: string;
+    readonly venue: VenueInterface;
+    private _agents;
+    constructor(id: string, venue: VenueInterface);
+    request(input?: any, wait?: boolean | number): Promise<AgentRequestResult>;
+    message(message: any): Promise<AgentMessageResult>;
+    chat(message: any, sessionId?: string): Promise<AgentChatResult>;
+    /**
+     * Create a ChatSession bound to this agent.
+     * @param sessionId - Optional session ID to resume an existing session
+     */
+    chatSession(sessionId?: string): ChatSession;
+    trigger(): Promise<AgentTriggerResult>;
+    query(): Promise<AgentQueryResult>;
+    suspend(): Promise<AgentSuspendResult>;
+    resume(autoWake?: boolean): Promise<AgentSuspendResult>;
+    update(options: {
+        config?: Record<string, any>;
+        state?: Record<string, any>;
+    }): Promise<any>;
+    cancelTask(taskId: string): Promise<any>;
+    info(): Promise<AgentInfoResult>;
+    /**
+     * Fork this agent into a new agent.
+     * @param agentId - ID for the new forked agent
+     * @param options - Fork options
+     * @returns A new Agent instance for the forked agent
+     */
+    fork(agentId: string, options?: {
+        config?: Record<string, any>;
+        includeTimeline?: boolean;
+        overwrite?: boolean;
+    }): Promise<Agent>;
+    context(task?: any): Promise<string>;
+    delete(remove?: boolean): Promise<AgentDeleteResult>;
+}
+declare class ChatSession {
+    readonly agent: Agent;
+    private _sessionId;
+    constructor(agent: Agent, sessionId?: string);
+    /** The session ID, or undefined if no message has been sent yet and no ID was provided. */
+    get sessionId(): string | undefined;
+    /**
+     * Send a message on this session.
+     * On the first call (when no sessionId is set), the server mints a new session.
+     * The returned sessionId is captured and reused for all subsequent calls.
+     */
+    send(message: any): Promise<AgentChatResult>;
+}
+
 declare class Venue implements VenueInterface {
     baseUrl: string;
     venueId: string;
@@ -466,6 +517,13 @@ declare class Venue implements VenueInterface {
      * @returns {Promise<Job>}
      */
     getJob(jobId: string): Promise<Job>;
+    /**
+     * Get a lazy Agent handle for the given agent ID.
+     * No network round-trip — the agent is not verified to exist.
+     * @param agentId - Agent identifier
+     * @returns {Agent} An Agent instance bound to this venue
+     */
+    agent(agentId: string): Agent;
     /**
      * List secret names
      * @returns {Promise<string[]>}
@@ -1104,4 +1162,4 @@ declare function decodePublicKey(multikey: string): Uint8Array;
  */
 declare function didFromPublicKey(publicKey: Uint8Array): string;
 
-export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentChatInput, type AgentChatResult, type AgentCompleteTaskResult, type AgentContextInput, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentFailTaskResult, type AgentForkInput, type AgentForkResult, type AgentInfoResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, AssetManager, type AssetMetadata, AssetNotFoundError, type AssetPinResult, Auth, BearerAuth, type ContentDetails, type ContentHashResult, CoviaConnectionError, CoviaError, CoviaTimeoutError, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, JobManager, type JobMetadata, JobNotFoundError, JobStatus, KeyPairAuth, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, OperationManager, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceCopyResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceInspectInput, type WorkspaceInspectResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, decodePublicKey, didFromPublicKey, encodePublicKey, fetchStreamWithError, fetchWithError, generateKeyPair, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, hexToPrivateKey, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream, privateKeyToHex };
+export { type AdapterInfo, type AdaptersResult, Agent, type AgentCancelTaskInput, type AgentCard, type AgentChatInput, type AgentChatResult, type AgentCompleteTaskResult, type AgentContextInput, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentFailTaskResult, type AgentForkInput, type AgentForkResult, type AgentInfoResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, AssetManager, type AssetMetadata, AssetNotFoundError, type AssetPinResult, Auth, BearerAuth, ChatSession, type ContentDetails, type ContentHashResult, CoviaConnectionError, CoviaError, CoviaTimeoutError, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, JobManager, type JobMetadata, JobNotFoundError, JobStatus, KeyPairAuth, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, OperationManager, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceCopyResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceInspectInput, type WorkspaceInspectResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, decodePublicKey, didFromPublicKey, encodePublicKey, fetchStreamWithError, fetchWithError, generateKeyPair, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, hexToPrivateKey, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream, privateKeyToHex };
