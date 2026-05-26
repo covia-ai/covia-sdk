@@ -11,6 +11,7 @@ export { Asset } from './Asset';
 export { Operation } from './Operation';
 export { DataAsset } from './DataAsset';
 export { Job } from './Job';
+export { Agent, ChatSession } from './Agent';
 export { AgentManager } from './AgentManager';
 export { AssetManager } from './AssetManager';
 export { JobManager } from './JobManager';

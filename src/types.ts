@@ -1,3 +1,4 @@
+import { Agent } from "./Agent";
 import { Asset } from "./Asset";
 import { Auth } from "./Credentials";
 import { Job } from "./Job";
@@ -38,6 +39,7 @@ export interface VenueInterface {
   listSecrets(): Promise<string[]>;
   putSecret(name: string, value: string): Promise<void>;
   deleteSecret(name: string): Promise<void>;
+  agent(agentId: string): Agent;
   close(): void;
 
 }
