@@ -315,6 +315,67 @@ export interface AgentCancelTaskInput {
   taskId: string;
 }
 
+export interface AgentInfoResult {
+  agentId: string;
+  status: string;
+  config?: Record<string, any>;
+  stateConfig?: Record<string, any>;
+  timelineLength?: number;
+  tasks?: number;
+  error?: string;
+}
+
+export interface AgentForkInput {
+  sourceId: string;
+  agentId: string;
+  config?: Record<string, any>;
+  includeTimeline?: boolean;
+  overwrite?: boolean;
+}
+
+export interface AgentForkResult {
+  agentId: string;
+  status: string;
+  created: boolean;
+  forkedFrom: string;
+}
+
+export interface AgentContextInput {
+  agentId: string;
+  task?: any;
+}
+
+export interface AgentCompleteTaskResult {
+  agentId: string;
+  taskId: string;
+  status: string;
+}
+
+export interface AgentFailTaskResult {
+  agentId: string;
+  taskId: string;
+  status: string;
+}
+
+export interface AssetPinResult {
+  path: string;
+  hash: string;
+}
+
+export interface WorkspaceCopyResult {
+  copied: boolean;
+}
+
+export interface WorkspaceInspectInput {
+  paths: string | string[];
+  budget?: number;
+  compact?: boolean;
+}
+
+export interface WorkspaceInspectResult {
+  result: any;
+}
+
 // ── Workspace Types ──
 
 export interface WorkspaceReadInput {

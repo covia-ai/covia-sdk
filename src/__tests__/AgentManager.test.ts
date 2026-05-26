@@ -50,9 +50,12 @@ describe('AgentManager', () => {
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/trigger', { agentId: 'a1' });
   });
 
-  it('query calls v/ops/agent/info', async () => {
+  it('query calls agent:info and covia:read for state', async () => {
     await agents.query('a1');
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/info', { agentId: 'a1' });
+    expect(venue.operations.run).toHaveBeenCalledWith('agent:info', { agentId: 'a1' });
+    expect(venue.operations.run).toHaveBeenCalledWith('covia:read', { path: 'g/a1/timeline' });
+    expect(venue.operations.run).toHaveBeenCalledWith('covia:read', { path: 'g/a1/state' });
+    expect(venue.operations.run).toHaveBeenCalledWith('covia:read', { path: 'g/a1/inbox' });
   });
 
   it('list calls v/ops/agent/list', async () => {
@@ -88,5 +91,35 @@ describe('AgentManager', () => {
   it('cancelTask calls v/ops/agent/cancel-task', async () => {
     await agents.cancelTask('a1', 'task-42');
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/cancel-task', { agentId: 'a1', taskId: 'task-42' });
+  });
+
+  it('info calls v/ops/agent/info', async () => {
+    await agents.info('a1');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/info', { agentId: 'a1' });
+  });
+
+  it('fork calls v/ops/agent/fork', async () => {
+    await agents.fork({ sourceId: 'a1', agentId: 'a2', includeTimeline: true });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/fork', { sourceId: 'a1', agentId: 'a2', includeTimeline: true });
+  });
+
+  it('context calls v/ops/agent/context', async () => {
+    await agents.context('a1', { goal: 'test' });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/context', { agentId: 'a1', task: { goal: 'test' } });
+  });
+
+  it('context works without task', async () => {
+    await agents.context('a1');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/context', { agentId: 'a1', task: undefined });
+  });
+
+  it('completeTask calls v/ops/agent/complete-task', async () => {
+    await agents.completeTask({ answer: 42 });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/complete-task', { result: { answer: 42 } });
+  });
+
+  it('failTask calls v/ops/agent/fail-task', async () => {
+    await agents.failTask('something went wrong');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/fail-task', { error: 'something went wrong' });
   });
 });

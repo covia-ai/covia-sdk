@@ -1,4 +1,4 @@
-import { WorkspaceReadResult, WorkspaceWriteResult, WorkspaceDeleteResult, WorkspaceAppendResult, WorkspaceListResult, WorkspaceSliceResult } from './types';
+import { WorkspaceReadResult, WorkspaceWriteResult, WorkspaceDeleteResult, WorkspaceAppendResult, WorkspaceListResult, WorkspaceSliceResult, WorkspaceCopyResult, WorkspaceInspectResult } from './types';
 
 interface WorkspaceManagerVenue {
   operations: { run(assetId: string, input: any): Promise<any> };
@@ -29,5 +29,13 @@ export class WorkspaceManager {
 
   async slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult> {
     return this.venue.operations.run('v/ops/covia/slice', { path, offset, limit });
+  }
+
+  async copy(from: string, to: string): Promise<WorkspaceCopyResult> {
+    return this.venue.operations.run('v/ops/covia/copy', { from, to });
+  }
+
+  async inspect(paths: string | string[], budget?: number, compact?: boolean): Promise<WorkspaceInspectResult> {
+    return this.venue.operations.run('v/ops/covia/inspect', { paths, budget, compact });
   }
 }

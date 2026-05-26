@@ -1,4 +1,4 @@
-import { AssetMetadata, AssetID, AssetListOptions, AssetList, ContentHashResult, NotFoundError, AssetNotFoundError } from './types';
+import { AssetMetadata, AssetID, AssetListOptions, AssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult } from './types';
 import { fetchWithError, fetchStreamWithError } from './Utils';
 import { Asset } from './Asset';
 import { Operation } from './Operation';
@@ -7,6 +7,7 @@ import { DataAsset } from './DataAsset';
 interface AssetManagerVenue {
   baseUrl: string;
   auth: { apply(headers: Record<string, string>): void };
+  operations: { run(assetId: string, input: any): Promise<any> };
 }
 
 // Cache for storing asset data
@@ -120,6 +121,15 @@ export class AssetManager {
       }
       throw error;
     }
+  }
+
+  /**
+   * Pin a resolvable value into the content-addressed asset store.
+   * Idempotent — same value produces the same hash.
+   * @param path - Source address (hex hash, /a/<hash>, /o/<name>, /v/<path>, DID URL, or workspace path)
+   */
+  async pin(path: string): Promise<AssetPinResult> {
+    return this.venue.operations.run('v/ops/asset/pin', { path });
   }
 
   /**

@@ -244,6 +244,11 @@ declare class AgentManager {
     resume(agentId: string, autoWake?: boolean): Promise<AgentSuspendResult>;
     update(input: AgentUpdateInput): Promise<any>;
     cancelTask(agentId: string, taskId: string): Promise<any>;
+    info(agentId: string): Promise<AgentInfoResult>;
+    fork(input: AgentForkInput): Promise<AgentForkResult>;
+    context(agentId: string, task?: any): Promise<string>;
+    completeTask(result?: any): Promise<AgentCompleteTaskResult>;
+    failTask(error: string): Promise<AgentFailTaskResult>;
 }
 
 interface JobManagerVenue {
@@ -270,6 +275,9 @@ interface AssetManagerVenue {
     baseUrl: string;
     auth: {
         apply(headers: Record<string, string>): void;
+    };
+    operations: {
+        run(assetId: string, input: any): Promise<any>;
     };
 }
 declare class AssetManager {
@@ -308,6 +316,12 @@ declare class AssetManager {
      * @param assetId - Asset identifier
      */
     getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null>;
+    /**
+     * Pin a resolvable value into the content-addressed asset store.
+     * Idempotent — same value produces the same hash.
+     * @param path - Source address (hex hash, /a/<hash>, /o/<name>, /v/<path>, DID URL, or workspace path)
+     */
+    pin(path: string): Promise<AssetPinResult>;
     /**
      * Clear the asset cache.
      */
@@ -364,6 +378,8 @@ declare class WorkspaceManager {
     append(path: string, value: any): Promise<WorkspaceAppendResult>;
     list(path?: string, limit?: number, offset?: number): Promise<WorkspaceListResult>;
     slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult>;
+    copy(from: string, to: string): Promise<WorkspaceCopyResult>;
+    inspect(paths: string | string[], budget?: number, compact?: boolean): Promise<WorkspaceInspectResult>;
 }
 
 interface UCANManagerVenue {
@@ -761,6 +777,57 @@ interface AgentCancelTaskInput {
     agentId: string;
     taskId: string;
 }
+interface AgentInfoResult {
+    agentId: string;
+    status: string;
+    config?: Record<string, any>;
+    stateConfig?: Record<string, any>;
+    timelineLength?: number;
+    tasks?: number;
+    error?: string;
+}
+interface AgentForkInput {
+    sourceId: string;
+    agentId: string;
+    config?: Record<string, any>;
+    includeTimeline?: boolean;
+    overwrite?: boolean;
+}
+interface AgentForkResult {
+    agentId: string;
+    status: string;
+    created: boolean;
+    forkedFrom: string;
+}
+interface AgentContextInput {
+    agentId: string;
+    task?: any;
+}
+interface AgentCompleteTaskResult {
+    agentId: string;
+    taskId: string;
+    status: string;
+}
+interface AgentFailTaskResult {
+    agentId: string;
+    taskId: string;
+    status: string;
+}
+interface AssetPinResult {
+    path: string;
+    hash: string;
+}
+interface WorkspaceCopyResult {
+    copied: boolean;
+}
+interface WorkspaceInspectInput {
+    paths: string | string[];
+    budget?: number;
+    compact?: boolean;
+}
+interface WorkspaceInspectResult {
+    result: any;
+}
 interface WorkspaceReadInput {
     path: string;
     maxSize?: number;
@@ -1037,4 +1104,4 @@ declare function decodePublicKey(multikey: string): Uint8Array;
  */
 declare function didFromPublicKey(publicKey: Uint8Array): string;
 
-export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentChatInput, type AgentChatResult, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, AssetManager, type AssetMetadata, AssetNotFoundError, Auth, BearerAuth, type ContentDetails, type ContentHashResult, CoviaConnectionError, CoviaError, CoviaTimeoutError, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, JobManager, type JobMetadata, JobNotFoundError, JobStatus, KeyPairAuth, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, OperationManager, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, decodePublicKey, didFromPublicKey, encodePublicKey, fetchStreamWithError, fetchWithError, generateKeyPair, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, hexToPrivateKey, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream, privateKeyToHex };
+export { type AdapterInfo, type AdaptersResult, type AgentCancelTaskInput, type AgentCard, type AgentChatInput, type AgentChatResult, type AgentCompleteTaskResult, type AgentContextInput, type AgentCreateInput, type AgentCreateResult, type AgentDeleteInput, type AgentDeleteResult, type AgentFailTaskResult, type AgentForkInput, type AgentForkResult, type AgentInfoResult, type AgentListInput, type AgentListResult, AgentManager, type AgentMessageInput, type AgentMessageResult, type AgentQueryInput, type AgentQueryResult, type AgentRequestInput, type AgentRequestResult, type AgentResumeInput, AgentStatus, type AgentSuspendResult, type AgentTriggerInput, type AgentTriggerResult, type AgentUpdateInput, Asset, type AssetID, type AssetList, type AssetListOptions, AssetManager, type AssetMetadata, AssetNotFoundError, type AssetPinResult, Auth, BearerAuth, type ContentDetails, type ContentHashResult, CoviaConnectionError, CoviaError, CoviaTimeoutError, type Credentials, CredentialsHTTP, type DIDDocument, DataAsset, type FunctionInfo, type FunctionsResult, Grid, GridError, type InvokeOptions, type InvokePayload, Job, JobFailedError, JobManager, type JobMetadata, JobNotFoundError, JobStatus, KeyPairAuth, type MCPDiscovery, NoAuth, NotFoundError, Operation, type OperationDetails, type OperationInfo, OperationManager, type OperationPayload, RunStatus, type SSEEvent, type SecretExtractInput, type SecretExtractResult, SecretManager, type SecretSetInput, type SecretSetResult, type StatsData, type StatusData, type UCANAttenuation, type UCANIssueInput, type UCANIssueResult, UCANManager, Venue, type VenueConstructor, type VenueData, type VenueInterface, type VenueOptions, type WorkspaceAppendInput, type WorkspaceAppendResult, type WorkspaceCopyResult, type WorkspaceDeleteInput, type WorkspaceDeleteResult, type WorkspaceInspectInput, type WorkspaceInspectResult, type WorkspaceListInput, type WorkspaceListResult, WorkspaceManager, type WorkspaceReadInput, type WorkspaceReadResult, type WorkspaceSliceInput, type WorkspaceSliceResult, type WorkspaceWriteInput, type WorkspaceWriteResult, createSSEEvent, decodePublicKey, didFromPublicKey, encodePublicKey, fetchStreamWithError, fetchWithError, generateKeyPair, getAssetIdFromPath, getAssetIdFromVenueId, getParsedAssetId, hexToPrivateKey, isJobComplete, isJobFinished, isJobPaused, logger, parseSSEStream, privateKeyToHex };

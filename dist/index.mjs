@@ -1403,6 +1403,21 @@ var AgentManager = class {
   async cancelTask(agentId, taskId) {
     return this.venue.operations.run("v/ops/agent/cancel-task", { agentId, taskId });
   }
+  async info(agentId) {
+    return this.venue.operations.run("v/ops/agent/info", { agentId });
+  }
+  async fork(input) {
+    return this.venue.operations.run("v/ops/agent/fork", input);
+  }
+  async context(agentId, task) {
+    return this.venue.operations.run("v/ops/agent/context", { agentId, task });
+  }
+  async completeTask(result) {
+    return this.venue.operations.run("v/ops/agent/complete-task", { result });
+  }
+  async failTask(error) {
+    return this.venue.operations.run("v/ops/agent/fail-task", { error });
+  }
 };
 
 // src/Job.ts
@@ -1839,6 +1854,14 @@ var AssetManager = class {
     }
   }
   /**
+   * Pin a resolvable value into the content-addressed asset store.
+   * Idempotent — same value produces the same hash.
+   * @param path - Source address (hex hash, /a/<hash>, /o/<name>, /v/<path>, DID URL, or workspace path)
+   */
+  async pin(path) {
+    return this.venue.operations.run("v/ops/asset/pin", { path });
+  }
+  /**
    * Clear the asset cache.
    */
   clearCache() {
@@ -1929,6 +1952,12 @@ var WorkspaceManager = class {
   }
   async slice(path, offset, limit) {
     return this.venue.operations.run("v/ops/covia/slice", { path, offset, limit });
+  }
+  async copy(from, to) {
+    return this.venue.operations.run("v/ops/covia/copy", { from, to });
+  }
+  async inspect(paths, budget, compact) {
+    return this.venue.operations.run("v/ops/covia/inspect", { paths, budget, compact });
   }
 };
 

@@ -1,4 +1,4 @@
-import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentQueryResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentQueryResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult } from './types';
 
 interface AgentManagerVenue {
   operations: { run(assetId: string, input: any): Promise<any> };
@@ -81,5 +81,25 @@ export class AgentManager {
 
   async cancelTask(agentId: string, taskId: string): Promise<any> {
     return this.venue.operations.run('v/ops/agent/cancel-task', { agentId, taskId });
+  }
+
+  async info(agentId: string): Promise<AgentInfoResult> {
+    return this.venue.operations.run('v/ops/agent/info', { agentId });
+  }
+
+  async fork(input: AgentForkInput): Promise<AgentForkResult> {
+    return this.venue.operations.run('v/ops/agent/fork', input);
+  }
+
+  async context(agentId: string, task?: any): Promise<string> {
+    return this.venue.operations.run('v/ops/agent/context', { agentId, task });
+  }
+
+  async completeTask(result?: any): Promise<AgentCompleteTaskResult> {
+    return this.venue.operations.run('v/ops/agent/complete-task', { result });
+  }
+
+  async failTask(error: string): Promise<AgentFailTaskResult> {
+    return this.venue.operations.run('v/ops/agent/fail-task', { error });
   }
 }

@@ -44,4 +44,19 @@ describe('WorkspaceManager', () => {
     await ws.slice('w/mylist', 5, 10);
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/slice', { path: 'w/mylist', offset: 5, limit: 10 });
   });
+
+  it('copy calls v/ops/covia/copy', async () => {
+    await ws.copy('v/ops/json/merge', 'o/merge');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/copy', { from: 'v/ops/json/merge', to: 'o/merge' });
+  });
+
+  it('inspect calls v/ops/covia/inspect with single path', async () => {
+    await ws.inspect('v/ops', 400);
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/inspect', { paths: 'v/ops', budget: 400, compact: undefined });
+  });
+
+  it('inspect calls v/ops/covia/inspect with multiple paths', async () => {
+    await ws.inspect(['v/ops/json/merge', 'w/mydata'], 2000, false);
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/inspect', { paths: ['v/ops/json/merge', 'w/mydata'], budget: 2000, compact: false });
+  });
 });
