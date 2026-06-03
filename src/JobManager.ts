@@ -11,12 +11,16 @@ export class JobManager {
   constructor(private venue: JobManagerVenue) {}
 
   async list(): Promise<string[]> {
-    return fetchWithError<string[]>(`${this.venue.baseUrl}/api/v1/jobs`);
+    return fetchWithError<string[]>(`${this.venue.baseUrl}/api/v1/jobs`, {
+      headers: this._buildHeaders(),
+    });
   }
 
   async get(jobId: string): Promise<Job> {
     try {
-      const data = await fetchWithError<any>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`);
+      const data = await fetchWithError<any>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`, {
+        headers: this._buildHeaders(),
+      });
       return new Job(jobId, this.venue as any, data);
     } catch (error) {
       if (error instanceof NotFoundError) {

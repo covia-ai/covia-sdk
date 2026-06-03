@@ -1573,11 +1573,15 @@ var JobManager = class {
     this.venue = venue;
   }
   async list() {
-    return fetchWithError(`${this.venue.baseUrl}/api/v1/jobs`);
+    return fetchWithError(`${this.venue.baseUrl}/api/v1/jobs`, {
+      headers: this._buildHeaders()
+    });
   }
   async get(jobId) {
     try {
-      const data = await fetchWithError(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`);
+      const data = await fetchWithError(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`, {
+        headers: this._buildHeaders()
+      });
       return new Job(jobId, this.venue, data);
     } catch (error) {
       if (error instanceof NotFoundError) {
