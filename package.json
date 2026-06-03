@@ -1,6 +1,6 @@
 {
   "name": "@covia/covia-sdk",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Typescript library for covia-ai",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

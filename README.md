@@ -108,6 +108,7 @@ venue.metadata;   // { name, description }
 | `venue.status()` | Get venue status (health, stats) |
 | `venue.getAsset(assetId)` | Get an asset by ID (returns `Operation` or `DataAsset`) |
 | `venue.listAssets(options?)` | List assets with pagination (`{ offset, limit }`) |
+| `venue.agent(agentId)` | Get a lazy `Agent` handle (no round-trip) |
 | `venue.getJob(jobId)` | Get a job by ID |
 | `venue.listJobs()` | List all job IDs |
 | `venue.didDocument()` | Get the venue's DID document |
@@ -320,50 +321,100 @@ const job = await asset.invoke({ param: "value" });       // async → Job
 
 ---
 
-### Agents — `venue.agents`
+### Agents — `venue.agent(id)` / `venue.agents`
 
-Create and manage persistent AI agents.
+The preferred way to work with agents is through the `Agent` instance returned by `venue.agent(id)`. This is a lazy handle — no network call is made until you invoke a method.
+
+```typescript
+// Get a handle to an agent (no round-trip)
+const mina = venue.agent("Mina");
+
+// Interact
+const response = await mina.request({ text: "hello" });
+await mina.message({ event: "update" });
+await mina.trigger();
+const state = await mina.query();
+const info = await mina.info();
+
+// Session-scoped chat — ChatSession manages the sessionId for you
+const chat = mina.chatSession();
+await chat.send("hi");          // mints a new session
+await chat.send("and now?");    // reuses the session automatically
+chat.sessionId;                 // available for persistence
+
+// Resume a previous session
+const resumed = mina.chatSession(storedSessionId);
+await resumed.send("I'm back");
+
+// Lifecycle
+await mina.suspend();
+await mina.resume();
+await mina.update({ config: { model: "gpt-4" } });
+await mina.cancelTask("task-123");
+await mina.delete();
+
+// Fork into a new agent
+const clone = await mina.fork("Mina-v2", { includeTimeline: true });
+```
+
+#### Agent Instance
+
+| Method | Returns | Description |
+|---|---|---|
+| `agent.request(input?, wait?)` | `AgentRequestResult` | Send request to agent |
+| `agent.message(message)` | `AgentMessageResult` | Send a message |
+| `agent.chat(message, sessionId?)` | `AgentChatResult` | Single chat call (manual sessionId) |
+| `agent.chatSession(sessionId?)` | `ChatSession` | Create a session that manages sessionId |
+| `agent.trigger()` | `AgentTriggerResult` | Trigger agent execution |
+| `agent.query()` | `AgentQueryResult` | Query agent state |
+| `agent.info()` | `AgentInfoResult` | Get agent info |
+| `agent.context(task?)` | `string` | Get agent context |
+| `agent.suspend()` | `AgentSuspendResult` | Suspend the agent |
+| `agent.resume(autoWake?)` | `AgentSuspendResult` | Resume the agent |
+| `agent.update(options)` | `any` | Update agent config/state |
+| `agent.cancelTask(taskId)` | `any` | Cancel an agent task |
+| `agent.fork(agentId, options?)` | `Agent` | Fork into a new agent |
+| `agent.delete(remove?)` | `AgentDeleteResult` | Delete the agent |
+
+#### ChatSession
+
+| Property / Method | Type | Description |
+|---|---|---|
+| `chat.sessionId` | `string \| undefined` | Current session ID (undefined until first send) |
+| `chat.send(message)` | `Promise<AgentChatResult>` | Send a message, auto-managing sessionId |
+
+#### AgentManager — `venue.agents`
+
+The `AgentManager` is still available for collection-level operations and flat-style dispatch.
 
 ```typescript
 // Create an agent
-const result = await venue.agents.create({
-  agentId: "my-agent",
-  config: { model: "gpt-4", instructions: "..." },
-});
+await venue.agents.create({ agentId: "my-agent", config: { ... } });
 
-// Interact with an agent
-const response = await venue.agents.request("my-agent", { text: "hello" });
-await venue.agents.message("my-agent", { event: "update" });
-await venue.agents.trigger("my-agent");
-const state = await venue.agents.query("my-agent");
-
-// Session-scoped chat — mints a session on the first call, continue by echoing sessionId
-const first = await venue.agents.chat("my-agent", "hi");
-const follow = await venue.agents.chat("my-agent", "and now?", first.sessionId);
-
-// Lifecycle
+// List agents
 const agents = await venue.agents.list();
-await venue.agents.suspend("my-agent");
-await venue.agents.resume("my-agent");
-await venue.agents.update({ agentId: "my-agent", config: { ... } });
-await venue.agents.cancelTask("my-agent", "task-123");
-await venue.agents.delete("my-agent");
+
+// Flat-style dispatch (all manager methods still work)
+await venue.agents.chat("my-agent", "hi");
 ```
 
 | Method | Returns | Description |
 |---|---|---|
 | `agents.create(input)` | `AgentCreateResult` | Create an agent |
+| `agents.list(includeTerminated?)` | `AgentListResult` | List agents |
 | `agents.request(id, input?, wait?)` | `AgentRequestResult` | Send request to agent |
 | `agents.message(id, message)` | `AgentMessageResult` | Send a message |
-| `agents.chat(id, message, sessionId?)` | `AgentChatResult` | Session-scoped chat — awaits next response on the session |
+| `agents.chat(id, message, sessionId?)` | `AgentChatResult` | Session-scoped chat |
 | `agents.trigger(id)` | `AgentTriggerResult` | Trigger agent execution |
 | `agents.query(id)` | `AgentQueryResult` | Query agent state |
-| `agents.list(includeTerminated?)` | `AgentListResult` | List agents |
-| `agents.delete(id, remove?)` | `AgentDeleteResult` | Delete an agent |
+| `agents.info(id)` | `AgentInfoResult` | Get agent info |
 | `agents.suspend(id)` | `AgentSuspendResult` | Suspend an agent |
 | `agents.resume(id, autoWake?)` | `AgentSuspendResult` | Resume an agent |
 | `agents.update(input)` | `any` | Update agent config/state |
 | `agents.cancelTask(agentId, taskId)` | `any` | Cancel an agent task |
+| `agents.fork(input)` | `AgentForkResult` | Fork an agent |
+| `agents.context(id, task?)` | `string` | Get agent context |
+| `agents.delete(id, remove?)` | `AgentDeleteResult` | Delete an agent |
 
 ---
 
@@ -513,7 +564,7 @@ RunStatus.AUTH_REQUIRED;   // Waiting for authentication
 
 ```typescript
 import {
-  Venue, Grid, Job, Asset, Operation, DataAsset,
+  Venue, Grid, Job, Agent, ChatSession, Asset, Operation, DataAsset,
   AssetManager, OperationManager, JobManager,
   AgentManager, WorkspaceManager, SecretManager, UCANManager,
   KeyPairAuth, BearerAuth,

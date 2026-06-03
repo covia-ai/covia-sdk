@@ -12,6 +12,7 @@ import { Auth, NoAuth } from './Credentials';
 import { Resolver } from 'did-resolver'
 import { getResolver } from 'web-did-resolver'
 import { Job } from './Job';
+import { Agent } from './Agent';
 
 const webResolver = getResolver()
 const resolver = new Resolver(webResolver)
@@ -131,6 +132,16 @@ export class Venue implements VenueInterface {
    */
   async getJob(jobId: string): Promise<Job> {
     return this.jobs.get(jobId);
+  }
+
+  /**
+   * Get a lazy Agent handle for the given agent ID.
+   * No network round-trip — the agent is not verified to exist.
+   * @param agentId - Agent identifier
+   * @returns {Agent} An Agent instance bound to this venue
+   */
+  agent(agentId: string): Agent {
+    return new Agent(agentId, this);
   }
 
   /**

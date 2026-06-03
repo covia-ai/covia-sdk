@@ -50,12 +50,12 @@ describe('AgentManager', () => {
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/trigger', { agentId: 'a1' });
   });
 
-  it('query calls agent:info and covia:read for state', async () => {
+  it('query calls v/ops/agent/info and v/ops/covia/read for state', async () => {
     await agents.query('a1');
-    expect(venue.operations.run).toHaveBeenCalledWith('agent:info', { agentId: 'a1' });
-    expect(venue.operations.run).toHaveBeenCalledWith('covia:read', { path: 'g/a1/timeline' });
-    expect(venue.operations.run).toHaveBeenCalledWith('covia:read', { path: 'g/a1/state' });
-    expect(venue.operations.run).toHaveBeenCalledWith('covia:read', { path: 'g/a1/inbox' });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/info', { agentId: 'a1' });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/read', { path: 'g/a1/timeline' });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/read', { path: 'g/a1/state' });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/read', { path: 'g/a1/inbox' });
   });
 
   it('list calls v/ops/agent/list', async () => {
