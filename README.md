@@ -35,10 +35,14 @@ const auth = KeyPairAuth.generate();
 const venue = await Grid.connect("did:web:venue.covia.ai", auth);
 
 // Run an operation and get the result
-const result = await venue.operations.run("test:echo", { message: "hello" });
+const result = await venue.operations.run("v/ops/schema/infer", {
+  value: { name: "Ada", age: 36, admin: true },
+});
 
 // Invoke an operation asynchronously and track the job
-const job = await venue.operations.invoke("test:echo", { message: "hello" });
+const job = await venue.operations.invoke("v/ops/schema/infer", {
+  value: { name: "Ada", age: 36, admin: true },
+});
 console.log(`Job ${job.id} status: ${job.metadata.status}`);
 const output = await job.result({ timeout: 30000 });
 
@@ -128,13 +132,17 @@ const ops = await venue.operations.list();
 ops.forEach((op) => console.log(`${op.name}: ${op.description}`));
 
 // Get operation details
-const info = await venue.operations.get("test:echo");
+const info = await venue.operations.get("v/ops/schema/infer");
 
 // Run synchronously (invoke + wait for result)
-const result = await venue.operations.run("test:echo", { message: "hi" });
+const result = await venue.operations.run("v/ops/schema/infer", {
+  value: { name: "Ada", age: 36 },
+});
 
 // Invoke asynchronously (returns a Job)
-const job = await venue.operations.invoke("test:echo", { message: "hi" });
+const job = await venue.operations.invoke("v/ops/schema/infer", {
+  value: { name: "Ada", age: 36 },
+});
 const output = await job.result({ timeout: 10000 });
 
 // With UCAN capability tokens

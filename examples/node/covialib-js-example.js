@@ -37,16 +37,16 @@ async function main() {
   });
 
   // Run an operation synchronously (invoke + wait for result)
-  console.log(`\nRunning test:echo...`);
-  const echoResult = await venue.operations.run("test:echo", {
-    message: "Hello from covia-sdk!",
+  console.log(`\nRunning v/ops/schema/infer...`);
+  const inferResult = await venue.operations.run("v/ops/schema/infer", {
+    value: { name: "Ada", age: 36, admin: true },
   });
-  console.log(`Echo result:`, echoResult);
+  console.log(`Inferred schema:`, inferResult);
 
   // Invoke an operation asynchronously (returns a Job)
-  console.log(`\nInvoking test:echo async...`);
-  const job = await venue.operations.invoke("test:echo", {
-    message: "async hello",
+  console.log(`\nInvoking v/ops/schema/infer async...`);
+  const job = await venue.operations.invoke("v/ops/schema/infer", {
+    value: { name: "Bob", age: 42 },
   });
   console.log(`Job ID: ${job.id}, Status: ${job.metadata.status}`);
 

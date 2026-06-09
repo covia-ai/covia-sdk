@@ -19,7 +19,7 @@ export class OperationManager {
 
   /**
    * Get details of a named operation
-   * @param name - Operation name (e.g., "test:echo")
+   * @param name - Operation name (e.g., "v/ops/schema/infer")
    */
   async get(name: string): Promise<OperationInfo> {
     return fetchWithError<OperationInfo>(`${this.venue.baseUrl}/api/v1/operations/${name}`);
