@@ -9,7 +9,7 @@
 - **Language:** TypeScript 5.3+
 - **Runtime:** Node.js (>=18)
 - **Build:** tsup (dual CJS + ESM output with type declarations)
-- **Package Manager:** pnpm (npm lockfile also present)
+- **Package Manager:** pnpm
 - **Crypto:** `@noble/ed25519`, `@noble/hashes`, `did-resolver`, `web-did-resolver`
 
 ## Commands
