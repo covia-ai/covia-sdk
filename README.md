@@ -2,7 +2,7 @@
 
 [![npm version](https://badge.fury.io/js/@covia%2Fcovia-sdk.svg)](https://www.npmjs.com/package/@covia/covia-sdk)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 TypeScript SDK for [Covia.ai](https://covia.ai) — The Universal Grid for AI Orchestration & Multi-Agent Workflows.
 
@@ -589,4 +589,4 @@ import {
 
 ## License
 
-MIT - [Covia AI](https://covia.ai)
+Apache-2.0 - [Covia AI](https://covia.ai)

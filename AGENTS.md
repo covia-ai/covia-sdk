@@ -108,4 +108,4 @@ dist/                   # Build output (CJS + ESM + .d.ts) — committed
 - **npm:** `@covia/covia-sdk`
 - **Version:** see `package.json` (currently 1.3.x)
 - **Entry points:** `dist/index.js` (CJS), `dist/index.mjs` (ESM), `dist/index.d.ts` (types)
-- **License:** MIT
+- **License:** Apache-2.0
