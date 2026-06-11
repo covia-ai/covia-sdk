@@ -1,0 +1,80 @@
+name: Publish to npm
+
+# Tag-triggered release pipeline, mirroring covia-sdk-py's publish.yml:
+# push a tag `v<version>` matching package.json and this validates, tests,
+# publishes to npm, and creates a GitHub release.
+#
+# Auth is npm "trusted publishing" (OIDC) — no token secret required.
+# One-time setup on npmjs.com: package @covia/covia-sdk → Settings →
+# Trusted Publisher → GitHub Actions, repository covia-ai/covia-sdk,
+# workflow publish.yml. Publishes from this workflow then need no OTP
+# and carry provenance automatically.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  validate-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate tag matches package.json version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "Tag v$TAG does not match package.json version $VERSION" >&2
+            exit 1
+          fi
+
+  publish:
+    needs: [ci, validate-tag]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing requires npm >= 11.5.1
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # prepublishOnly runs the build and unit tests again as a final gate
+      - name: Publish
+        run: npm publish
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release create "$TAG" \
+            --title "Release $TAG" \
+            --notes "## @covia/covia-sdk $TAG
+
+          Published to [npm](https://www.npmjs.com/package/@covia/covia-sdk)."

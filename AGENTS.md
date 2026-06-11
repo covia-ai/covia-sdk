@@ -103,6 +103,16 @@ dist/                   # Build output (CJS + ESM + .d.ts) — committed
 - **Unit tests:** `src/__tests__/*.test.ts` — one suite per manager, plus SSE, Utils, types, Credentials
 - **Integration tests:** `venue.test.ts` at repo root — hits a live venue
 
+## Releasing
+
+1. Bump `version` in `package.json` (and note changes in the README if relevant)
+2. Commit, then tag `v<version>` (must match package.json) and push the tag
+3. `.github/workflows/publish.yml` validates the tag, runs CI, publishes to npm
+   via trusted publishing (OIDC — no token, no OTP), and creates a GitHub release
+
+CI (`ci.yml`) runs lint, build, and unit tests on every PR and push to `main`.
+Integration tests (`venue.test.ts`) need a live venue and stay local for now.
+
 ## Package Details
 
 - **npm:** `@covia/covia-sdk`
