@@ -365,7 +365,10 @@ export interface AssetPinResult {
 }
 
 export interface WorkspaceCopyResult {
-  copied: boolean;
+  /** 0.2.x: present and true only if a new parent path was built at the destination. */
+  pathCreated?: boolean;
+  /** @deprecated pre-0.2.x: constant true. Success is the job status. */
+  copied?: boolean;
 }
 
 export interface WorkspaceInspectInput {
@@ -389,6 +392,9 @@ export interface WorkspaceReadResult {
   exists: boolean;
   value?: any;
   truncated?: boolean;
+  /** 0.2.x: encoding size in bytes (always present). */
+  valueBytes?: number;
+  /** @deprecated pre-0.2.x: bytes, only on truncation. Use valueBytes. */
   size?: number;
 }
 
@@ -398,7 +404,10 @@ export interface WorkspaceWriteInput {
 }
 
 export interface WorkspaceWriteResult {
-  written: boolean;
+  /** 0.2.x: true iff the write built a new parent path; omitted otherwise. */
+  pathCreated?: boolean;
+  /** @deprecated pre-0.2.x: constant true. Success is the job status. */
+  written?: boolean;
 }
 
 export interface WorkspaceDeleteInput {
@@ -406,7 +415,8 @@ export interface WorkspaceDeleteInput {
 }
 
 export interface WorkspaceDeleteResult {
-  deleted: boolean;
+  /** @deprecated pre-0.2.x: constant true. 0.2.x returns an empty object (success is the job status). */
+  deleted?: boolean;
 }
 
 export interface WorkspaceAppendInput {
@@ -415,7 +425,12 @@ export interface WorkspaceAppendInput {
 }
 
 export interface WorkspaceAppendResult {
-  appended: boolean;
+  /** 0.2.x: vector element count after the append. */
+  newSize?: number;
+  /** 0.2.x: true iff a new parent path was built. */
+  pathCreated?: boolean;
+  /** @deprecated pre-0.2.x: constant true. */
+  appended?: boolean;
 }
 
 export interface WorkspaceListInput {
@@ -427,10 +442,13 @@ export interface WorkspaceListInput {
 export interface WorkspaceListResult {
   exists: boolean;
   type: string;
-  count?: number;
+  /** 0.2.x: total entries in the collection. */
+  totalSize?: number;
   keys?: string[];
   values?: any[];
   offset?: number;
+  /** @deprecated pre-0.2.x name for totalSize. */
+  count?: number;
 }
 
 export interface WorkspaceSliceInput {
@@ -441,10 +459,13 @@ export interface WorkspaceSliceInput {
 
 export interface WorkspaceSliceResult {
   exists: boolean;
-  type: string;
-  values: any[];
-  count: number;
-  offset: number;
+  type?: string;
+  values?: any[];
+  /** 0.2.x: total entries in the collection. */
+  totalSize?: number;
+  offset?: number;
+  /** @deprecated pre-0.2.x name for totalSize. */
+  count?: number;
 }
 
 // ── UCAN Types ──
