@@ -6,7 +6,7 @@ export { logger } from './Logger';
 
 // Export all classes
 export { Grid } from './Grid';
-export { Venue } from './Venue';
+export { Venue, venueBaseUrlCandidates } from './Venue';
 export { Asset } from './Asset';
 export { Operation } from './Operation';
 export { DataAsset } from './DataAsset';

@@ -17,6 +17,52 @@ import { Agent } from './Agent';
 const webResolver = getResolver()
 const resolver = new Resolver(webResolver)
 
+function stripTrailingSlash(value: string): string {
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
+// True for hosts reachable only locally (loopback, private ranges, mDNS).
+// Used to decide the default scheme for schemeless venue inputs.
+function hostIsLocal(host: string): boolean {
+  const h = host.toLowerCase();
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local')) return true;
+  if (h === '::1' || h === '0.0.0.0') return true;
+  if (/^127\./.test(h)) return true;                      // 127.0.0.0/8 loopback
+  if (/^10\./.test(h)) return true;                       // 10.0.0.0/8
+  if (/^192\.168\./.test(h)) return true;                 // 192.168.0.0/16
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;  // 172.16.0.0/12
+  if (/^169\.254\./.test(h)) return true;                 // link-local
+  return false;
+}
+
+// Turn a schemeless venue id (bare host / IP / host:port) into the ordered list
+// of base URLs to try. The scheme is unspecified here, so a local host may fall
+// back across schemes (http then https); public hosts stay https-only.
+function schemelessVenueCandidates(venueId: string): string[] {
+  const authority = venueId.split('/')[0];
+  const v6 = authority.match(/^\[([^\]]+)\]/);
+  const host = v6 ? v6[1] : authority.split(':')[0];
+  const bare = stripTrailingSlash(venueId);
+  return hostIsLocal(host)
+    ? [`http://${bare}`, `https://${bare}`]
+    : [`https://${bare}`];
+}
+
+/**
+ * Resolve a non-DID venue id into the ordered list of base URLs that
+ * {@link Venue.connect} will try in turn. Explicit `http(s)://` inputs are
+ * honoured as given (trailing slash trimmed, single candidate, no fallback);
+ * schemeless inputs (bare host / IP / host:port) pick a scheme by host — local
+ * hosts (loopback, private ranges, mDNS) try http then https, public hosts stay
+ * https-only. `did:*` ids are resolved separately and are not handled here.
+ */
+export function venueBaseUrlCandidates(venueId: string): string[] {
+  if (venueId.startsWith('http:') || venueId.startsWith('https:')) {
+    return [stripTrailingSlash(venueId)];
+  }
+  return schemelessVenueCandidates(venueId);
+}
+
 export class Venue implements VenueInterface {
   public baseUrl: string;
   public venueId: string;
@@ -67,13 +113,11 @@ export class Venue implements VenueInterface {
     }
 
     if (typeof venueId === 'string') {
-      let baseUrl: string;
-      if (venueId.startsWith('http:') || venueId.startsWith('https:')) {
-        baseUrl = venueId;
-        if(baseUrl.endsWith("/"))
-          baseUrl = baseUrl.substring(0, baseUrl.length - 1);
-
-      } else if (venueId.startsWith('did:web:')) {
+      // Resolve the input to one or more candidate base URLs. did:web ids and
+      // explicit schemes resolve to a single target (behaviour unchanged); only
+      // schemeless inputs may produce a fallback list (see venueBaseUrlCandidates).
+      let candidates: string[];
+      if (venueId.startsWith('did:web:')) {
         const didDoc = await resolver.resolve(venueId);
         if (!didDoc.didDocument) {
           throw new CoviaError('Invalid DID document');
@@ -82,18 +126,26 @@ export class Venue implements VenueInterface {
         if (!endpoint) {
           throw new CoviaError('No endpoint found for DID');
         }
-        baseUrl = endpoint.toString().replace(/\/api\/v1/, '');
+        candidates = [endpoint.toString().replace(/\/api\/v1/, '')];
       } else {
-        baseUrl = `https://${venueId}`;
+        candidates = venueBaseUrlCandidates(venueId);
       }
-    const data = await fetchWithError<StatusData>(baseUrl+'/api/v1/status');
-    return new Venue({
+
+      let lastError: unknown;
+      for (const baseUrl of candidates) {
+        try {
+          const data = await fetchWithError<StatusData>(baseUrl+'/api/v1/status');
+          return new Venue({
             baseUrl,
             venueId: data.did,
             name: data.name,
             auth: auth
-    });
-
+          });
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError ?? new CoviaError(`Could not connect to venue: ${venueId}`);
     }
 
     throw new CoviaError('Invalid venue ID parameter. Must be a string (URL/DNS) or Venue instance.');
