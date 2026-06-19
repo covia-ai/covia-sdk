@@ -96,10 +96,21 @@ export class Venue implements VenueInterface {
   }
 
   /**
-   * Static method to connect to a venue
-   * @param venueId - Can be a HTTP base URL, DNS name, or existing Venue instance
-   * @param credentials - Optional credentials for venue authentication
-   * @returns {Promise<Venue>} A new Venue instance configured appropriately
+   * Connect to a venue, validating it with `GET {base}/api/v1/status`.
+   *
+   * The input is permissive: a full `http(s)://` URL, a bare host / IP /
+   * host:port, a `did:web:` id, or an existing Venue instance. Schemeless inputs
+   * pick a scheme by host and may fall back across http/https (see
+   * {@link venueBaseUrlCandidates}); did:web ids resolve to their `Covia.API.v1`
+   * endpoint.
+   *
+   * @param venueId - A venue URL, DNS name / host:port, `did:web:` id, or existing Venue
+   * @param auth - Optional credentials for venue authentication
+   * @returns {Promise<Venue>} A connected venue. The actually resolved/validated
+   *   target is on the returned object: `venue.baseUrl` is the origin that
+   *   responded (the https candidate if an http fallback failed; the resolved
+   *   endpoint for a did:web id), and `venue.venueId` is the DID the venue
+   *   reported. The validated API root is `${venue.baseUrl}/api/v1`.
    */
   static async connect(venueId: string | Venue, auth?: Auth): Promise<Venue> {
 
