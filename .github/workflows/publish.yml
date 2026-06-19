@@ -56,9 +56,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # prepublishOnly runs the build and unit tests again as a final gate
+      # prepublishOnly runs the build and unit tests again as a final gate.
+      # Prerelease versions (e.g. 1.6.0-next.0) publish under a matching
+      # dist-tag so they never become the default `latest` install.
       - name: Publish
-        run: npm publish
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          case "$VERSION" in
+            *-rc.*)   NPM_TAG=rc ;;
+            *-beta.*) NPM_TAG=beta ;;
+            *-*)      NPM_TAG=next ;;
+            *)        NPM_TAG=latest ;;
+          esac
+          echo "Publishing $VERSION under dist-tag $NPM_TAG"
+          npm publish --tag "$NPM_TAG"
 
   github-release:
     needs: publish
