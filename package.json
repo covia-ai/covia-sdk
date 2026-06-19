@@ -25,6 +25,12 @@
     "prepublishOnly": "npm run build && npm run test:unit",
     "prepare": "npm run build"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "unrs-resolver"
+    ]
+  },
   "keywords": [
     "covia",
     "grid",
