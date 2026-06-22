@@ -3,7 +3,7 @@
 
 import { Grid, Venue, KeyPairAuth, RunStatus } from "@covia/covia-sdk";
 
-const VENUE_URL = "https://venue-test.covia.ai";
+const VENUE_URL = "https://venue-3.covia.ai";
 
 async function getSHA256Hash(input) {
   const textAsBuffer = new TextEncoder().encode(input.toString());

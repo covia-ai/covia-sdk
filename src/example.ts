@@ -6,7 +6,7 @@ import { Grid } from './Grid';
 async function example() {
   try {
     // Create a venue connection
-    const venue  =  await Grid.connect('did:web:venue-test.covia.ai')
+    const venue  =  await Grid.connect('https://venue-3.covia.ai')
     
     // List all assets
     const assets = await venue.listAssets();
