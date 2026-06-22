@@ -1,7 +1,7 @@
-import { SecretSetResult, SecretExtractResult } from './types';
+import { SecretSetResult, SecretExtractResult, InvokeOptions } from './types';
 
 interface SecretManagerVenue {
-  operations: { run(assetId: string, input: any): Promise<any> };
+  operations: { run(assetId: string, input: any, options?: InvokeOptions): Promise<any> };
   listSecrets(): Promise<string[]>;
   putSecret(name: string, value: string): Promise<void>;
   deleteSecret(name: string): Promise<void>;
@@ -16,11 +16,11 @@ export class SecretManager {
 
   /**
    * Extract a secret value by name.
-   * NOTE: This operation requires a UCAN capability grant. The backend
-   * may reject requests that lack the appropriate capability proof.
+   * Requires a UCAN capability grant — pass the proof token(s) as `ucans`.
+   * Extracting another DID's secret needs a grant on that DID's `/s/<name>`.
    */
-  async extract(name: string): Promise<SecretExtractResult> {
-    return this.venue.operations.run('v/ops/secret/extract', { name });
+  async extract(name: string, ucans?: string[]): Promise<SecretExtractResult> {
+    return this.venue.operations.run('v/ops/secret/extract', { name }, { ucans });
   }
 
   async list(): Promise<string[]> {

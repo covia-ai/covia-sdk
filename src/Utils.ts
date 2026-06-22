@@ -1,5 +1,6 @@
 import { CoviaError, CoviaConnectionError, GridError, NotFoundError, RunStatus, SSEEvent } from './types';
 import { logger } from './Logger';
+import { didUrl, Namespace } from './did';
 
 /**
  * Parse error message from an API response body.
@@ -139,26 +140,29 @@ export function isJobFinished(jobStatus:RunStatus): boolean {
  * @returns {string} - Returns the parsed hexIdof the asset
  */
 export function getParsedAssetId(assetId: string): string {
-  if(assetId.startsWith("did:web")) {
+  // For any DID URL (did:web, did:key, …) the trailing segment is the hex id.
+  if (assetId.startsWith("did:")) {
     const parts = assetId.split("/");
-    return  parts[parts.length - 1];
+    return parts[parts.length - 1];
   }
   return assetId;
 }
 /**
- * Utility function to return complete assetId from hex and path
+ * Utility function to return complete assetId from hex and an API path of the
+ * form `/api/v1/assets/<encoded-did>/...`.
  * @param assetHex - The asset hex
  * @param assetPath - The asset path
  * @returns {string} - Returns the complete assetId
  */
-export function getAssetIdFromPath(assetHex: string, assetPath:string): string {
-  //Get did from path and append to asset for full id
-  const venueDid = decodeURIComponent(assetPath.split("/")[4]);   
-  return venueDid+"/a/"+assetHex;
+export function getAssetIdFromPath(assetHex: string, assetPath: string): string {
+  // Locate the segment after "assets" rather than assuming a fixed index.
+  const parts = assetPath.split("/");
+  const i = parts.indexOf("assets");
+  const venueDid = decodeURIComponent(i >= 0 && i + 1 < parts.length ? parts[i + 1] : "");
+  return getAssetIdFromVenueId(assetHex, venueDid);
 }
-export function getAssetIdFromVenueId(assetHex: string, venueId:string): string {
-  //Get did from path and append to asset for full id
-  return venueId+"/a/"+assetHex;
+export function getAssetIdFromVenueId(assetHex: string, venueId: string): string {
+  return didUrl(venueId, Namespace.ASSET, assetHex);
 }
 
 /**

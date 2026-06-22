@@ -27,13 +27,16 @@ export function base64UrlEncode(data: Uint8Array): string {
  * Create and sign an EdDSA JWT for self-issued authentication.
  *
  * Header:  {"alg":"EdDSA","typ":"JWT","kid":"<multikey>"}
- * Payload: {"sub":"did:key:<multikey>","iss":"did:key:<multikey>","iat":<now>,"exp":<now+lifetime>}
+ * Payload: {"sub":"did:key:<multikey>","iss":"did:key:<multikey>","iat":<now>,"exp":<now+lifetime>[,"aud":<audience>]}
  *
  * @param privateKey - 32-byte Ed25519 private key
  * @param lifetimeSeconds - Token lifetime in seconds (default 300)
+ * @param audience - Optional `aud` claim — the venue's DID. Bind tokens to the
+ *   target venue so they can't be replayed elsewhere (and so they pass the
+ *   venue's audience check). Omitted when not supplied.
  * @returns Signed JWT string
  */
-export function createEdDSAJWT(privateKey: Uint8Array, lifetimeSeconds: number = 300): string {
+export function createEdDSAJWT(privateKey: Uint8Array, lifetimeSeconds: number = 300, audience?: string): string {
   const publicKey = getPublicKey(privateKey);
   const multikey = encodePublicKey(publicKey);
   const did = `did:key:${multikey}`;
@@ -41,12 +44,14 @@ export function createEdDSAJWT(privateKey: Uint8Array, lifetimeSeconds: number =
   const nowSecs = Math.floor(Date.now() / 1000);
 
   const header = JSON.stringify({ alg: 'EdDSA', typ: 'JWT', kid: multikey });
-  const payload = JSON.stringify({
+  const claims: Record<string, unknown> = {
     sub: did,
     iss: did,
     iat: nowSecs,
     exp: nowSecs + lifetimeSeconds,
-  });
+  };
+  if (audience) claims.aud = audience;
+  const payload = JSON.stringify(claims);
 
   const headerB64 = base64UrlEncode(encoder.encode(header));
   const payloadB64 = base64UrlEncode(encoder.encode(payload));

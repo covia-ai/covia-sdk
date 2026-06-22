@@ -68,6 +68,8 @@ dist/                   # Build output (CJS + ESM + .d.ts) — committed
 
 **Utilities:** `fetchWithError()`, `fetchStreamWithError()`, `isJobComplete()`, `isJobFinished()`, `isJobPaused()`, `getParsedAssetId()`, `getAssetIdFromPath()`
 
+**DID / lattice paths:** `Namespace`, `isDid()`, `didMethod()`, `parseDidUrl()`, `didUrl()`, `assetHash()` (`src/did.ts`) — build/parse `<DID>/<namespace>/<path>` addresses
+
 **Crypto:** `generateKeyPair`, `privateKeyToHex`, `hexToPrivateKey`, `didFromPublicKey`, `encodePublicKey`, `decodePublicKey`
 
 ## Core Workflow

@@ -4,7 +4,8 @@ import { Job } from './Job';
 
 interface OperationManagerVenue {
   baseUrl: string;
-  auth: { apply(headers: Record<string, string>): void };
+  venueId: string;
+  auth: { apply(headers: Record<string, string>, audience?: string): void };
 }
 
 export class OperationManager {
@@ -60,7 +61,7 @@ export class OperationManager {
 
   private _buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    this.venue.auth.apply(headers);
+    this.venue.auth.apply(headers, this.venue.venueId);
     return headers;
   }
 }

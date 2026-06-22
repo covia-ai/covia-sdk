@@ -16,13 +16,20 @@ import { createEdDSAJWT } from './crypto/jwt';
  *   }
  */
 export abstract class Auth {
-  /** Apply authentication credentials to request headers (mutates in place). */
-  abstract apply(headers: Record<string, string>): void;
+  /**
+   * Apply authentication credentials to request headers (mutates in place).
+   *
+   * @param headers - Outgoing request headers to mutate.
+   * @param audience - The venue's DID, supplied by the transport. Providers
+   *   that bind tokens to the venue's identity (e.g. {@link KeyPairAuth}) use it
+   *   as the JWT `aud`; others ignore it.
+   */
+  abstract apply(headers: Record<string, string>, audience?: string): void;
 }
 
 /** No-op authentication provider. Sends no credentials. */
 export class NoAuth extends Auth {
-  apply(_headers: Record<string, string>): void {
+  apply(_headers: Record<string, string>, _audience?: string): void {
     // No-op
   }
 }
@@ -42,7 +49,7 @@ export class BearerAuth extends Auth {
     this._token = token;
   }
 
-  apply(headers: Record<string, string>): void {
+  apply(headers: Record<string, string>, _audience?: string): void {
     headers["Authorization"] = `Bearer ${this._token}`;
   }
 }
@@ -63,6 +70,7 @@ export class KeyPairAuth extends Auth {
   private _publicKey: Uint8Array;
   private _did: string;
   private _lifetime: number;
+  private _audience?: string;
 
   /**
    * @param privateKey - 32-byte Ed25519 private key
@@ -76,8 +84,10 @@ export class KeyPairAuth extends Auth {
     this._lifetime = tokenLifetimeSeconds;
   }
 
-  apply(headers: Record<string, string>): void {
-    const jwt = createEdDSAJWT(this._privateKey, this._lifetime);
+  apply(headers: Record<string, string>, audience?: string): void {
+    // An explicitly-pinned audience wins; otherwise bind the JWT `aud` to the
+    // venue DID the transport supplies. With neither, no `aud` is sent.
+    const jwt = createEdDSAJWT(this._privateKey, this._lifetime, this._audience ?? audience);
     headers['Authorization'] = `Bearer ${jwt}`;
   }
 
@@ -85,6 +95,13 @@ export class KeyPairAuth extends Auth {
   getDID(): string {
     return this._did;
   }
+
+  /**
+   * Explicitly pin the JWT `aud` claim. Overrides the venue DID the transport
+   * supplies — normally unnecessary, since the venue DID is the correct audience.
+   */
+  set audience(value: string | undefined) { this._audience = value; }
+  get audience(): string | undefined { return this._audience; }
 
   /** The 32-byte Ed25519 public key. */
   getPublicKey(): Uint8Array {

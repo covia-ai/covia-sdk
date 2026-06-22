@@ -1,4 +1,4 @@
-import { CoviaError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
+import { CoviaError, CoviaTimeoutError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
 import { AgentManager } from './AgentManager';
 import { JobManager } from './JobManager';
 import { AssetManager } from './AssetManager';
@@ -251,6 +251,37 @@ export class Venue implements VenueInterface {
   }
 
   /**
+   * Block until the venue is ready to serve operations.
+   *
+   * Polls {@link status} until it responds and reports either no explicit
+   * `status` or `"OK"`. Connection/HTTP errors are treated as "not ready yet"
+   * and retried until `timeoutMs` elapses — useful right after starting a venue,
+   * since a cold venue may answer its root before its invoke layer is up.
+   *
+   * @param options.timeoutMs - Max time to wait (default 60000).
+   * @param options.pollIntervalMs - Delay between polls (default 1000).
+   * @returns The ready {@link StatusData}.
+   * @throws {CoviaTimeoutError} If the venue is not ready within the timeout.
+   */
+  async waitUntilReady(options: { timeoutMs?: number; pollIntervalMs?: number } = {}): Promise<StatusData> {
+    const timeoutMs = options.timeoutMs ?? 60_000;
+    const pollIntervalMs = options.pollIntervalMs ?? 1_000;
+    const start = Date.now();
+    for (;;) {
+      try {
+        const data = await this.status();
+        if (data.status == null || data.status.toUpperCase() === 'OK') return data;
+      } catch {
+        // not ready yet — retry until the timeout
+      }
+      if (Date.now() - start >= timeoutMs) {
+        throw new CoviaTimeoutError(`Venue ${this.baseUrl} not ready within ${timeoutMs}ms`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+  }
+
+  /**
    * Get the full DID document for this venue
    * @returns {Promise<DIDDocument>}
    */
@@ -291,7 +322,9 @@ export class Venue implements VenueInterface {
 
   private _buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    this.auth.apply(headers);
+    // Bind auth to this venue's DID (the JWT `aud`), so tokens can't be
+    // replayed at another venue and pass the venue's audience check.
+    this.auth.apply(headers, this.venueId);
     return headers;
   }
 }

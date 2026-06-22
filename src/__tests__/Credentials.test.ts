@@ -161,6 +161,36 @@ describe('KeyPairAuth', () => {
     expect(payload.exp - payload.iat).toBe(300); // default 5 min
   });
 
+  const decodePayload = (headers: Record<string, string>) =>
+    JSON.parse(
+      Buffer.from(
+        headers['Authorization'].replace('Bearer ', '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/'),
+        'base64',
+      ).toString(),
+    );
+
+  it('binds the JWT aud to the venue DID passed by the transport', () => {
+    const auth = KeyPairAuth.generate();
+    const headers: Record<string, string> = {};
+    auth.apply(headers, 'did:web:venue.covia.ai');
+    expect(decodePayload(headers).aud).toBe('did:web:venue.covia.ai');
+  });
+
+  it('omits aud when no audience is supplied', () => {
+    const auth = KeyPairAuth.generate();
+    const headers: Record<string, string> = {};
+    auth.apply(headers);
+    expect(decodePayload(headers).aud).toBeUndefined();
+  });
+
+  it('an explicitly pinned audience overrides the transport-supplied one', () => {
+    const auth = KeyPairAuth.generate();
+    auth.audience = 'did:web:pinned.example';
+    const headers: Record<string, string> = {};
+    auth.apply(headers, 'did:web:venue.covia.ai');
+    expect(decodePayload(headers).aud).toBe('did:web:pinned.example');
+  });
+
   it('respects custom token lifetime', () => {
     const auth = KeyPairAuth.generate(600);
     const headers: Record<string, string> = {};

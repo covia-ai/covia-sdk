@@ -2,6 +2,7 @@
 export * from './types';
 export * from './Credentials'
 export * from './Utils';
+export * from './did';
 export { logger } from './Logger';
 
 // Export all classes

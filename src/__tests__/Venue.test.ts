@@ -1,5 +1,5 @@
 import { Venue } from '../Venue';
-import { CoviaError, RunStatus, AssetNotFoundError, JobNotFoundError, NotFoundError, GridError } from '../types';
+import { CoviaError, CoviaTimeoutError, RunStatus, AssetNotFoundError, JobNotFoundError, NotFoundError, GridError } from '../types';
 import { BearerAuth, NoAuth } from '../Credentials';
 import { Operation } from '../Operation';
 import { DataAsset } from '../DataAsset';
@@ -52,6 +52,25 @@ function mockFetchError(status: number) {
     status,
   });
 }
+
+describe('Venue.waitUntilReady', () => {
+  const venue = new Venue({ baseUrl: 'https://v', venueId: 'did:web:v' });
+
+  it('returns once status reports OK (after polling)', async () => {
+    mockFetch.mockReset();
+    mockFetchSuccess({ status: 'STARTING' });
+    mockFetchSuccess({ status: 'OK', name: 'V' });
+    const data = await venue.waitUntilReady({ pollIntervalMs: 0 });
+    expect(data.status).toBe('OK');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws CoviaTimeoutError when never ready', async () => {
+    mockFetch.mockReset();
+    mockFetchError(503);
+    await expect(venue.waitUntilReady({ timeoutMs: 0, pollIntervalMs: 0 })).rejects.toThrow(CoviaTimeoutError);
+  });
+});
 
 describe('Venue constructor', () => {
   it('creates with default options', () => {

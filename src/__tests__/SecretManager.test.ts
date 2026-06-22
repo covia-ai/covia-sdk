@@ -25,7 +25,12 @@ describe('SecretManager', () => {
 
   it('extract calls secret:extract via operations.run', async () => {
     await secrets.extract('API_KEY');
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/secret/extract', { name: 'API_KEY' });
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/secret/extract', { name: 'API_KEY' }, { ucans: undefined });
+  });
+
+  it('extract forwards ucans (capability proof) to operations.run', async () => {
+    await secrets.extract('API_KEY', ['eyJ.grant']);
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/secret/extract', { name: 'API_KEY' }, { ucans: ['eyJ.grant'] });
   });
 
   it('list delegates to venue.listSecrets', async () => {

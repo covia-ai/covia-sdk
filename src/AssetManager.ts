@@ -1,12 +1,14 @@
 import { AssetMetadata, AssetID, AssetListOptions, AssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult } from './types';
 import { fetchWithError, fetchStreamWithError } from './Utils';
+import { assetHash } from './did';
 import { Asset } from './Asset';
 import { Operation } from './Operation';
 import { DataAsset } from './DataAsset';
 
 interface AssetManagerVenue {
   baseUrl: string;
-  auth: { apply(headers: Record<string, string>): void };
+  venueId: string;
+  auth: { apply(headers: Record<string, string>, audience?: string): void };
   operations: { run(assetId: string, input: any): Promise<any> };
 }
 
@@ -17,8 +19,13 @@ export class AssetManager {
   constructor(private venue: AssetManagerVenue) {}
 
   /**
-   * Get asset by ID
-   * @param assetId - Asset identifier
+   * Get an asset by lattice address.
+   *
+   * `assetId` may be a content hash (`<hash>`, `a/<hash>`, `<DID>/a/<hash>`) or
+   * a mutable lattice path the venue resolves (`w/my-assets/foo`, `o/my-op`,
+   * `<DID>/w/...`). Only content-addressed (immutable) refs are cached;
+   * mutable paths are always re-fetched, so a changed value is never served stale.
+   * @param assetId - Asset identifier or lattice address
    * @returns Returns either an Operation or DataAsset based on the asset's metadata
    */
   async get(assetId: AssetID): Promise<Asset> {
@@ -32,7 +39,9 @@ export class AssetManager {
     }
     try {
       const data = await fetchWithError<any>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`);
-      cache.set(assetId, data);
+      // Cache only immutable, content-addressed refs — caching a mutable
+      // lattice path (w/…, o/…) would serve stale data after it changes.
+      if (assetHash(assetId)) cache.set(assetId, data);
       if (data.metadata?.operation) {
         return new Operation(assetId, this.venue as any, data);
       } else {
@@ -141,7 +150,7 @@ export class AssetManager {
 
   private _buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    this.venue.auth.apply(headers);
+    this.venue.auth.apply(headers, this.venue.venueId);
     return headers;
   }
 }
