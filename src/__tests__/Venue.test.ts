@@ -169,6 +169,33 @@ describe('Venue.connect', () => {
 
     await expect(Venue.connect('https://bad.com')).rejects.toThrow(CoviaError);
   });
+
+  // An auth-gated venue (public access disabled) 401s on /api/v1/status, but its
+  // did:web document is public by spec — connect must fall back to it.
+  it('falls back to the public did:web document when /status is auth-gated', async () => {
+    mockFetchError(401);                                        // /api/v1/status → 401
+    mockFetchSuccess({ id: 'did:key:z6MkPrivateVenue' });       // /.well-known/did.json
+
+    const venue = await Venue.connect('https://private.example.com');
+    expect(venue.baseUrl).toBe('https://private.example.com');
+    expect(venue.venueId).toBe('did:key:z6MkPrivateVenue');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[1][0]).toBe('https://private.example.com/.well-known/did.json');
+  });
+
+  it('throws the original auth error when the did:web fallback also fails', async () => {
+    mockFetchError(401);                                        // /api/v1/status
+    mockFetchError(404);                                        // /.well-known/did.json
+
+    await expect(Venue.connect('https://gone.example.com')).rejects.toThrow(/401/);
+  });
+
+  it('does not consult did.json on non-auth status failures', async () => {
+    mockFetchError(500);
+
+    await expect(Venue.connect('https://broken.example.com')).rejects.toThrow(CoviaError);
+    expect(mockFetch).toHaveBeenCalledTimes(1);                 // no fallback fetch
+  });
 });
 
 describe('Venue.getAsset', () => {

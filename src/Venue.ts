@@ -1,4 +1,4 @@
-import { CoviaError, CoviaTimeoutError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
+import { CoviaError, CoviaTimeoutError, GridError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
 import { AgentManager } from './AgentManager';
 import { JobManager } from './JobManager';
 import { AssetManager } from './AssetManager';
@@ -96,7 +96,11 @@ export class Venue implements VenueInterface {
   }
 
   /**
-   * Connect to a venue, validating it with `GET {base}/api/v1/status`.
+   * Connect to a venue, validating it with `GET {base}/api/v1/status`. If the
+   * venue is auth-gated (status answers 401/403 — public access disabled), the
+   * venue is validated against its public did:web document at
+   * `/.well-known/did.json` instead, whose `id` becomes `venueId` — identity is
+   * publicly resolvable by spec even when the API is not.
    *
    * The input is permissive: a full `http(s)://` URL, a bare host / IP /
    * host:port, a `did:web:` id, or an existing Venue instance. Schemeless inputs
@@ -153,6 +157,18 @@ export class Venue implements VenueInterface {
             auth: auth
           });
         } catch (error) {
+          // An auth-gated venue (public access disabled) 401s on /status, but its
+          // did:web document at /.well-known/did.json is public by spec — identity
+          // (DID, public keys, endpoints) is meant to be resolvable anonymously even
+          // when the API itself is not. Validate the venue against that instead.
+          if (error instanceof GridError && (error.statusCode === 401 || error.statusCode === 403)) {
+            try {
+              const doc = await fetchWithError<DIDDocument>(baseUrl + '/.well-known/did.json');
+              if (doc?.id) {
+                return new Venue({ baseUrl, venueId: doc.id, auth: auth });
+              }
+            } catch { /* fall through to the next candidate with the original error */ }
+          }
           lastError = error;
         }
       }
