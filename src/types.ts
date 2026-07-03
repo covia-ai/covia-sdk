@@ -365,6 +365,8 @@ export interface AssetPinResult {
 }
 
 export interface WorkspaceCopyResult {
+  /** 0.3.0 (#147): `false` = copy created a new value at the destination, `true` = it replaced an existing one. */
+  existed?: boolean;
   /** 0.2.x: present and true only if a new parent path was built at the destination. */
   pathCreated?: boolean;
   /** @deprecated pre-0.2.x: constant true. Success is the job status. */
@@ -407,6 +409,8 @@ export interface WorkspaceWriteInput {
 }
 
 export interface WorkspaceWriteResult {
+  /** 0.3.0 (#147): `false` = a new value was created, `true` = an existing one was replaced (a stored null counts as present). */
+  existed?: boolean;
   /** 0.2.x: true iff the write built a new parent path; omitted otherwise. */
   pathCreated?: boolean;
   /** @deprecated pre-0.2.x: constant true. Success is the job status. */
@@ -418,7 +422,7 @@ export interface WorkspaceDeleteInput {
 }
 
 export interface WorkspaceDeleteResult {
-  /** @deprecated pre-0.2.x: constant true. 0.2.x returns an empty object (success is the job status). */
+  /** 0.3.0 (#147): `true` = a value was present and removed, `false` = idempotent no-op. (Pre-0.3.0 this was a constant `true`, then an empty object.) */
   deleted?: boolean;
 }
 
@@ -428,6 +432,10 @@ export interface WorkspaceAppendInput {
 }
 
 export interface WorkspaceAppendResult {
+  /** 0.3.0 (#147): `false` = a new collection was created, `true` = an existing one was extended. */
+  existed?: boolean;
+  /** 0.3.0 (#147): the position the appended element landed at (`newSize - 1`). */
+  index?: number;
   /** 0.2.x: vector element count after the append. */
   newSize?: number;
   /** 0.2.x: true iff a new parent path was built. */
