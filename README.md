@@ -430,34 +430,42 @@ await venue.agents.chat("my-agent", "hi");
 
 Read and write shared state in the venue's workspace.
 
+**Reads are job-free.** `read`/`list`/`slice`/`inspect`/`count`/`aggregate` go through
+`GET /api/v1/values/*` (covia #177) — synchronous, capability-checked, and **no job is
+persisted**. This matters under load: routing reads through the invoke/job path writes a
+durable job record per read, growing the venue's etch without bound. **Writes stay on the
+job path** (they should leave an audit record). A read that needs UCAN **proof tokens**
+(cross-DID) transparently falls back to the invoke path.
+
 ```typescript
-// CRUD
+// CRUD (reads are job-free; writes are jobs)
 await venue.workspace.write("w/my-app/config", { theme: "dark" });
 const data = await venue.workspace.read("w/my-app/config");
 await venue.workspace.append("w/my-app/log", "new entry");
 await venue.workspace.delete("w/my-app/config");
 
 // List and slice
-const entries = await venue.workspace.list("w/my-app/", 100, 0);
+const entries = await venue.workspace.list("w/my-app/log", 100, 0);
 const slice = await venue.workspace.slice("w/my-app/log", 0, 10);
 
-// Discovery
-const funcs = await venue.workspace.functions();
-const desc = await venue.workspace.describe("myFunction");
-const adapters = await venue.workspace.adapters();
+// Server-side tallies — count / group-by without reading every record
+const { count } = await venue.workspace.count("w/my-app/log", { depth: 1 });
+const byKind = await venue.workspace.aggregate("w/my-app/events", { depth: 2, groupBy: "kind" });
+// byKind.groups → { click: { count: 12 }, view: { count: 40 } }
 ```
 
 | Method | Returns | Description |
 |---|---|---|
-| `workspace.read(path, maxSize?)` | `WorkspaceReadResult` | Read a value |
-| `workspace.write(path, value)` | `WorkspaceWriteResult` | Write a value |
-| `workspace.delete(path)` | `WorkspaceDeleteResult` | Delete an entry |
-| `workspace.append(path, value)` | `WorkspaceAppendResult` | Append to an entry |
-| `workspace.list(path?, limit?, offset?)` | `WorkspaceListResult` | List entries |
-| `workspace.slice(path, offset?, limit?)` | `WorkspaceSliceResult` | Slice an entry |
-| `workspace.functions()` | `FunctionsResult` | List available functions |
-| `workspace.describe(name)` | `any` | Describe a function |
-| `workspace.adapters()` | `AdaptersResult` | List adapters |
+| `workspace.read(path, maxSize?)` | `WorkspaceReadResult` | Read a value (job-free) |
+| `workspace.write(path, value)` | `WorkspaceWriteResult` | Write a value (job) |
+| `workspace.delete(path)` | `WorkspaceDeleteResult` | Delete an entry (job) |
+| `workspace.append(path, value)` | `WorkspaceAppendResult` | Append to an entry (job) |
+| `workspace.list(path?, limit?, offset?)` | `WorkspaceListResult` | List keys/count of a node (job-free) |
+| `workspace.slice(path, offset?, limit?)` | `WorkspaceSliceResult` | Paginated elements/entries (job-free) |
+| `workspace.inspect(paths, budget?, compact?)` | `WorkspaceInspectResult` | JSON5 render of a value (job-free; single path) |
+| `workspace.count(path, {depth?})` | `WorkspaceCountResult` | Count entries at a depth (job-free) |
+| `workspace.aggregate(path, {depth?, groupBy?})` | `WorkspaceAggregateResult` | Count, optionally grouped by a field (job-free) |
+| `workspace.copy(from, to)` | `WorkspaceCopyResult` | Copy a value between paths (job) |
 
 ---
 

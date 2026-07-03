@@ -392,7 +392,10 @@ export interface WorkspaceReadResult {
   exists: boolean;
   value?: any;
   truncated?: boolean;
-  /** 0.2.x: encoding size in bytes (always present). */
+  /** Convex type name; included on a truncated read (0.3.0) so the caller can
+   *  fall back to `list` (map) or `slice` (sequence) instead of guessing. */
+  type?: string;
+  /** encoding size in bytes (always present). */
   valueBytes?: number;
   /** @deprecated pre-0.2.x: bytes, only on truncation. Use valueBytes. */
   size?: number;
@@ -442,13 +445,13 @@ export interface WorkspaceListInput {
 export interface WorkspaceListResult {
   exists: boolean;
   type: string;
-  /** 0.2.x: total entries in the collection. */
-  totalSize?: number;
+  /** total entries in the collection (the single cardinality word from 0.3.0). */
+  count?: number;
   keys?: string[];
   values?: any[];
   offset?: number;
-  /** @deprecated pre-0.2.x name for totalSize. */
-  count?: number;
+  /** @deprecated pre-0.3.0 name for `count`. */
+  totalSize?: number;
 }
 
 export interface WorkspaceSliceInput {
@@ -461,11 +464,27 @@ export interface WorkspaceSliceResult {
   exists: boolean;
   type?: string;
   values?: any[];
-  /** 0.2.x: total entries in the collection. */
-  totalSize?: number;
-  offset?: number;
-  /** @deprecated pre-0.2.x name for totalSize. */
+  /** total entries in the collection (the single cardinality word from 0.3.0). */
   count?: number;
+  offset?: number;
+  /** @deprecated pre-0.3.0 name for `count`. */
+  totalSize?: number;
+}
+
+/** Job-free tally (#177). `exists` = a countable collection is present at the
+ *  path (absent path, or a scalar with nothing to descend into → `{exists:false}`,
+ *  no `count`; an empty or too-deep collection → `{exists:true, count:0}`). */
+export interface WorkspaceCountResult {
+  exists: boolean;
+  count?: number;
+}
+export interface WorkspaceAggregateResult {
+  exists: boolean;
+  count?: number;
+  /** Present when `groupBy` was supplied: each distinct field value → a metric
+   *  object (`{count}` today; numeric reductions add keys additively). An entry
+   *  lacking the field groups under the `"null"` key. Σ(group counts) == count. */
+  groups?: Record<string, { count: number }>;
 }
 
 // ── UCAN Types ──
