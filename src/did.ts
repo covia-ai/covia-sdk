@@ -52,7 +52,7 @@ export function didMethod(value: string): string | null {
  */
 export function parseDidUrl(value: string): DIDURL {
   let did: string | null = null;
-  let rest = value;
+  let rest: string;
   if (value.startsWith('did:')) {
     const slash = value.indexOf('/');
     if (slash === -1) return { did: value, namespace: null, path: '' };

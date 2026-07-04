@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
     "test": "jest",
     "test:unit": "jest src/__tests__/",
     "test:integration": "jest venue.test.ts",
@@ -48,13 +49,16 @@
     "access": "public"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
     "dotenv": "^17.4.2",
+    "eslint": "^10.6.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
     "tsup": "^8.0.0",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.0",
+    "typescript-eslint": "^8.62.1"
   },
   "engines": {
     "node": ">=18"

@@ -18,7 +18,7 @@ const defaultHandler: LogHandler = (_level, message) => {
 
 export const logger = {
   level: 'none' as LogLevel,
-  handler: defaultHandler as LogHandler,
+  handler: defaultHandler,
 
   debug(message: string): void {
     if (this.level === 'debug') {

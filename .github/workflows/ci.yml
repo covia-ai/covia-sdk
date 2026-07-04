@@ -23,9 +23,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # No lint step: eslint is not a project dependency (the `lint` script
-      # assumes a global install). Add it here if/when eslint lands in
-      # devDependencies with a config.
+      - name: Lint
+        run: pnpm run lint
 
       - name: Build
         run: pnpm run build

@@ -42,7 +42,7 @@ export abstract class Asset {
     if (cache.has(this.id)) {
       return Promise.resolve(cache.get(this.id)!);
     } else {
-      const data = this._assets.getMetadata(this.id)
+      const data = await this._assets.getMetadata(this.id);
       if (data) {
         cache.set(this.id, data);
       }

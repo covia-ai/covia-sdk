@@ -21,7 +21,7 @@ describe('AssetManager caching', () => {
 
   beforeEach(() => {
     mockFetch.mockReset();
-    am = new AssetManager(makeVenue() as any);
+    am = new AssetManager(makeVenue());
     am.clearCache();
   });
 

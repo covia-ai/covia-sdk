@@ -138,10 +138,10 @@ export class Venue implements VenueInterface {
           throw new CoviaError('Invalid DID document');
         }
         const endpoint = didDoc.didDocument.service?.find(service => service.type === 'Covia.API.v1')?.serviceEndpoint;
-        if (!endpoint) {
-          throw new CoviaError('No endpoint found for DID');
+        if (typeof endpoint !== 'string') {
+          throw new CoviaError('No (string) endpoint found for DID');
         }
-        candidates = [endpoint.toString().replace(/\/api\/v1/, '')];
+        candidates = [endpoint.replace(/\/api\/v1/, '')];
       } else {
         candidates = venueBaseUrlCandidates(venueId);
       }
@@ -172,7 +172,7 @@ export class Venue implements VenueInterface {
           lastError = error;
         }
       }
-      throw lastError ?? new CoviaError(`Could not connect to venue: ${venueId}`);
+      throw lastError instanceof Error ? lastError : new CoviaError(`Could not connect to venue: ${venueId}`);
     }
 
     throw new CoviaError('Invalid venue ID parameter. Must be a string (URL/DNS) or Venue instance.');

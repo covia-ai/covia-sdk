@@ -12,7 +12,7 @@ describe('AgentManager', () => {
 
   beforeEach(() => {
     venue = createMockVenue();
-    agents = new AgentManager(venue as any);
+    agents = new AgentManager(venue);
   });
 
   it('create calls v/ops/agent/create', async () => {

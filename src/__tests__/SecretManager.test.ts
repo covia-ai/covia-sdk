@@ -14,7 +14,7 @@ describe('SecretManager', () => {
 
   beforeEach(() => {
     venue = createMockVenue();
-    secrets = new SecretManager(venue as any);
+    secrets = new SecretManager(venue);
   });
 
   it('set calls secret:set via operations.run', async () => {

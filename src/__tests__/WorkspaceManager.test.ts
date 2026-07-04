@@ -31,7 +31,7 @@ describe('WorkspaceManager', () => {
   beforeEach(() => {
     mockFetch.mockReset();
     venue = createMockVenue();
-    ws = new WorkspaceManager(venue as any);
+    ws = new WorkspaceManager(venue);
   });
 
   // ── reads → job-free GET /api/v1/values/* ──────────────────────────────────

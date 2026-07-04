@@ -12,7 +12,7 @@ describe('UCANManager', () => {
 
   beforeEach(() => {
     venue = createMockVenue();
-    ucan = new UCANManager(venue as any);
+    ucan = new UCANManager(venue);
   });
 
   it('issue calls ucan:issue with correct params', async () => {
