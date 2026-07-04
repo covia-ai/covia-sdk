@@ -3,7 +3,6 @@ import { SecretSetResult, SecretExtractResult, InvokeOptions } from './types';
 interface SecretManagerVenue {
   operations: { run(assetId: string, input: any, options?: InvokeOptions): Promise<any> };
   listSecrets(): Promise<string[]>;
-  putSecret(name: string, value: string): Promise<void>;
   deleteSecret(name: string): Promise<void>;
 }
 
@@ -25,10 +24,6 @@ export class SecretManager {
 
   async list(): Promise<string[]> {
     return this.venue.listSecrets();
-  }
-
-  async put(name: string, value: string): Promise<void> {
-    return this.venue.putSecret(name, value);
   }
 
   async delete(name: string): Promise<void> {

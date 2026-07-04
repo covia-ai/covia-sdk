@@ -4,7 +4,6 @@ function createMockVenue() {
   return {
     operations: { run: jest.fn().mockResolvedValue({}) },
     listSecrets: jest.fn().mockResolvedValue(['API_KEY', 'DB_PASS']),
-    putSecret: jest.fn().mockResolvedValue(undefined),
     deleteSecret: jest.fn().mockResolvedValue(undefined),
   };
 }
@@ -37,11 +36,6 @@ describe('SecretManager', () => {
     const names = await secrets.list();
     expect(venue.listSecrets).toHaveBeenCalled();
     expect(names).toEqual(['API_KEY', 'DB_PASS']);
-  });
-
-  it('put delegates to venue.putSecret', async () => {
-    await secrets.put('API_KEY', 'new-value');
-    expect(venue.putSecret).toHaveBeenCalledWith('API_KEY', 'new-value');
   });
 
   it('delete delegates to venue.deleteSecret', async () => {

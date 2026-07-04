@@ -37,7 +37,6 @@ export interface VenueInterface {
   mcpDiscovery(): Promise<MCPDiscovery>;
   agentCard(): Promise<AgentCard>;
   listSecrets(): Promise<string[]>;
-  putSecret(name: string, value: string): Promise<void>;
   deleteSecret(name: string): Promise<void>;
   agent(agentId: string): Agent;
   close(): void;
@@ -367,10 +366,8 @@ export interface AssetPinResult {
 export interface WorkspaceCopyResult {
   /** 0.3.0 (#147): `false` = copy created a new value at the destination, `true` = it replaced an existing one. */
   existed?: boolean;
-  /** 0.2.x: present and true only if a new parent path was built at the destination. */
+  /** 0.3.0: present and true only if a new parent path was built at the destination. */
   pathCreated?: boolean;
-  /** @deprecated pre-0.2.x: constant true. Success is the job status. */
-  copied?: boolean;
 }
 
 export interface WorkspaceInspectInput {
@@ -380,7 +377,8 @@ export interface WorkspaceInspectInput {
 }
 
 export interface WorkspaceInspectResult {
-  result: any;
+  /** Rendered string for a single path, or a `{path: string}` map for multiple. */
+  result: string | Record<string, string>;
 }
 
 // ── Workspace Types ──
@@ -397,10 +395,8 @@ export interface WorkspaceReadResult {
   /** Convex type name; included on a truncated read (0.3.0) so the caller can
    *  fall back to `list` (map) or `slice` (sequence) instead of guessing. */
   type?: string;
-  /** encoding size in bytes (always present). */
+  /** 0.3.0: encoded size in bytes (always present). */
   valueBytes?: number;
-  /** @deprecated pre-0.2.x: bytes, only on truncation. Use valueBytes. */
-  size?: number;
 }
 
 export interface WorkspaceWriteInput {
@@ -411,10 +407,8 @@ export interface WorkspaceWriteInput {
 export interface WorkspaceWriteResult {
   /** 0.3.0 (#147): `false` = a new value was created, `true` = an existing one was replaced (a stored null counts as present). */
   existed?: boolean;
-  /** 0.2.x: true iff the write built a new parent path; omitted otherwise. */
+  /** 0.3.0: true iff the write built a new parent path; omitted otherwise. */
   pathCreated?: boolean;
-  /** @deprecated pre-0.2.x: constant true. Success is the job status. */
-  written?: boolean;
 }
 
 export interface WorkspaceDeleteInput {
@@ -436,12 +430,10 @@ export interface WorkspaceAppendResult {
   existed?: boolean;
   /** 0.3.0 (#147): the position the appended element landed at (`newSize - 1`). */
   index?: number;
-  /** 0.2.x: vector element count after the append. */
+  /** 0.3.0: vector element count after the append. */
   newSize?: number;
-  /** 0.2.x: true iff a new parent path was built. */
+  /** 0.3.0: true iff a new parent path was built. */
   pathCreated?: boolean;
-  /** @deprecated pre-0.2.x: constant true. */
-  appended?: boolean;
 }
 
 export interface WorkspaceListInput {
@@ -450,16 +442,17 @@ export interface WorkspaceListInput {
   offset?: number;
 }
 
+/** Result of `covia:list` — the direct children of a node. A map lists its
+ *  `keys`; sets and vectors report only `type` + `count` (page their elements
+ *  with `slice`). */
 export interface WorkspaceListResult {
   exists: boolean;
   type: string;
-  /** total entries in the collection (the single cardinality word from 0.3.0). */
+  /** total entries in the collection (the single cardinality word). */
   count?: number;
+  /** populated for maps; omitted for sets/vectors/scalars. */
   keys?: string[];
-  values?: any[];
   offset?: number;
-  /** @deprecated pre-0.3.0 name for `count`. */
-  totalSize?: number;
 }
 
 export interface WorkspaceSliceInput {
@@ -472,11 +465,9 @@ export interface WorkspaceSliceResult {
   exists: boolean;
   type?: string;
   values?: any[];
-  /** total entries in the collection (the single cardinality word from 0.3.0). */
+  /** total entries in the collection (the single cardinality word). */
   count?: number;
   offset?: number;
-  /** @deprecated pre-0.3.0 name for `count`. */
-  totalSize?: number;
 }
 
 /** Job-free tally (#177). `exists` = a countable collection is present at the
@@ -486,13 +477,20 @@ export interface WorkspaceCountResult {
   exists: boolean;
   count?: number;
 }
+/** One group's metrics in `WorkspaceAggregateResult.groups`. `count` today;
+ *  numeric reductions (`sum`/`min`/`max`) will add keys additively. */
+export interface GroupCount {
+  count?: number;
+  [key: string]: number | undefined;
+}
+
 export interface WorkspaceAggregateResult {
   exists: boolean;
   count?: number;
-  /** Present when `groupBy` was supplied: each distinct field value → a metric
-   *  object (`{count}` today; numeric reductions add keys additively). An entry
-   *  lacking the field groups under the `"null"` key. Σ(group counts) == count. */
-  groups?: Record<string, { count: number }>;
+  /** Present when `groupBy` was supplied: each distinct field value → a
+   *  `GroupCount`. An entry lacking the field groups under the `"null"` key.
+   *  Σ(group counts) == count. */
+  groups?: Record<string, GroupCount>;
 }
 
 // ── UCAN Types ──

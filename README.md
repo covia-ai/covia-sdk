@@ -474,9 +474,8 @@ const byKind = await venue.workspace.aggregate("w/my-app/events", { depth: 2, gr
 Manage secrets stored on the venue.
 
 ```typescript
-// Store and retrieve
-await venue.secrets.put("API_KEY", "sk-...");
-await venue.secrets.set("API_KEY", "sk-..."); // via secret:set operation
+// Store a secret (returns SecretSetResult)
+await venue.secrets.set("API_KEY", "sk-...");
 
 // List
 const names = await venue.secrets.list(); // ["API_KEY", "DB_PASS"]
@@ -491,8 +490,7 @@ await venue.secrets.delete("API_KEY");
 | Method | Returns | Description |
 |---|---|---|
 | `secrets.list()` | `string[]` | List secret names |
-| `secrets.put(name, value)` | `void` | Store a secret via REST |
-| `secrets.set(name, value)` | `SecretSetResult` | Store via `secret:set` operation |
+| `secrets.set(name, value)` | `SecretSetResult` | Store a secret (`secret:set`) |
 | `secrets.extract(name)` | `SecretExtractResult` | Extract value (requires UCAN) |
 | `secrets.delete(name)` | `void` | Delete a secret |
 

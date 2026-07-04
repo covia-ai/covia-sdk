@@ -235,19 +235,6 @@ export class Venue implements VenueInterface {
   }
 
   /**
-   * Store a secret value
-   * @param name - Secret name
-   * @param value - Secret value
-   */
-  async putSecret(name: string, value: string): Promise<void> {
-    await fetchWithError(`${this.baseUrl}/api/v1/secrets/${encodeURIComponent(name)}`, {
-      method: 'PUT',
-      headers: this._buildHeaders(),
-      body: JSON.stringify({ value }),
-    });
-  }
-
-  /**
    * Delete a secret
    * @param name - Secret name
    */

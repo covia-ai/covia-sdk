@@ -545,16 +545,6 @@ describe('Venue.secrets REST', () => {
     expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/secrets');
   });
 
-  it('putSecret sends PUT with value', async () => {
-    mockFetchSuccess({ name: 'API_KEY', stored: true });
-
-    await venue.putSecret('API_KEY', 'secret-value');
-    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/secrets/API_KEY');
-    expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
-    const body = JSON.parse(mockFetch.mock.calls[0][1]?.body);
-    expect(body.value).toBe('secret-value');
-  });
-
   it('deleteSecret sends DELETE', async () => {
     mockFetchStreamSuccess(200);
 
