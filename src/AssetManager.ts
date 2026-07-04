@@ -12,18 +12,11 @@ interface AssetManagerVenue {
   operations: OperationRunner;
 }
 
-/**
- * Shape of `GET /api/v1/assets/{id}`. NOTE: the server wraps the metadata under
- * a `metadata` key, and this whole object is what gets stored as `Asset.metadata`
- * — so fields live at `asset.metadata.metadata.*`, which is inconsistent with
- * `asset.getMetadata()` returning the inner `AssetMetadata` directly. Flagged.
- */
-interface AssetGetResponse {
-  metadata?: AssetMetadata;
-}
-
-// Cache for storing asset data
-const cache = new Map<AssetID, AssetGetResponse>();
+// Cache for storing asset metadata. `GET /api/v1/assets/{id}` returns the asset
+// metadata *directly* as the body (the resolved content id travels in the ETag
+// header), so the response body is the AssetMetadata — there is no transport
+// envelope to unwrap, and `operation` is a top-level field.
+const cache = new Map<AssetID, AssetMetadata>();
 
 export class AssetManager {
   constructor(private venue: AssetManagerVenue) {}
@@ -41,18 +34,18 @@ export class AssetManager {
   async get(assetId: AssetID): Promise<Asset> {
     if (cache.has(assetId)) {
       const cachedData = cache.get(assetId)!;
-      if (cachedData.metadata?.operation) {
+      if (cachedData.operation) {
         return new Operation(assetId, this.venue as unknown as VenueInterface, cachedData);
       } else {
         return new DataAsset(assetId, this.venue as unknown as VenueInterface, cachedData);
       }
     }
     try {
-      const data = await fetchWithError<AssetGetResponse>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`);
+      const data = await fetchWithError<AssetMetadata>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`);
       // Cache only immutable, content-addressed refs — caching a mutable
       // lattice path (w/…, o/…) would serve stale data after it changes.
       if (assetHash(assetId)) cache.set(assetId, data);
-      if (data.metadata?.operation) {
+      if (data.operation) {
         return new Operation(assetId, this.venue as unknown as VenueInterface, data);
       } else {
         return new DataAsset(assetId, this.venue as unknown as VenueInterface, data);
@@ -83,8 +76,9 @@ export class AssetManager {
    * @param assetData - Asset configuration
    */
   async register(assetData: unknown): Promise<Asset> {
-    // NOTE: assumes the POST returns the new asset's id (AssetID). Unverified
-    // against the server response shape — flag if it actually returns `{ id }`.
+    // POST /api/v1/assets returns the new asset's id as a bare (JSON-encoded)
+    // string — confirmed against the venue (buildResult(201, id.toHexString()))
+    // and the Python SDK — so feeding it straight into get() is correct.
     return fetchWithError<AssetID>(`${this.venue.baseUrl}/api/v1/assets`, {
       method: 'POST',
       headers: this._buildHeaders(),

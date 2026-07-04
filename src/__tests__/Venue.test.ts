@@ -207,7 +207,7 @@ describe('Venue.getAsset', () => {
   });
 
   it('returns Operation when metadata has operation field', async () => {
-    mockFetchSuccess({ metadata: { name: 'Op', operation: { adapter: 'test' } } });
+    mockFetchSuccess({ name: 'Op', operation: { adapter: 'test' } });
 
     const asset = await venue.getAsset('op-id');
     expect(asset).toBeInstanceOf(Operation);
@@ -215,7 +215,7 @@ describe('Venue.getAsset', () => {
   });
 
   it('returns DataAsset when metadata has no operation field', async () => {
-    mockFetchSuccess({ metadata: { name: 'Data' } });
+    mockFetchSuccess({ name: 'Data' });
 
     const asset = await venue.getAsset('data-id');
     expect(asset).toBeInstanceOf(DataAsset);
@@ -257,7 +257,7 @@ describe('venue.assets.register', () => {
     // First fetch: register POST returns asset ID
     mockFetchSuccess('new-asset-id');
     // Second fetch: getAsset fetches the created asset
-    mockFetchSuccess({ metadata: { name: 'New Asset' } });
+    mockFetchSuccess({ name: 'New Asset' });
 
     const asset = await venue.assets.register({ name: 'New Asset' });
     expect(asset).toBeInstanceOf(DataAsset);
