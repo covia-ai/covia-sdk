@@ -34,13 +34,24 @@ describe('Grid', () => {
     expect(Venue.connect).toHaveBeenCalledWith('https://auth-venue.example.com', auth);
   });
 
-  it('returns cached venue on second call with same ID', async () => {
+  it('returns cached venue on second call with same ID and same auth', async () => {
     const venueId = 'https://cached-venue.example.com';
     const first = await Grid.connect(venueId);
     const second = await Grid.connect(venueId);
 
-    // Venue.connect should only be called once for the same ID
+    // Venue.connect should only be called once for the same ID + auth
     expect(Venue.connect).toHaveBeenCalledTimes(1);
     expect(first).toBe(second);
+  });
+
+  it('does NOT reuse a cached venue when a different auth is supplied', async () => {
+    // Regression: the cache used to key on the id alone, so an anonymous
+    // connect followed by an authenticated one silently returned the
+    // anonymous venue — running authenticated requests unauthenticated.
+    const { BearerAuth } = jest.requireActual('../Credentials');
+    const venueId = 'https://reauth-venue.example.com';
+    await Grid.connect(venueId); // anonymous
+    await Grid.connect(venueId, new BearerAuth('token')); // authenticated
+    expect(Venue.connect).toHaveBeenCalledTimes(2);
   });
 });
