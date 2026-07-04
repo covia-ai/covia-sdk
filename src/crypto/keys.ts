@@ -3,21 +3,18 @@
  */
 
 import * as ed from '@noble/ed25519';
-import { sha512 } from '@noble/hashes/sha512';
+import { sha512 } from '@noble/hashes/sha2.js';
 
-// Configure @noble/ed25519 to use sha512 from @noble/hashes (required for sync API)
-ed.etc.sha512Sync = (...m: Uint8Array[]) => {
-  const h = sha512.create();
-  for (const msg of m) h.update(msg);
-  return h.digest();
-};
+// Wire @noble/ed25519's synchronous API to a SHA-512 implementation.
+// v3 reads the sync hash from `hashes.sha512` (was `etc.sha512Sync` in v2).
+ed.hashes.sha512 = sha512;
 
 /**
  * Generate a random Ed25519 keypair.
  * @returns Object with privateKey (32 bytes) and publicKey (32 bytes)
  */
 export function generateKeyPair(): { privateKey: Uint8Array; publicKey: Uint8Array } {
-  const privateKey = ed.utils.randomPrivateKey();
+  const privateKey = ed.utils.randomSecretKey();
   const publicKey = ed.getPublicKey(privateKey);
   return { privateKey, publicKey };
 }

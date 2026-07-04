@@ -6,10 +6,10 @@
 
 ## Tech Stack
 
-- **Language:** TypeScript 5.3+
+- **Language:** TypeScript 6+
 - **Runtime:** Node.js (>=18)
 - **Build:** tsup (dual CJS + ESM output with type declarations)
-- **Package Manager:** pnpm
+- **Package Manager:** pnpm 11 (pinned via the `packageManager` field in package.json)
 - **Crypto:** `@noble/ed25519`, `@noble/hashes`, `did-resolver`, `web-did-resolver`
 
 ## Commands
@@ -118,6 +118,6 @@ Integration tests (`venue.test.ts`) need a live venue and stay local for now.
 ## Package Details
 
 - **npm:** `@covia/covia-sdk`
-- **Version:** see `package.json` (currently 1.3.x)
+- **Version:** see `package.json` (currently 1.6.x)
 - **Entry points:** `dist/index.js` (CJS), `dist/index.mjs` (ESM), `dist/index.d.ts` (types)
 - **License:** Apache-2.0

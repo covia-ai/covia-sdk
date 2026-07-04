@@ -2,6 +2,7 @@
   "name": "@covia/covia-sdk",
   "version": "1.6.0-next.0",
   "description": "Typescript library for covia-ai",
+  "packageManager": "pnpm@11.9.0",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -24,12 +25,6 @@
     "test:integration": "jest venue.test.ts",
     "prepublishOnly": "npm run build && npm run test:unit",
     "prepare": "npm run build"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "unrs-resolver"
-    ]
   },
   "keywords": [
     "covia",
@@ -54,19 +49,19 @@
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "^20.0.0",
-    "dotenv": "^17.2.3",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6",
+    "@types/node": "^24.0.0",
+    "dotenv": "^17.4.2",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
     "tsup": "^8.0.0",
-    "typescript": "^5.3.0"
+    "typescript": "^6.0.0"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "@noble/ed25519": "^2.0.0",
-    "@noble/hashes": "^1.0.0",
+    "@noble/ed25519": "^3.0.0",
+    "@noble/hashes": "^2.0.0",
     "did-resolver": "^4.1.0",
     "web-did-resolver": "^2.0.32"
   }

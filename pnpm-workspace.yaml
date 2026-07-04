@@ -1,0 +1,6 @@
+# pnpm 10+ reads build-script approvals here (moved out of package.json's
+# "pnpm" field, which pnpm 11 no longer reads). esbuild and unrs-resolver ship
+# native binaries and need their install scripts to run.
+onlyBuiltDependencies:
+  - esbuild
+  - unrs-resolver
