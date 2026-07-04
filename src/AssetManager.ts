@@ -1,4 +1,4 @@
-import { AssetMetadata, AssetID, AssetListOptions, AssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult } from './types';
+import { AssetMetadata, AssetID, AssetListOptions, AssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
 import { fetchWithError, fetchStreamWithError } from './Utils';
 import { assetHash } from './did';
 import { Asset } from './Asset';
@@ -9,11 +9,21 @@ interface AssetManagerVenue {
   baseUrl: string;
   venueId: string;
   auth: { apply(headers: Record<string, string>, audience?: string): void };
-  operations: { run(assetId: string, input: any): Promise<any> };
+  operations: OperationRunner;
+}
+
+/**
+ * Shape of `GET /api/v1/assets/{id}`. NOTE: the server wraps the metadata under
+ * a `metadata` key, and this whole object is what gets stored as `Asset.metadata`
+ * — so fields live at `asset.metadata.metadata.*`, which is inconsistent with
+ * `asset.getMetadata()` returning the inner `AssetMetadata` directly. Flagged.
+ */
+interface AssetGetResponse {
+  metadata?: AssetMetadata;
 }
 
 // Cache for storing asset data
-const cache = new Map<AssetID, any>();
+const cache = new Map<AssetID, AssetGetResponse>();
 
 export class AssetManager {
   constructor(private venue: AssetManagerVenue) {}
@@ -30,22 +40,22 @@ export class AssetManager {
    */
   async get(assetId: AssetID): Promise<Asset> {
     if (cache.has(assetId)) {
-      const cachedData = cache.get(assetId);
+      const cachedData = cache.get(assetId)!;
       if (cachedData.metadata?.operation) {
-        return new Operation(assetId, this.venue as any, cachedData);
+        return new Operation(assetId, this.venue as unknown as VenueInterface, cachedData);
       } else {
-        return new DataAsset(assetId, this.venue as any, cachedData);
+        return new DataAsset(assetId, this.venue as unknown as VenueInterface, cachedData);
       }
     }
     try {
-      const data = await fetchWithError<any>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`);
+      const data = await fetchWithError<AssetGetResponse>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`);
       // Cache only immutable, content-addressed refs — caching a mutable
       // lattice path (w/…, o/…) would serve stale data after it changes.
       if (assetHash(assetId)) cache.set(assetId, data);
       if (data.metadata?.operation) {
-        return new Operation(assetId, this.venue as any, data);
+        return new Operation(assetId, this.venue as unknown as VenueInterface, data);
       } else {
-        return new DataAsset(assetId, this.venue as any, data);
+        return new DataAsset(assetId, this.venue as unknown as VenueInterface, data);
       }
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -72,8 +82,10 @@ export class AssetManager {
    * Register a new asset
    * @param assetData - Asset configuration
    */
-  async register(assetData: any): Promise<Asset> {
-    return fetchWithError<any>(`${this.venue.baseUrl}/api/v1/assets`, {
+  async register(assetData: unknown): Promise<Asset> {
+    // NOTE: assumes the POST returns the new asset's id (AssetID). Unverified
+    // against the server response shape — flag if it actually returns `{ id }`.
+    return fetchWithError<AssetID>(`${this.venue.baseUrl}/api/v1/assets`, {
       method: 'POST',
       headers: this._buildHeaders(),
       body: JSON.stringify(assetData),
@@ -138,7 +150,7 @@ export class AssetManager {
    * @param path - Source address (hex hash, /a/<hash>, /o/<name>, /v/<path>, DID URL, or workspace path)
    */
   async pin(path: string): Promise<AssetPinResult> {
-    return this.venue.operations.run('v/ops/asset/pin', { path });
+    return this.venue.operations.run<AssetPinResult>('v/ops/asset/pin', { path });
   }
 
   /**

@@ -22,6 +22,15 @@ export interface InvokeOptions {
   ucans?: string[];
 }
 
+/**
+ * The venue's operation-execution surface, as the typed managers consume it.
+ * `run<T>` returns the operation's result typed as `T` (defaults to `unknown`,
+ * so an un-parameterised call stays type-safe rather than leaking `any`).
+ */
+export interface OperationRunner {
+  run<T = unknown>(assetId: string, input?: unknown, options?: InvokeOptions): Promise<T>;
+}
+
 export interface VenueInterface {
   baseUrl: string;
   venueId: string;
@@ -87,16 +96,17 @@ export interface ContentHashResult {
 }
 
 export interface JobMetadata {
+  id?: string;
   name?:string;
   status?: RunStatus;
   created?: string;
   updated?: string;
-  input?: any;
-  output?: any;
+  input?: unknown;
+  output?: unknown;
   operation?:string;
   caller?: string;
   error?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface InvokePayload {
@@ -189,7 +199,7 @@ export interface SSEEvent {
   id: string | null;
   retry: number | null;
   /** Parse the event data as JSON. */
-  json: () => any;
+  json: () => unknown;
 }
 
 // ── Agent Types ──
@@ -567,9 +577,9 @@ export class CoviaError extends Error {
 /** Raised when the Covia API returns an error response (4xx/5xx). */
 export class GridError extends CoviaError {
   public statusCode: number;
-  public responseBody: any;
+  public responseBody: unknown;
 
-  constructor(statusCode: number, message: string, responseBody: any = null) {
+  constructor(statusCode: number, message: string, responseBody: unknown = null) {
     super(`HTTP ${statusCode}: ${message}`, statusCode);
     this.name = 'GridError';
     this.statusCode = statusCode;
@@ -598,11 +608,16 @@ export class JobFailedError extends CoviaError {
   public jobData: JobMetadata;
 
   constructor(jobData: JobMetadata) {
-    const id = (jobData as any).id ?? 'unknown';
+    const id = jobData.id ?? 'unknown';
     const status = jobData.status ?? 'unknown';
     let msg = `Job ${id} ${status}`;
-    if (jobData.output?.error) {
-      msg += `: ${jobData.output.error}`;
+    const output = jobData.output;
+    const errText =
+      output && typeof output === 'object' && 'error' in output
+        ? (output as { error?: unknown }).error
+        : undefined;
+    if (typeof errText === 'string') {
+      msg += `: ${errText}`;
     }
     super(msg);
     this.name = 'JobFailedError';

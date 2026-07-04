@@ -38,7 +38,7 @@ export class Agent {
   constructor(id: string, venue: VenueInterface) {
     this.id = id;
     this.venue = venue;
-    this._agents = (venue as any).agents;
+    this._agents = (venue as unknown as { agents: AgentOps }).agents;
   }
 
   async request(input?: any, wait?: boolean | number): Promise<AgentRequestResult> {

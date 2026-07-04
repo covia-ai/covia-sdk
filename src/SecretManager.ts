@@ -1,7 +1,7 @@
-import { SecretSetResult, SecretExtractResult, InvokeOptions } from './types';
+import { SecretSetResult, SecretExtractResult, OperationRunner } from './types';
 
 interface SecretManagerVenue {
-  operations: { run(assetId: string, input: any, options?: InvokeOptions): Promise<any> };
+  operations: OperationRunner;
   listSecrets(): Promise<string[]>;
   deleteSecret(name: string): Promise<void>;
 }
@@ -10,7 +10,7 @@ export class SecretManager {
   constructor(private venue: SecretManagerVenue) {}
 
   async set(name: string, value: string): Promise<SecretSetResult> {
-    return this.venue.operations.run('v/ops/secret/set', { name, value });
+    return this.venue.operations.run<SecretSetResult>('v/ops/secret/set', { name, value });
   }
 
   /**
@@ -19,7 +19,7 @@ export class SecretManager {
    * Extracting another DID's secret needs a grant on that DID's `/s/<name>`.
    */
   async extract(name: string, ucans?: string[]): Promise<SecretExtractResult> {
-    return this.venue.operations.run('v/ops/secret/extract', { name }, { ucans });
+    return this.venue.operations.run<SecretExtractResult>('v/ops/secret/extract', { name }, { ucans });
   }
 
   async list(): Promise<string[]> {

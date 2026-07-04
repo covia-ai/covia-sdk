@@ -2,14 +2,14 @@ import { fetchWithError } from './Utils';
 import {
   WorkspaceReadResult, WorkspaceWriteResult, WorkspaceDeleteResult, WorkspaceAppendResult,
   WorkspaceListResult, WorkspaceSliceResult, WorkspaceCopyResult, WorkspaceInspectResult,
-  WorkspaceCountResult, WorkspaceAggregateResult, InvokeOptions,
+  WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner,
 } from './types';
 
 interface WorkspaceManagerVenue {
   baseUrl: string;
   venueId: string;
   auth: { apply(headers: Record<string, string>, audience?: string): void };
-  operations: { run(assetId: string, input: any, options?: InvokeOptions): Promise<any> };
+  operations: OperationRunner;
 }
 
 /**
@@ -51,24 +51,24 @@ export class WorkspaceManager {
   // ── job-free reads (#177) ───────────────────────────────────────────────────
 
   async read(path: string, maxSize?: number, ucans?: string[]): Promise<WorkspaceReadResult> {
-    if (ucans?.length) return this.venue.operations.run('v/ops/covia/read', { path, maxSize }, { ucans });
+    if (ucans?.length) return this.venue.operations.run<WorkspaceReadResult>('v/ops/covia/read', { path, maxSize }, { ucans });
     return this._values('read', { path, maxSize });
   }
 
   async list(path?: string, limit?: number, offset?: number, ucans?: string[]): Promise<WorkspaceListResult> {
     // The GET route requires a path; a root/undefined list stays on the op path.
-    if (ucans?.length || !path) return this.venue.operations.run('v/ops/covia/list', { path, limit, offset }, { ucans });
+    if (ucans?.length || !path) return this.venue.operations.run<WorkspaceListResult>('v/ops/covia/list', { path, limit, offset }, { ucans });
     return this._values('list', { path, limit, offset });
   }
 
   async slice(path: string, offset?: number, limit?: number, ucans?: string[]): Promise<WorkspaceSliceResult> {
-    if (ucans?.length) return this.venue.operations.run('v/ops/covia/slice', { path, offset, limit }, { ucans });
+    if (ucans?.length) return this.venue.operations.run<WorkspaceSliceResult>('v/ops/covia/slice', { path, offset, limit }, { ucans });
     return this._values('slice', { path, offset, limit });
   }
 
   async inspect(paths: string | string[], budget?: number, compact?: boolean, ucans?: string[]): Promise<WorkspaceInspectResult> {
     // The GET route renders a single path; multi-path (or proof tokens) use the op.
-    if (ucans?.length || Array.isArray(paths)) return this.venue.operations.run('v/ops/covia/inspect', { paths, budget, compact }, { ucans });
+    if (ucans?.length || Array.isArray(paths)) return this.venue.operations.run<WorkspaceInspectResult>('v/ops/covia/inspect', { paths, budget, compact }, { ucans });
     return this._values('inspect', { path: paths, budget, compact });
   }
 
@@ -82,7 +82,7 @@ export class WorkspaceManager {
    */
   async count(path: string, opts: { depth?: number; ucans?: string[] } = {}): Promise<WorkspaceCountResult> {
     const { depth, ucans } = opts;
-    if (ucans?.length) return this.venue.operations.run('v/ops/covia/aggregate', { path, depth }, { ucans });
+    if (ucans?.length) return this.venue.operations.run<WorkspaceCountResult>('v/ops/covia/aggregate', { path, depth }, { ucans });
     return this._values('count', { path, depth });
   }
 
@@ -96,25 +96,25 @@ export class WorkspaceManager {
    */
   async aggregate(path: string, opts: { depth?: number; groupBy?: string; ucans?: string[] } = {}): Promise<WorkspaceAggregateResult> {
     const { depth, groupBy, ucans } = opts;
-    if (ucans?.length) return this.venue.operations.run('v/ops/covia/aggregate', { path, depth, groupBy }, { ucans });
+    if (ucans?.length) return this.venue.operations.run<WorkspaceAggregateResult>('v/ops/covia/aggregate', { path, depth, groupBy }, { ucans });
     return this._values('aggregate', { path, depth, groupBy });
   }
 
   // ── writes stay on the job path (they should leave an audit record) ─────────
 
-  async write(path: string, value: any, ucans?: string[]): Promise<WorkspaceWriteResult> {
-    return this.venue.operations.run('v/ops/covia/write', { path, value }, { ucans });
+  async write(path: string, value: unknown, ucans?: string[]): Promise<WorkspaceWriteResult> {
+    return this.venue.operations.run<WorkspaceWriteResult>('v/ops/covia/write', { path, value }, { ucans });
   }
 
   async delete(path: string, ucans?: string[]): Promise<WorkspaceDeleteResult> {
-    return this.venue.operations.run('v/ops/covia/delete', { path }, { ucans });
+    return this.venue.operations.run<WorkspaceDeleteResult>('v/ops/covia/delete', { path }, { ucans });
   }
 
-  async append(path: string, value: any, ucans?: string[]): Promise<WorkspaceAppendResult> {
-    return this.venue.operations.run('v/ops/covia/append', { path, value }, { ucans });
+  async append(path: string, value: unknown, ucans?: string[]): Promise<WorkspaceAppendResult> {
+    return this.venue.operations.run<WorkspaceAppendResult>('v/ops/covia/append', { path, value }, { ucans });
   }
 
   async copy(from: string, to: string, ucans?: string[]): Promise<WorkspaceCopyResult> {
-    return this.venue.operations.run('v/ops/covia/copy', { from, to }, { ucans });
+    return this.venue.operations.run<WorkspaceCopyResult>('v/ops/covia/copy', { from, to }, { ucans });
   }
 }

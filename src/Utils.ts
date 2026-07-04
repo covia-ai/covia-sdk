@@ -5,13 +5,14 @@ import { didUrl, Namespace } from './did';
 /**
  * Parse error message from an API response body.
  */
-async function parseErrorBody(response: Response): Promise<{ message: string; body: any }> {
-  let body: any = null;
+async function parseErrorBody(response: Response): Promise<{ message: string; body: unknown }> {
+  let body: unknown = null;
   let message = `Request failed with status ${response.status}`;
   try {
-    body = await response.json();
-    if (body?.error) {
-      message = body.error;
+    body = (await response.json()) as unknown;
+    if (body && typeof body === 'object' && 'error' in body) {
+      const err = (body as { error?: unknown }).error;
+      if (typeof err === 'string') message = err;
     }
   } catch {
     try {
@@ -69,7 +70,7 @@ export async function fetchWithError<T>(url: string, options?: RequestInit): Pro
   if (!response.ok) {
     await throwHttpError(response);
   }
-  return response.json();
+  return response.json() as Promise<T>;
 }
 
 /**
@@ -175,7 +176,7 @@ export function createSSEEvent(fields: { event?: string; data?: string; id?: str
     data,
     id: fields.id || null,
     retry: fields.retry ?? null,
-    json() { return JSON.parse(data); },
+    json() { return JSON.parse(data) as unknown; },
   };
 }
 

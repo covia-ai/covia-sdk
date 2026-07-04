@@ -1,4 +1,4 @@
-import { JobMetadata, SSEEvent, NotFoundError, JobNotFoundError } from './types';
+import { JobMetadata, SSEEvent, NotFoundError, JobNotFoundError, VenueInterface } from './types';
 import { fetchWithError, fetchStreamWithError, parseSSEStream } from './Utils';
 import { Job } from './Job';
 
@@ -19,10 +19,10 @@ export class JobManager {
 
   async get(jobId: string): Promise<Job> {
     try {
-      const data = await fetchWithError<any>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`, {
+      const data = await fetchWithError<JobMetadata>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`, {
         headers: this._buildHeaders(),
       });
-      return new Job(jobId, this.venue as any, data);
+      return new Job(jobId, this.venue as unknown as VenueInterface, data);
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new JobNotFoundError(jobId);
@@ -87,9 +87,9 @@ export class JobManager {
     }
   }
 
-  async sendMessage(jobId: string, message: any): Promise<any> {
+  async sendMessage(jobId: string, message: unknown): Promise<unknown> {
     try {
-      return await fetchWithError<any>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`, {
+      return await fetchWithError<unknown>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`, {
         method: 'POST',
         headers: this._buildHeaders(),
         body: JSON.stringify(message),

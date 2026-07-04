@@ -12,7 +12,7 @@ interface JobOps {
   delete(jobId: string): Promise<void>;
   pause(jobId: string): Promise<JobMetadata>;
   resume(jobId: string): Promise<JobMetadata>;
-  sendMessage(jobId: string, message: any): Promise<any>;
+  sendMessage(jobId: string, message: unknown): Promise<unknown>;
   stream(jobId: string): AsyncGenerator<SSEEvent>;
 }
 
@@ -26,7 +26,7 @@ export class Job {
     this.id = id;
     this.venue = venue;
     this.metadata = metadata;
-    this._jobs = (venue as any).jobs;
+    this._jobs = (venue as unknown as { jobs: JobOps }).jobs;
   }
 
   /**
@@ -48,7 +48,7 @@ export class Job {
    * @throws {Error} If the job has not finished yet.
    * @throws {JobFailedError} If the job finished with a non-COMPLETE status.
    */
-  get output(): any {
+  get output(): unknown {
     if (!this.isFinished) {
       throw new Error(`Job is not finished (status: ${this.metadata.status})`);
     }
@@ -101,7 +101,7 @@ export class Job {
    * @throws {JobFailedError} If the job finishes with a non-COMPLETE status.
    * @throws {CoviaTimeoutError} If timeout is exceeded.
    */
-  async result(options?: { timeout?: number }): Promise<any> {
+  async result(options?: { timeout?: number }): Promise<unknown> {
     await this.wait(options);
     return this.output;
   }
@@ -140,7 +140,7 @@ export class Job {
    * @param message - Message payload
    * @returns {Promise<any>}
    */
-  async sendMessage(message: any): Promise<any> {
+  async sendMessage(message: unknown): Promise<unknown> {
     return this._jobs.sendMessage(this.id, message);
   }
 

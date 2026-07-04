@@ -1,4 +1,4 @@
-import { OperationInfo, InvokeOptions } from './types';
+import { OperationInfo, InvokeOptions, JobMetadata, VenueInterface } from './types';
 import { fetchWithError } from './Utils';
 import { Job } from './Job';
 
@@ -32,9 +32,9 @@ export class OperationManager {
    * @param input - Operation input parameters
    * @param options - Invoke options (e.g., ucans)
    */
-  async run(assetId: string, input: any, options?: InvokeOptions): Promise<any> {
+  async run<T = unknown>(assetId: string, input?: unknown, options?: InvokeOptions): Promise<T> {
     const job = await this.invoke(assetId, input, options);
-    return job.result();
+    return (await job.result()) as T;
   }
 
   /**
@@ -43,20 +43,20 @@ export class OperationManager {
    * @param input - Operation input parameters
    * @param options - Invoke options (e.g., ucans)
    */
-  async invoke(assetId: string, input: any, options?: InvokeOptions): Promise<Job> {
-    const payload: Record<string, any> = {
+  async invoke(assetId: string, input?: unknown, options?: InvokeOptions): Promise<Job> {
+    const payload: Record<string, unknown> = {
       operation: assetId,
       input: input
     };
     if (options?.ucans) {
       payload.ucans = options.ucans;
     }
-    const response = await fetchWithError<any>(`${this.venue.baseUrl}/api/v1/invoke`, {
+    const response = await fetchWithError<JobMetadata>(`${this.venue.baseUrl}/api/v1/invoke`, {
       method: 'POST',
       headers: this._buildHeaders(),
       body: JSON.stringify(payload),
     });
-    return new Job(response?.id, this.venue as any, response);
+    return new Job(response.id ?? '', this.venue as unknown as VenueInterface, response);
   }
 
   private _buildHeaders(): Record<string, string> {

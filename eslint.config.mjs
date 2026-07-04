@@ -25,16 +25,15 @@ export default tseslint.config(
       // This SDK is a dynamic API client. Explicit `any` at request/response
       // boundaries is intentional and flexible, so `no-explicit-any` is off.
       '@typescript-eslint/no-explicit-any': 'off',
-      // The `no-unsafe-*` family fires where response `any` flows into typed
-      // code — the dynamic wire edges. Surfaced as warnings (visible, tightened
-      // incrementally) rather than blocking: the typed result models are the
-      // consumer-facing contract, and forcing `unknown` everywhere would push
-      // casts onto every caller without runtime validation to back them.
-      '@typescript-eslint/no-unsafe-assignment': 'warn',
-      '@typescript-eslint/no-unsafe-member-access': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      '@typescript-eslint/no-unsafe-return': 'warn',
-      '@typescript-eslint/no-unsafe-call': 'warn',
+      // Dynamic wire data is typed `unknown` (never `any`) and narrowed at the
+      // boundary, and `run<T>` hands each operation its real result type — so the
+      // `no-unsafe-*` family is enforced as errors: any new `any` leaking into
+      // typed code fails the build.
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
       // Preserve the repo's `_`-prefix convention for intentionally-unused
       // params/vars/catch bindings.
       '@typescript-eslint/no-unused-vars': [

@@ -30,8 +30,8 @@ export abstract class Asset {
     this.id = id;
     this.venue = venue;
     this.metadata = metadata;
-    this._assets = (venue as any).assets;
-    this._operations = (venue as any).operations;
+    this._assets = (venue as unknown as { assets: AssetOps }).assets;
+    this._operations = (venue as unknown as { operations: OpOps }).operations;
   }
 
   /**
