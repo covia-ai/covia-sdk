@@ -1,4 +1,4 @@
-import { Venue, Asset, Operation, DataAsset, CoviaError, RunStatus } from './index';
+import { CoviaError } from './index';
 import { BearerAuth } from './Credentials';
 import { Grid } from './Grid';
 
@@ -39,8 +39,8 @@ async function example() {
     // Get content from data asset
     const stream = await dataAsset.getContent();
     if (stream) {
-      const reader = stream.getReader();
-      await dataAsset.readStream(reader);
+      const bytes = await new Response(stream).arrayBuffer();
+      console.log('Content bytes:', bytes.byteLength);
     }
 
     // List all jobs

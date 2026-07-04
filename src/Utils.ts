@@ -101,10 +101,8 @@ export async function fetchStreamWithError(url: string, options?: RequestInit): 
  * @param jobStatus - The status of the job
  * @returns {boolean} - Returns false if job is not completed , else returns true
  */
-export function isJobComplete(jobStatus:RunStatus): boolean {
-  if(jobStatus == null)
-      return false;
-  return jobStatus == RunStatus.COMPLETE ? true:false
+export function isJobComplete(jobStatus: RunStatus): boolean {
+  return jobStatus === RunStatus.COMPLETE;
 }
 /**
  * Utility function to check if job is considered paused

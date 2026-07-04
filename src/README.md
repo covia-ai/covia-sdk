@@ -23,7 +23,7 @@ Asset (abstract base class)
 ## Usage
 
 ```typescript
-import { Venue, Asset, Operation, DataAsset } from '@/lib/covia';
+import { Grid } from '@covia/covia-sdk';
 
 // Create venue
 const venue = await Grid.connect("venue-did");
@@ -34,7 +34,7 @@ const dataAsset = await venue.getAsset('data-id');
 
 // Use inherited functionality
 await operation.invoke({ param: 'value' }); // Simplified: just pass input parameters
-await dataAsset.uploadContent(content);
+await dataAsset.putContent(content);
 ```
 
 ## Key Features

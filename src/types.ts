@@ -517,7 +517,10 @@ export interface UCANIssueInput {
 }
 
 export interface UCANIssueResult {
-  [key: string]: any;
+  /** The issued delegation token — pass as an element of the `ucans` array on
+   *  subsequent invokes. */
+  token: string;
+  [key: string]: unknown;
 }
 
 // ── Secret Types ──
