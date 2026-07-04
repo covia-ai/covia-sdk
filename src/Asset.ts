@@ -1,9 +1,6 @@
 import { Job } from './Job';
 import { AssetMetadata, ContentHashResult, RunStatus, VenueInterface, AssetID, InvokeOptions } from './types';
 
-// Cache for storing asset data
-const cache = new Map<AssetID, AssetMetadata>();
-
 /** Minimal interface for asset operations from the venue's AssetManager. */
 interface AssetOps {
   getMetadata(assetId: string): Promise<AssetMetadata>;
@@ -38,16 +35,10 @@ export abstract class Asset {
    * Get asset metadata
    * @returns {Promise<AssetMetadata>}
    */
-  async getMetadata(): Promise<AssetMetadata> {
-    if (cache.has(this.id)) {
-      return Promise.resolve(cache.get(this.id)!);
-    } else {
-      const data = await this._assets.getMetadata(this.id);
-      if (data) {
-        cache.set(this.id, data);
-      }
-      return data;
-    }
+  getMetadata(): Promise<AssetMetadata> {
+    // Delegate to AssetManager, which caches content-addressed refs correctly
+    // and never caches mutable lattice paths (so they can't be served stale).
+    return this._assets.getMetadata(this.id);
   }
 
   /**

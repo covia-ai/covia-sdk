@@ -446,6 +446,13 @@ describe('venue.assets.putContent and getContent', () => {
     expect(mockFetch.mock.calls[0][1]?.method).toBe('PUT');
   });
 
+  it('putContent does not force a JSON content-type (fetch infers from the body)', async () => {
+    mockFetchSuccess({ hash: 'abc123' });
+    await venue.assets.putContent('asset-1', 'file-data');
+    const headers = mockFetch.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBeUndefined();
+  });
+
   it('getContent sends GET for content', async () => {
     mockFetchStreamSuccess(200);
 

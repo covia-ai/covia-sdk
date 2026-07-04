@@ -111,7 +111,7 @@ export class AssetManager {
     try {
       return await fetchWithError<ContentHashResult>(`${this.venue.baseUrl}/api/v1/assets/${assetId}/content`, {
         method: 'PUT',
-        headers: this._buildHeaders(),
+        headers: this._buildHeaders(null),
         body: content,
       });
     } catch (error) {
@@ -154,8 +154,12 @@ export class AssetManager {
     cache.clear();
   }
 
-  private _buildHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // `contentType` defaults to JSON for the metadata/register endpoints. Pass
+  // `undefined` for binary content upload so fetch infers the type from the
+  // body — forcing application/json would mislabel a Blob/ArrayBuffer/stream.
+  private _buildHeaders(contentType: string | null = 'application/json'): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (contentType) headers['Content-Type'] = contentType;
     this.venue.auth.apply(headers, this.venue.venueId);
     return headers;
   }

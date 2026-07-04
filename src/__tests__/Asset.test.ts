@@ -130,6 +130,17 @@ describe('Asset (via Operation subclass)', () => {
       expect(getAssets(venue).getMetadata).toHaveBeenCalledWith('meta-1');
       expect(meta).toEqual({ name: 'Test Asset', type: 'data' });
     });
+
+    it('always delegates — no stale per-asset cache', async () => {
+      // Regression: a mutable path (o/…, w/…) must not be cached at the Asset
+      // level, or getMetadata() would serve stale data. AssetManager owns the
+      // (content-addressed-only) cache.
+      const venue = createMockVenue();
+      const asset = new DataAsset('o/my-op', venue);
+      await asset.getMetadata();
+      await asset.getMetadata();
+      expect(getAssets(venue).getMetadata).toHaveBeenCalledTimes(2);
+    });
   });
 });
 
