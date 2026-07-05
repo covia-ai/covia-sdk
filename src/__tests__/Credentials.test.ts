@@ -1,4 +1,4 @@
-import { NoAuth, BearerAuth, KeyPairAuth, Auth } from '../Credentials';
+import { NoAuth, BearerAuth, BasicAuth, Ed25519Auth, KeyPairAuth, Auth } from '../Credentials';
 import { generateKeyPair, privateKeyToHex, hexToPrivateKey } from '../crypto/keys';
 import { didFromPublicKey, encodePublicKey, decodePublicKey } from '../crypto/multikey';
 import { encode, decode } from '../crypto/base58';
@@ -25,6 +25,26 @@ describe('BearerAuth', () => {
 
   it('is an instance of Auth', () => {
     expect(new BearerAuth('t')).toBeInstanceOf(Auth);
+  });
+});
+
+describe('BasicAuth', () => {
+  it('adds Authorization Basic header with base64(username:password)', () => {
+    const headers: Record<string, string> = {};
+    new BasicAuth('admin', 's3cret').apply(headers);
+    const expected = Buffer.from('admin:s3cret', 'utf-8').toString('base64');
+    expect(headers['Authorization']).toBe(`Basic ${expected}`);
+  });
+
+  it('encodes non-ASCII credentials as UTF-8', () => {
+    const headers: Record<string, string> = {};
+    new BasicAuth('café', 'naïve').apply(headers);
+    const decoded = Buffer.from(headers['Authorization'].replace('Basic ', ''), 'base64').toString('utf-8');
+    expect(decoded).toBe('café:naïve');
+  });
+
+  it('is an instance of Auth', () => {
+    expect(new BasicAuth('u', 'p')).toBeInstanceOf(Auth);
   });
 });
 
@@ -113,26 +133,26 @@ describe('base64UrlEncode', () => {
   });
 });
 
-// --- KeyPairAuth ---
+// --- Ed25519Auth ---
 
-describe('KeyPairAuth', () => {
+describe('Ed25519Auth', () => {
   it('is an instance of Auth', () => {
-    const auth = KeyPairAuth.generate();
+    const auth = Ed25519Auth.generate();
     expect(auth).toBeInstanceOf(Auth);
   });
 
   it('generate() produces a valid DID', () => {
-    const auth = KeyPairAuth.generate();
+    const auth = Ed25519Auth.generate();
     expect(auth.getDID()).toMatch(/^did:key:z6Mk/);
   });
 
   it('getPublicKey() returns 32 bytes', () => {
-    const auth = KeyPairAuth.generate();
+    const auth = Ed25519Auth.generate();
     expect(auth.getPublicKey().length).toBe(32);
   });
 
   it('apply() sets Authorization Bearer header with valid JWT', () => {
-    const auth = KeyPairAuth.generate();
+    const auth = Ed25519Auth.generate();
     const headers: Record<string, string> = {};
     auth.apply(headers);
 
@@ -170,21 +190,21 @@ describe('KeyPairAuth', () => {
     );
 
   it('binds the JWT aud to the venue DID passed by the transport', () => {
-    const auth = KeyPairAuth.generate();
+    const auth = Ed25519Auth.generate();
     const headers: Record<string, string> = {};
     auth.apply(headers, 'did:web:venue.covia.ai');
     expect(decodePayload(headers).aud).toBe('did:web:venue.covia.ai');
   });
 
   it('omits aud when no audience is supplied', () => {
-    const auth = KeyPairAuth.generate();
+    const auth = Ed25519Auth.generate();
     const headers: Record<string, string> = {};
     auth.apply(headers);
     expect(decodePayload(headers).aud).toBeUndefined();
   });
 
   it('an explicitly pinned audience overrides the transport-supplied one', () => {
-    const auth = KeyPairAuth.generate();
+    const auth = Ed25519Auth.generate();
     auth.audience = 'did:web:pinned.example';
     const headers: Record<string, string> = {};
     auth.apply(headers, 'did:web:venue.covia.ai');
@@ -192,7 +212,7 @@ describe('KeyPairAuth', () => {
   });
 
   it('respects custom token lifetime', () => {
-    const auth = KeyPairAuth.generate(600);
+    const auth = Ed25519Auth.generate(600);
     const headers: Record<string, string> = {};
     auth.apply(headers);
 
@@ -206,13 +226,13 @@ describe('KeyPairAuth', () => {
   it('fromHex() restores the same DID', () => {
     const { privateKey } = generateKeyPair();
     const hex = privateKeyToHex(privateKey);
-    const auth1 = new KeyPairAuth(privateKey);
-    const auth2 = KeyPairAuth.fromHex(hex);
+    const auth1 = new Ed25519Auth(privateKey);
+    const auth2 = Ed25519Auth.fromHex(hex);
     expect(auth2.getDID()).toBe(auth1.getDID());
   });
 
   it('generates fresh JWT on each apply() call', () => {
-    const auth = KeyPairAuth.generate();
+    const auth = Ed25519Auth.generate();
     const h1: Record<string, string> = {};
     const h2: Record<string, string> = {};
     auth.apply(h1);
@@ -221,5 +241,19 @@ describe('KeyPairAuth', () => {
     // Both should be valid JWTs with same DID
     expect(h1['Authorization']).toMatch(/^Bearer /);
     expect(h2['Authorization']).toMatch(/^Bearer /);
+  });
+});
+
+// --- KeyPairAuth (deprecated alias) ---
+
+describe('KeyPairAuth alias', () => {
+  it('is the same class as Ed25519Auth', () => {
+    expect(KeyPairAuth).toBe(Ed25519Auth);
+  });
+
+  it('KeyPairAuth.generate() still produces an Ed25519Auth', () => {
+    const auth = KeyPairAuth.generate();
+    expect(auth).toBeInstanceOf(Ed25519Auth);
+    expect(auth.getDID()).toMatch(/^did:key:z6Mk/);
   });
 });

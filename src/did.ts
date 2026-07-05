@@ -6,7 +6,7 @@
  *
  * Which DID belongs in a lattice address:
  * - `w`/`o`/`g`/`j`/`s` are per-user: the `<DID>` is the resource *owner's* DID
- *   (yours is your auth DID, e.g. `KeyPairAuth.getDID()`) — NOT the venue's.
+ *   (yours is your auth DID, e.g. `Ed25519Auth.getDID()`) — NOT the venue's.
  * - `a` (assets) is venue-global and content-addressed.
  * - A namespace-relative path (no `<DID>`) resolves to the authenticated caller.
  */

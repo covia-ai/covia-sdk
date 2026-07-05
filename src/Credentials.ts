@@ -21,7 +21,7 @@ export abstract class Auth {
    *
    * @param headers - Outgoing request headers to mutate.
    * @param audience - The venue's DID, supplied by the transport. Providers
-   *   that bind tokens to the venue's identity (e.g. {@link KeyPairAuth}) use it
+   *   that bind tokens to the venue's identity (e.g. {@link Ed25519Auth}) use it
    *   as the JWT `aud`; others ignore it.
    */
   abstract apply(headers: Record<string, string>, audience?: string): void;
@@ -55,17 +55,40 @@ export class BearerAuth extends Auth {
 }
 
 /**
+ * HTTP Basic authentication.
+ * Adds `Authorization: Basic <base64(username:password)>` to every request.
+ *
+ * Example:
+ *   const venue = await Grid.connect("https://venue.covia.ai", new BasicAuth("admin", "s3cret"));
+ */
+export class BasicAuth extends Auth {
+  private _username: string;
+  private _password: string;
+
+  constructor(username: string, password: string) {
+    super();
+    this._username = username;
+    this._password = password;
+  }
+
+  apply(headers: Record<string, string>, _audience?: string): void {
+    const credentials = Buffer.from(`${this._username}:${this._password}`, 'utf-8').toString('base64');
+    headers["Authorization"] = `Basic ${credentials}`;
+  }
+}
+
+/**
  * Ed25519 keypair authentication (self-issued EdDSA JWT).
  * Generates a fresh short-lived JWT for every request, signed with the
  * client's Ed25519 private key.  The server verifies the signature and
  * extracts the caller's DID from the `sub` claim.
  *
  * Example:
- *   const auth = KeyPairAuth.generate();
+ *   const auth = Ed25519Auth.generate();
  *   console.log(auth.getDID()); // did:key:z6Mk...
  *   const venue = await Grid.connect("https://venue.covia.ai", auth);
  */
-export class KeyPairAuth extends Auth {
+export class Ed25519Auth extends Auth {
   private _privateKey: Uint8Array;
   private _publicKey: Uint8Array;
   private _did: string;
@@ -108,26 +131,36 @@ export class KeyPairAuth extends Auth {
     return this._publicKey;
   }
 
-  /** Generate a new random keypair and return a KeyPairAuth instance. */
-  static generate(tokenLifetimeSeconds: number = 300): KeyPairAuth {
+  /** Generate a new random keypair and return an Ed25519Auth instance. */
+  static generate(tokenLifetimeSeconds: number = 300): Ed25519Auth {
     const { privateKey } = generateKeyPair();
-    return new KeyPairAuth(privateKey, tokenLifetimeSeconds);
+    return new Ed25519Auth(privateKey, tokenLifetimeSeconds);
   }
 
   /** Create from a hex-encoded private key string. */
-  static fromHex(privateKeyHex: string, tokenLifetimeSeconds: number = 300): KeyPairAuth {
-    return new KeyPairAuth(hexToPrivateKey(privateKeyHex), tokenLifetimeSeconds);
+  static fromHex(privateKeyHex: string, tokenLifetimeSeconds: number = 300): Ed25519Auth {
+    return new Ed25519Auth(hexToPrivateKey(privateKeyHex), tokenLifetimeSeconds);
   }
 }
 
-/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, KeyPairAuth). */
+/**
+ * @deprecated Renamed to {@link Ed25519Auth} for cross-SDK consistency
+ * (the Python SDK uses the same name). This alias keeps existing
+ * `KeyPairAuth` / `KeyPairAuth.generate()` / `KeyPairAuth.fromHex()` usage
+ * working; prefer `Ed25519Auth` in new code.
+ */
+export const KeyPairAuth = Ed25519Auth;
+/** @deprecated Renamed to {@link Ed25519Auth}. */
+export type KeyPairAuth = Ed25519Auth;
+
+/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, BasicAuth, Ed25519Auth). */
 export interface Credentials {
   venueId: string;
   apiKey: string;
   userId: string;
 }
 
-/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, KeyPairAuth). */
+/** @deprecated Use Auth subclasses instead (NoAuth, BearerAuth, BasicAuth, Ed25519Auth). */
 export class CredentialsHTTP implements Credentials {
   constructor(public venueId: string, public apiKey: string, public userId: string) {}
 }
