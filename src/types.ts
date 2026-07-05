@@ -269,19 +269,6 @@ export interface AgentTriggerResult {
   taskResults?: any[];
 }
 
-export interface AgentQueryInput {
-  agentId: string;
-}
-
-export interface AgentQueryResult {
-  agentId: string;
-  status: string;
-  state?: Record<string, any>;
-  config?: Record<string, any>;
-  tasks?: any[];
-  [key: string]: any;
-}
-
 export interface AgentListInput {
   includeTerminated?: boolean;
 }

@@ -1,4 +1,4 @@
-import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentQueryResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, OperationRunner } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, OperationRunner } from './types';
 
 interface AgentManagerVenue {
   operations: OperationRunner;
@@ -41,23 +41,6 @@ export class AgentManager {
 
   async trigger(agentId: string): Promise<AgentTriggerResult> {
     return this.venue.operations.run<AgentTriggerResult>('v/ops/agent/trigger', { agentId });
-  }
-
-  async query(agentId: string): Promise<AgentQueryResult> {
-    const read = (path: string) =>
-      this.venue.operations.run<{ value: unknown }>('v/ops/covia/read', { path }).catch(() => ({ value: null }));
-    const [info, timelineRes, stateRes, inboxRes] = await Promise.all([
-      this.venue.operations.run<AgentQueryResult>('v/ops/agent/info', { agentId }),
-      read(`g/${agentId}/timeline`),
-      read(`g/${agentId}/state`),
-      read(`g/${agentId}/inbox`),
-    ]);
-    return {
-      ...info,
-      timeline: Array.isArray(timelineRes.value) ? timelineRes.value : [],
-      state: (stateRes.value ?? {}) as Record<string, unknown>,
-      inbox: Array.isArray(inboxRes.value) ? inboxRes.value : [],
-    };
   }
 
   async list(includeTerminated?: boolean): Promise<AgentListResult> {

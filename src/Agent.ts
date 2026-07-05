@@ -3,7 +3,6 @@ import {
   AgentMessageResult,
   AgentChatResult,
   AgentTriggerResult,
-  AgentQueryResult,
   AgentSuspendResult,
   AgentUpdateInput,
   AgentInfoResult,
@@ -19,7 +18,6 @@ interface AgentOps {
   message(agentId: string, message: any): Promise<AgentMessageResult>;
   chat(agentId: string, message: any, sessionId?: string): Promise<AgentChatResult>;
   trigger(agentId: string): Promise<AgentTriggerResult>;
-  query(agentId: string): Promise<AgentQueryResult>;
   suspend(agentId: string): Promise<AgentSuspendResult>;
   resume(agentId: string, autoWake?: boolean): Promise<AgentSuspendResult>;
   update(input: AgentUpdateInput): Promise<any>;
@@ -63,10 +61,6 @@ export class Agent {
 
   async trigger(): Promise<AgentTriggerResult> {
     return this._agents.trigger(this.id);
-  }
-
-  async query(): Promise<AgentQueryResult> {
-    return this._agents.query(this.id);
   }
 
   async suspend(): Promise<AgentSuspendResult> {

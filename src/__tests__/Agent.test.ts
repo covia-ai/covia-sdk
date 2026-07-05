@@ -6,7 +6,6 @@ function createMockAgents() {
     message: jest.fn().mockResolvedValue({ agentId: 'a1', delivered: true }),
     chat: jest.fn().mockResolvedValue({ agentId: 'a1', sessionId: 'sess-1', response: 'hello' }),
     trigger: jest.fn().mockResolvedValue({ agentId: 'a1', status: 'RUNNING' }),
-    query: jest.fn().mockResolvedValue({ agentId: 'a1', status: 'SLEEPING' }),
     suspend: jest.fn().mockResolvedValue({ agentId: 'a1', status: 'SUSPENDED' }),
     resume: jest.fn().mockResolvedValue({ agentId: 'a1', status: 'SLEEPING' }),
     update: jest.fn().mockResolvedValue({}),
@@ -61,11 +60,6 @@ describe('Agent', () => {
   it('trigger delegates to agents.trigger', async () => {
     await agent.trigger();
     expect(mockAgents.trigger).toHaveBeenCalledWith('a1');
-  });
-
-  it('query delegates to agents.query', async () => {
-    await agent.query();
-    expect(mockAgents.query).toHaveBeenCalledWith('a1');
   });
 
   it('suspend delegates to agents.suspend', async () => {
