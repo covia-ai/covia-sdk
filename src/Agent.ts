@@ -14,17 +14,17 @@ import {
 
 /** Minimal interface for the agent operations Agent needs from the venue's AgentManager. */
 interface AgentOps {
-  request(agentId: string, input?: any, wait?: boolean | number): Promise<AgentRequestResult>;
-  message(agentId: string, message: any): Promise<AgentMessageResult>;
-  chat(agentId: string, message: any, sessionId?: string): Promise<AgentChatResult>;
+  request(agentId: string, input?: unknown, wait?: boolean | number): Promise<AgentRequestResult>;
+  message(agentId: string, message: unknown): Promise<AgentMessageResult>;
+  chat(agentId: string, message: unknown, sessionId?: string): Promise<AgentChatResult>;
   trigger(agentId: string): Promise<AgentTriggerResult>;
   suspend(agentId: string): Promise<AgentSuspendResult>;
   resume(agentId: string, autoWake?: boolean): Promise<AgentSuspendResult>;
-  update(input: AgentUpdateInput): Promise<any>;
-  cancelTask(agentId: string, taskId: string): Promise<any>;
+  update(input: AgentUpdateInput): Promise<unknown>;
+  cancelTask(agentId: string, taskId: string): Promise<unknown>;
   info(agentId: string): Promise<AgentInfoResult>;
   fork(input: AgentForkInput): Promise<AgentForkResult>;
-  context(agentId: string, task?: any): Promise<string>;
+  context(agentId: string, task?: unknown): Promise<string>;
   delete(agentId: string, remove?: boolean): Promise<AgentDeleteResult>;
 }
 
@@ -39,15 +39,15 @@ export class Agent {
     this._agents = (venue as unknown as { agents: AgentOps }).agents;
   }
 
-  async request(input?: any, wait?: boolean | number): Promise<AgentRequestResult> {
+  async request(input?: unknown, wait?: boolean | number): Promise<AgentRequestResult> {
     return this._agents.request(this.id, input, wait);
   }
 
-  async message(message: any): Promise<AgentMessageResult> {
+  async message(message: unknown): Promise<AgentMessageResult> {
     return this._agents.message(this.id, message);
   }
 
-  async chat(message: any, sessionId?: string): Promise<AgentChatResult> {
+  async chat(message: unknown, sessionId?: string): Promise<AgentChatResult> {
     return this._agents.chat(this.id, message, sessionId);
   }
 
@@ -71,11 +71,11 @@ export class Agent {
     return this._agents.resume(this.id, autoWake);
   }
 
-  async update(options: { config?: Record<string, any>; state?: Record<string, any> }): Promise<any> {
+  async update(options: { config?: Record<string, unknown>; state?: Record<string, unknown> }): Promise<unknown> {
     return this._agents.update({ agentId: this.id, ...options });
   }
 
-  async cancelTask(taskId: string): Promise<any> {
+  async cancelTask(taskId: string): Promise<unknown> {
     return this._agents.cancelTask(this.id, taskId);
   }
 
@@ -89,12 +89,12 @@ export class Agent {
    * @param options - Fork options
    * @returns A new Agent instance for the forked agent
    */
-  async fork(agentId: string, options?: { config?: Record<string, any>; includeTimeline?: boolean; overwrite?: boolean }): Promise<Agent> {
+  async fork(agentId: string, options?: { config?: Record<string, unknown>; includeTimeline?: boolean; overwrite?: boolean }): Promise<Agent> {
     await this._agents.fork({ sourceId: this.id, agentId, ...options });
     return new Agent(agentId, this.venue);
   }
 
-  async context(task?: any): Promise<string> {
+  async context(task?: unknown): Promise<string> {
     return this._agents.context(this.id, task);
   }
 
@@ -122,7 +122,7 @@ export class ChatSession {
    * On the first call (when no sessionId is set), the server mints a new session.
    * The returned sessionId is captured and reused for all subsequent calls.
    */
-  async send(message: any): Promise<AgentChatResult> {
+  async send(message: unknown): Promise<AgentChatResult> {
     const result = await this.agent.chat(message, this._sessionId);
     this._sessionId = result.sessionId;
     return result;

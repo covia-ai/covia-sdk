@@ -10,8 +10,8 @@ interface AssetOps {
 
 /** Minimal interface for operation execution from the venue's OperationManager. */
 interface OpOps {
-  run(assetId: string, input: any, options?: InvokeOptions): Promise<any>;
-  invoke(assetId: string, input: any, options?: InvokeOptions): Promise<Job>;
+  run<T = unknown>(assetId: string, input?: unknown, options?: InvokeOptions): Promise<T>;
+  invoke(assetId: string, input?: unknown, options?: InvokeOptions): Promise<Job>;
 }
 
 export abstract class Asset {
@@ -67,20 +67,22 @@ export abstract class Asset {
   }
 
   /**
-   * Execute the operation
+   * Execute the operation and await its result.
    * @param input - Operation input parameters
-   * @returns {Promise<any>}
+   * @param options - Invocation options (e.g. UCAN proofs)
+   * @returns {Promise<T>} The operation result, typed as `T` (defaults to `unknown`)
    */
-  run(input: any): Promise<any> {
-    return this._operations.run(this.id, input);
+  run<T = unknown>(input?: unknown, options?: InvokeOptions): Promise<T> {
+    return this._operations.run<T>(this.id, input, options);
   }
 
-   /**
-   * Execute the operation
+  /**
+   * Execute the operation, returning the Job without awaiting completion.
    * @param input - Operation input parameters
+   * @param options - Invocation options (e.g. UCAN proofs)
    * @returns {Promise<Job>}
    */
-  invoke(input: any): Promise<Job> {
-    return this._operations.invoke(this.id, input);
+  invoke(input?: unknown, options?: InvokeOptions): Promise<Job> {
+    return this._operations.invoke(this.id, input, options);
   }
 }

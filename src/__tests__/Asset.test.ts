@@ -105,8 +105,17 @@ describe('Asset (via Operation subclass)', () => {
       const input = { param: 'value' };
 
       const result = await op.run(input);
-      expect(getOps(venue).run).toHaveBeenCalledWith('op-3', input);
+      expect(getOps(venue).run).toHaveBeenCalledWith('op-3', input, undefined);
       expect(result).toEqual({ result: 42 });
+    });
+
+    it('threads invocation options through to operations.run', async () => {
+      const venue = createMockVenue();
+      const op = new Operation('op-3', venue);
+      const options = { ucans: ['proof-token'] };
+
+      await op.run({ param: 'value' }, options);
+      expect(getOps(venue).run).toHaveBeenCalledWith('op-3', { param: 'value' }, options);
     });
   });
 
@@ -116,8 +125,17 @@ describe('Asset (via Operation subclass)', () => {
       const op = new Operation('op-4', venue);
 
       const result = await op.invoke({ x: 1 });
-      expect(getOps(venue).invoke).toHaveBeenCalledWith('op-4', { x: 1 });
+      expect(getOps(venue).invoke).toHaveBeenCalledWith('op-4', { x: 1 }, undefined);
       expect(result).toBeInstanceOf(Job);
+    });
+
+    it('threads invocation options through to operations.invoke', async () => {
+      const venue = createMockVenue();
+      const op = new Operation('op-4', venue);
+      const options = { ucans: ['proof-token'] };
+
+      await op.invoke({ x: 1 }, options);
+      expect(getOps(venue).invoke).toHaveBeenCalledWith('op-4', { x: 1 }, options);
     });
   });
 
