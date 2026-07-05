@@ -167,13 +167,23 @@ export interface MCPDiscovery {
   [key: string]: any;
 }
 
+/**
+ * A2A agent card from `GET /.well-known/agent-card.json`.
+ * Field names mirror the A2A v1.0 wire format the venue serves (via the
+ * official A2A Java SDK). The index signature preserves any spec fields a
+ * given venue build adds (e.g. `securitySchemes`, `protocolVersion`).
+ */
 export interface AgentCard {
-  agentProvider?: Record<string, any>;
-  agentCapabilities?: Record<string, any>;
-  agentSkills?: Record<string, any>[];
-  agentInterfaces?: Record<string, any>[];
-  securityScheme?: Record<string, any>;
-  preferredTransport?: Record<string, any>;
+  name: string;
+  description?: string;
+  version?: string;
+  provider?: Record<string, any>;
+  capabilities?: Record<string, any>;
+  defaultInputModes?: string[];
+  defaultOutputModes?: string[];
+  skills?: Record<string, any>[];
+  supportedInterfaces?: Record<string, any>[];
+  preferredTransport?: string;
   [key: string]: any;
 }
 
