@@ -4,9 +4,11 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
-## Unreleased
+## 1.6.0
 
-Targets the 0.3.0 venue. Several items are **breaking** — see below.
+First stable release targeting the covia 0.3.0 venue. Several items are
+**breaking** — see below. Validated against the released 0.3.0 fleet (job-free
+`/api/v1/values/*` reads confirmed live).
 
 ### Added
 
