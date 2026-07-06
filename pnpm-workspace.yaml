@@ -1,6 +1,8 @@
-# pnpm 10+ reads build-script approvals here (moved out of package.json's
-# "pnpm" field, which pnpm 11 no longer reads). esbuild and unrs-resolver ship
-# native binaries and need their install scripts to run.
-onlyBuiltDependencies:
-  - esbuild
-  - unrs-resolver
+# Build-script approvals for pnpm 11 (packageManager: pnpm@11.9.0).
+# pnpm 11 dropped both the package.json "pnpm" field and the pnpm-10
+# "onlyBuiltDependencies" list; it reads this "allowBuilds" boolean map.
+# esbuild and unrs-resolver ship native binaries whose install scripts must run,
+# or a consumer's (and this repo's CI) install fails with ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true
