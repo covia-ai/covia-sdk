@@ -10,6 +10,8 @@ export interface VenueOptions {
   name?:string;
   description?:string;
   auth?:Auth;
+  /** Status observed while connecting — seeds {@link Venue.lastKnownStatus}. */
+  status?: StatusData;
 }
 
 // Venue Constructor interface (for static members)
@@ -137,6 +139,8 @@ export interface StatusData {
   status?:string;
   did?:string;
   name?:string;
+  /** Venue platform version (e.g. "0.3.0"). Absent on venues before 0.3. */
+  version?:string;
   stats?:StatsData;
 
 }

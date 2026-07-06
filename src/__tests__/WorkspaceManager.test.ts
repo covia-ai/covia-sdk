@@ -183,6 +183,30 @@ describe('WorkspaceManager', () => {
     expect(venue.operations.run).toHaveBeenLastCalledWith('v/ops/covia/list', { path: 'w/second', limit: undefined, offset: undefined });
   });
 
+  it('a status without a version marks the venue pre-0.3 — no GET probe at all', async () => {
+    (venue as any).lastKnownStatus = { name: 'Old Stable', did: 'did:key:zVenue' }; // no version field
+    await ws.read('w/mydata');
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/read', { path: 'w/mydata', maxSize: undefined });
+  });
+
+  it('a status reporting ≥0.3 keeps reads on the job-free GET path', async () => {
+    (venue as any).lastKnownStatus = { version: '0.3.0-SNAPSHOT' };
+    okJson({ exists: true, value: 1 });
+    await ws.read('w/mydata');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(venue.operations.run).not.toHaveBeenCalled();
+  });
+
+  it('a status arriving after the manager exists still downgrades pre-0.3 venues', async () => {
+    okJson({ exists: true, value: 1 });
+    await ws.read('w/first');                                       // GET while nothing is known
+    (venue as any).lastKnownStatus = { version: '0.2.5' };          // e.g. venue.status() resolved
+    await ws.read('w/second');
+    expect(mockFetch).toHaveBeenCalledTimes(1);                     // no second GET
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/read', { path: 'w/second', maxSize: undefined });
+  });
+
   it('non-404 errors from the GET surface propagate — no invoke fallback', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false, status: 403,

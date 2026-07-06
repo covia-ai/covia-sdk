@@ -2,7 +2,7 @@ import { fetchWithError } from './Utils';
 import {
   WorkspaceReadResult, WorkspaceWriteResult, WorkspaceDeleteResult, WorkspaceAppendResult,
   WorkspaceListResult, WorkspaceSliceResult, WorkspaceCopyResult, WorkspaceInspectResult,
-  WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner, NotFoundError,
+  WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner, NotFoundError, StatusData,
 } from './types';
 
 interface WorkspaceManagerVenue {
@@ -10,6 +10,16 @@ interface WorkspaceManagerVenue {
   venueId: string;
   auth: { apply(headers: Record<string, string>, audience?: string): void };
   operations: OperationRunner;
+  lastKnownStatus?: StatusData;
+}
+
+/** Whether a venue version string is at least `major.minor`. Unparseable → true
+ *  (optimistic — the 404 probe corrects a wrong yes; a wrong no never recovers). */
+function versionAtLeast(version: string | undefined, major: number, minor: number): boolean {
+  const m = version?.match(/^(\d+)\.(\d+)/);
+  if (!m) return true;
+  const [maj, min] = [Number(m[1]), Number(m[2])];
+  return maj > major || (maj === major && min >= minor);
 }
 
 /**
@@ -58,13 +68,28 @@ export class WorkspaceManager {
     return fetchWithError<T>(`${this.venue.baseUrl}/api/v1/values/${op}?${qs.toString()}`, { headers: this._headers() });
   }
 
+  /**
+   * Whether the venue serves `GET /api/v1/values/*`: no if a probe already
+   * 404'd, or if the venue's last known status identifies it as pre-0.3
+   * (venues that old don't report a `version` at all). Checked per read —
+   * connect/`status()` may populate the status after this manager exists.
+   */
+  private supportsValues(): boolean {
+    if (!this.valuesSupported) return false;
+    const status = this.venue.lastKnownStatus;
+    if (status && (!status.version || !versionAtLeast(status.version, 0, 3))) {
+      this.valuesSupported = false;
+    }
+    return this.valuesSupported;
+  }
+
   /** A job-free values read, falling back to the invoke path on pre-0.3 venues. */
   private async _valuesOr<T>(
     op: string,
     params: Record<string, string | number | boolean | undefined>,
     fallback: () => Promise<T>,
   ): Promise<T> {
-    if (this.valuesSupported) {
+    if (this.supportsValues()) {
       try {
         return await this._values<T>(op, params);
       } catch (e) {

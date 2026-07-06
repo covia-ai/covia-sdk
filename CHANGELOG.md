@@ -22,6 +22,12 @@ Targets the 0.3.0 venue. Several items are **breaking** — see below.
   venue is remembered as pre-0.3 after the first probe, so old venues don't pay
   a failed GET per read. Venue-version accommodation lives in the SDK, not in
   application code.
+- **`venue.lastKnownStatus`** — `Venue.connect` stashes the `/api/v1/status`
+  payload it already fetches (and `status()` refreshes it), so managers can use
+  it as a capability hint: a status without a `version` field identifies a
+  pre-0.3 venue and workspace reads skip the GET probe entirely. The probe
+  remains the authority when no status has been seen (direct construction,
+  auth-gated venues).
 - **`ucans` threading + DID/path helpers** — managers accept `ucans` for
   capability-gated cross-DID access; `src/did.ts` exposes `Namespace`,
   `isDid`, `didUrl`, `parseDidUrl`, `assetHash`, etc. for building/parsing

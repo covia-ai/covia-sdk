@@ -69,6 +69,15 @@ export class Venue implements VenueInterface {
   public auth: Auth;
   public metadata: VenueData;
 
+  /**
+   * The most recent status this instance has seen — seeded by {@link connect}
+   * (which fetches `/api/v1/status` anyway) and refreshed by every
+   * {@link status} call. Undefined until one of those has happened, e.g. on a
+   * directly constructed venue. Managers use it as a capability hint (venue
+   * `version`); it is a cache, not a liveness check.
+   */
+  public lastKnownStatus?: StatusData;
+
   private _agents?: AgentManager;
   private _jobs?: JobManager;
   private _assets?: AssetManager;
@@ -89,6 +98,7 @@ export class Venue implements VenueInterface {
     this.baseUrl = options.baseUrl || '';
     this.venueId = options.venueId || '';
     this.auth = options.auth || new NoAuth();
+    this.lastKnownStatus = options.status;
     this.metadata = {
         name: options.name || "default",
         description: options.description || ""
@@ -123,7 +133,8 @@ export class Venue implements VenueInterface {
         baseUrl: venueId.baseUrl,
         venueId: venueId.venueId,
         name: venueId.metadata.name,
-        auth: auth
+        auth: auth,
+        status: venueId.lastKnownStatus
       });
     }
 
@@ -154,7 +165,8 @@ export class Venue implements VenueInterface {
             baseUrl,
             venueId: data.did,
             name: data.name,
-            auth: auth
+            auth: auth,
+            status: data
           });
         } catch (error) {
           // An auth-gated venue (public access disabled) 401s on /status, but its
@@ -249,8 +261,10 @@ export class Venue implements VenueInterface {
    * Get venue status
    * @returns {Promise<StatusData>}
    */
-  status():Promise<StatusData> {
-      return fetchWithError<StatusData>(`${this.baseUrl}/api/v1/status`);
+  async status():Promise<StatusData> {
+      const data = await fetchWithError<StatusData>(`${this.baseUrl}/api/v1/status`);
+      this.lastKnownStatus = data;
+      return data;
   }
 
   /**
