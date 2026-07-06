@@ -154,4 +154,42 @@ describe('WorkspaceManager', () => {
     await ws.count('did:key:zAlice/w/x', { depth: 2, ucans: ['eyJ.proof'] });
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/aggregate', { path: 'did:key:zAlice/w/x', depth: 2 }, { ucans: ['eyJ.proof'] });
   });
+
+  // ── old venues (< 0.3, no /values routes): 404 → invoke path, remembered ────
+  // A 404 can only mean the route is missing — an absent path is 200 {exists:false}.
+
+  function notFound() {
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 404,
+      json: () => Promise.resolve({ error: 'Endpoint GET /api/v1/values/read not found' }),
+      text: () => Promise.resolve('{"error": "Endpoint GET /api/v1/values/read not found"}'),
+    });
+  }
+
+  it('a read against a pre-0.3 venue falls back to the invoke path', async () => {
+    notFound();
+    venue.operations.run.mockResolvedValueOnce({ exists: true, value: 7 });
+    const r = await ws.read('w/mydata');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/read', { path: 'w/mydata', maxSize: undefined });
+    expect(r.value).toBe(7);
+  });
+
+  it('remembers a pre-0.3 venue — later reads skip the GET probe entirely', async () => {
+    notFound();
+    await ws.read('w/first');
+    await ws.list('w/second');
+    expect(mockFetch).toHaveBeenCalledTimes(1);                     // only the first probe
+    expect(venue.operations.run).toHaveBeenCalledTimes(2);
+    expect(venue.operations.run).toHaveBeenLastCalledWith('v/ops/covia/list', { path: 'w/second', limit: undefined, offset: undefined });
+  });
+
+  it('non-404 errors from the GET surface propagate — no invoke fallback', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 403,
+      json: () => Promise.resolve({ error: 'Capability denied' }),
+      text: () => Promise.resolve('{"error": "Capability denied"}'),
+    });
+    await expect(ws.read('w/private')).rejects.toThrow();
+    expect(venue.operations.run).not.toHaveBeenCalled();
+  });
 });

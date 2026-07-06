@@ -16,6 +16,12 @@ Targets the 0.3.0 venue. Several items are **breaking** — see below.
 - **Job-free workspace reads** — `venue.workspace` read/list/slice/inspect now
   route through the venue's `GET /api/v1/values/*` API (no Job persisted), with
   new `count` and `aggregate` operations.
+- **Pre-0.3 venue fallback** — workspace reads against a venue without the
+  `/values` routes transparently fall back to the invoke path (a 404 there can
+  only mean the route is missing; an absent path is `200 {exists:false}`). The
+  venue is remembered as pre-0.3 after the first probe, so old venues don't pay
+  a failed GET per read. Venue-version accommodation lives in the SDK, not in
+  application code.
 - **`ucans` threading + DID/path helpers** — managers accept `ucans` for
   capability-gated cross-DID access; `src/did.ts` exposes `Namespace`,
   `isDid`, `didUrl`, `parseDidUrl`, `assetHash`, etc. for building/parsing

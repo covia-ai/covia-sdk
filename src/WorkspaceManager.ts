@@ -2,7 +2,7 @@ import { fetchWithError } from './Utils';
 import {
   WorkspaceReadResult, WorkspaceWriteResult, WorkspaceDeleteResult, WorkspaceAppendResult,
   WorkspaceListResult, WorkspaceSliceResult, WorkspaceCopyResult, WorkspaceInspectResult,
-  WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner,
+  WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner, NotFoundError,
 } from './types';
 
 interface WorkspaceManagerVenue {
@@ -30,8 +30,18 @@ interface WorkspaceManagerVenue {
  * needs UCAN **proof tokens** (`ucans`) transparently falls back to the invoke
  * path (the only transport that carries a proof array). Own-namespace reads —
  * the common case — never need this and stay fully job-free.
+ *
+ * Venues that predate the `/values` routes (< covia 0.3) are accommodated
+ * here, not in application code: a 404 from the GET surface can only mean the
+ * route is missing (an absent path is `200 {exists:false}`), so reads fall
+ * back to the invoke path and the venue is remembered as pre-0.3 for the rest
+ * of this manager's lifetime.
  */
 export class WorkspaceManager {
+  // Whether this venue serves GET /api/v1/values/* — flipped on the first 404
+  // so pre-0.3 venues pay the probe once, not one failed GET per read.
+  private valuesSupported = true;
+
   constructor(private venue: WorkspaceManagerVenue) {}
 
   private _headers(): Record<string, string> {
@@ -48,28 +58,49 @@ export class WorkspaceManager {
     return fetchWithError<T>(`${this.venue.baseUrl}/api/v1/values/${op}?${qs.toString()}`, { headers: this._headers() });
   }
 
+  /** A job-free values read, falling back to the invoke path on pre-0.3 venues. */
+  private async _valuesOr<T>(
+    op: string,
+    params: Record<string, string | number | boolean | undefined>,
+    fallback: () => Promise<T>,
+  ): Promise<T> {
+    if (this.valuesSupported) {
+      try {
+        return await this._values<T>(op, params);
+      } catch (e) {
+        if (!(e instanceof NotFoundError)) throw e;
+        this.valuesSupported = false;
+      }
+    }
+    return fallback();
+  }
+
   // ── job-free reads (#177) ───────────────────────────────────────────────────
 
   async read(path: string, maxSize?: number, ucans?: string[]): Promise<WorkspaceReadResult> {
     if (ucans?.length) return this.venue.operations.run<WorkspaceReadResult>('v/ops/covia/read', { path, maxSize }, { ucans });
-    return this._values('read', { path, maxSize });
+    return this._valuesOr('read', { path, maxSize }, () =>
+      this.venue.operations.run<WorkspaceReadResult>('v/ops/covia/read', { path, maxSize }));
   }
 
   async list(path?: string, limit?: number, offset?: number, ucans?: string[]): Promise<WorkspaceListResult> {
     // The GET route requires a path; a root/undefined list stays on the op path.
     if (ucans?.length || !path) return this.venue.operations.run<WorkspaceListResult>('v/ops/covia/list', { path, limit, offset }, { ucans });
-    return this._values('list', { path, limit, offset });
+    return this._valuesOr('list', { path, limit, offset }, () =>
+      this.venue.operations.run<WorkspaceListResult>('v/ops/covia/list', { path, limit, offset }));
   }
 
   async slice(path: string, offset?: number, limit?: number, ucans?: string[]): Promise<WorkspaceSliceResult> {
     if (ucans?.length) return this.venue.operations.run<WorkspaceSliceResult>('v/ops/covia/slice', { path, offset, limit }, { ucans });
-    return this._values('slice', { path, offset, limit });
+    return this._valuesOr('slice', { path, offset, limit }, () =>
+      this.venue.operations.run<WorkspaceSliceResult>('v/ops/covia/slice', { path, offset, limit }));
   }
 
   async inspect(paths: string | string[], budget?: number, compact?: boolean, ucans?: string[]): Promise<WorkspaceInspectResult> {
     // The GET route renders a single path; multi-path (or proof tokens) use the op.
     if (ucans?.length || Array.isArray(paths)) return this.venue.operations.run<WorkspaceInspectResult>('v/ops/covia/inspect', { paths, budget, compact }, { ucans });
-    return this._values('inspect', { path: paths, budget, compact });
+    return this._valuesOr('inspect', { path: paths, budget, compact }, () =>
+      this.venue.operations.run<WorkspaceInspectResult>('v/ops/covia/inspect', { paths, budget, compact }));
   }
 
   /**
@@ -83,7 +114,10 @@ export class WorkspaceManager {
   async count(path: string, opts: { depth?: number; ucans?: string[] } = {}): Promise<WorkspaceCountResult> {
     const { depth, ucans } = opts;
     if (ucans?.length) return this.venue.operations.run<WorkspaceCountResult>('v/ops/covia/aggregate', { path, depth }, { ucans });
-    return this._values('count', { path, depth });
+    // Pre-0.3 venues lack the covia:aggregate op as well as the route, so the
+    // fallback fails there too — but with the honest "no such operation" error.
+    return this._valuesOr('count', { path, depth }, () =>
+      this.venue.operations.run<WorkspaceCountResult>('v/ops/covia/aggregate', { path, depth }));
   }
 
   /**
@@ -97,7 +131,8 @@ export class WorkspaceManager {
   async aggregate(path: string, opts: { depth?: number; groupBy?: string; ucans?: string[] } = {}): Promise<WorkspaceAggregateResult> {
     const { depth, groupBy, ucans } = opts;
     if (ucans?.length) return this.venue.operations.run<WorkspaceAggregateResult>('v/ops/covia/aggregate', { path, depth, groupBy }, { ucans });
-    return this._values('aggregate', { path, depth, groupBy });
+    return this._valuesOr('aggregate', { path, depth, groupBy }, () =>
+      this.venue.operations.run<WorkspaceAggregateResult>('v/ops/covia/aggregate', { path, depth, groupBy }));
   }
 
   // ── writes stay on the job path (they should leave an audit record) ─────────
