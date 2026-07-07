@@ -160,6 +160,22 @@ const job = await venue.operations.invoke("sensitive:op", input, {
 
 ---
 
+### Adapters — `venue.adapters`
+
+List the adapters registered on a venue — the true registry, including adapters
+with zero catalogued operations. Backed by the venue's canonical
+`v/info/adapters/<name>` lattice data, read job-free via the values API.
+
+```typescript
+// All registered adapters
+const adapters = await venue.adapters.list();
+adapters.forEach((a) => console.log(`${a.name}: ${a.operations.length} ops`));
+
+// One adapter's summary (null if not registered)
+const covia = await venue.adapters.get("covia");
+console.log(covia?.description, covia?.operations);
+```
+
 ### Assets — `venue.assets`
 
 Manage data assets and operations registered on the venue.
@@ -579,7 +595,7 @@ RunStatus.AUTH_REQUIRED;   // Waiting for authentication
 ```typescript
 import {
   Venue, Grid, Job, Agent, ChatSession, Asset, Operation, DataAsset,
-  AssetManager, OperationManager, JobManager,
+  AdapterManager, AssetManager, OperationManager, JobManager,
   AgentManager, WorkspaceManager, SecretManager, UCANManager,
   KeyPairAuth, BearerAuth,
   RunStatus, CoviaError,

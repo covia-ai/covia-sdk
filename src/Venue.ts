@@ -1,4 +1,5 @@
 import { CoviaError, CoviaTimeoutError, GridError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
+import { AdapterManager } from './AdapterManager';
 import { AgentManager } from './AgentManager';
 import { JobManager } from './JobManager';
 import { AssetManager } from './AssetManager';
@@ -78,6 +79,7 @@ export class Venue implements VenueInterface {
    */
   public lastKnownStatus?: StatusData;
 
+  private _adapters?: AdapterManager;
   private _agents?: AgentManager;
   private _jobs?: JobManager;
   private _assets?: AssetManager;
@@ -86,6 +88,7 @@ export class Venue implements VenueInterface {
   private _ucan?: UCANManager;
   private _secrets?: SecretManager;
 
+  get adapters(): AdapterManager { return this._adapters ??= new AdapterManager(this); }
   get agents(): AgentManager { return this._agents ??= new AgentManager(this); }
   get jobs(): JobManager { return this._jobs ??= new JobManager(this); }
   get assets(): AssetManager { return this._assets ??= new AssetManager(this); }

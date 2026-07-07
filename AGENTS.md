@@ -39,6 +39,7 @@ src/
 ├── Credentials.ts      # Auth interface (NoAuth + implementations)
 ├── Logger.ts           # Logger utility
 ├── Utils.ts            # Fetch helpers, SSE streaming, job status utilities
+├── AdapterManager.ts   # Adapter introspection (v/info/adapters, job-free)
 ├── AgentManager.ts     # Agent lifecycle on a venue
 ├── AssetManager.ts     # Asset CRUD, caching, listing
 ├── JobManager.ts       # Job creation, polling, listing
@@ -62,7 +63,7 @@ dist/                   # Build output (CJS + ESM + .d.ts) — committed
 
 **Classes:** `Grid`, `Venue`, `Asset`, `Operation`, `DataAsset`, `Job`
 
-**Managers:** `AgentManager`, `AssetManager`, `JobManager`, `OperationManager`, `WorkspaceManager`, `UCANManager`, `SecretManager`
+**Managers:** `AdapterManager`, `AgentManager`, `AssetManager`, `JobManager`, `OperationManager`, `WorkspaceManager`, `UCANManager`, `SecretManager`
 
 **Types:** `VenueOptions`, `AssetMetadata`, `OperationDetails`, `JobMetadata`, `RunStatus`, `CoviaError`, `AgentCard`, `MCPDiscovery`, `DIDDocument`
 
@@ -75,7 +76,7 @@ dist/                   # Build output (CJS + ESM + .d.ts) — committed
 ## Core Workflow
 
 1. Connect to a venue via `Grid.connect()` or `Venue.connect()` (HTTP URL, DNS name, or `did:web:`)
-2. Access domain managers through `venue.assets`, `venue.operations`, `venue.jobs`, `venue.agents`, `venue.workspace`, `venue.secrets`, `venue.ucan` (lazily instantiated)
+2. Access domain managers through `venue.adapters`, `venue.assets`, `venue.operations`, `venue.jobs`, `venue.agents`, `venue.workspace`, `venue.secrets`, `venue.ucan` (lazily instantiated)
 3. Retrieve assets via `venue.assets.get(id)` → returns `Operation` or `DataAsset`
 4. Invoke operations (resolved via `v/ops/<adapter>/<op>` paths) and poll jobs
 5. Discover venue metadata via `venue.status()`, `venue.didDocument()`, `venue.mcpDiscovery()`, `venue.agentCard()`

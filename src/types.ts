@@ -557,9 +557,13 @@ export interface FunctionsResult {
   functions: FunctionInfo[];
 }
 
+/** Per-adapter summary the venue materialises at `v/info/adapters/<name>`
+ *  (OPERATIONS.md §3). */
 export interface AdapterInfo {
   name: string;
   description?: string;
+  /** Full catalog paths of the adapter's invocable operations
+   *  (`v/ops/...`, `v/test/ops/...`), each runnable via `operations.run`. */
   operations: string[];
 }
 
