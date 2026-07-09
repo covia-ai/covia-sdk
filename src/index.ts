@@ -20,6 +20,7 @@ export { OperationManager } from './OperationManager';
 export { WorkspaceManager } from './WorkspaceManager';
 export { UCANManager } from './UCANManager';
 export { SecretManager } from './SecretManager';
+export { AdapterManager } from './AdapterManager';
 
 // Crypto utilities
 export { generateKeyPair, privateKeyToHex, hexToPrivateKey } from './crypto/keys';
