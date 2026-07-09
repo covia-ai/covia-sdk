@@ -1,17 +1,18 @@
-import { fetchWithError } from './Utils';
-import { AdapterInfo } from './types';
+import { AdapterInfo, WorkspaceReadResult, WorkspaceSliceResult } from './types';
 
 interface AdapterManagerVenue {
-  baseUrl: string;
-  venueId: string;
-  auth: { apply(headers: Record<string, string>, audience?: string): void };
+  workspace: {
+    slice(path: string, offset?: number, limit?: number, ucans?: string[]): Promise<WorkspaceSliceResult>;
+    read(path: string, maxSize?: number, ucans?: string[]): Promise<WorkspaceReadResult>;
+  };
 }
 
 /**
- * Root of the per-adapter summaries the venue materialises into the lattice
- * at startup (`Engine.materialiseVenueInfo`) — the authoritative adapter
- * list, unlike inferring adapter names from `metadata.operation.adapter` on
- * the operations catalog, which misses adapters with zero catalog operations.
+ * Root of the per-adapter summaries the venue materialises into its lattice
+ * at startup (`v/info/adapters/<name>` → `{name, description, operations}`,
+ * per OPERATIONS.md §3) — the authoritative adapter registry, unlike
+ * inferring adapter names from `metadata.operation.adapter` on the
+ * operations catalog, which misses adapters with zero catalog operations.
  */
 const ADAPTERS_PATH = 'v/info/adapters';
 
@@ -25,16 +26,6 @@ interface AdapterSummary {
   operations?: string[];
 }
 
-interface AdaptersSliceResult {
-  exists: boolean;
-  values?: { key?: string; value?: AdapterSummary }[];
-}
-
-interface AdapterReadResult {
-  exists: boolean;
-  value?: AdapterSummary;
-}
-
 function toAdapterInfo(name: string | undefined, value: AdapterSummary | undefined): AdapterInfo {
   return {
     name: value?.name ?? name ?? '',
@@ -44,34 +35,33 @@ function toAdapterInfo(name: string | undefined, value: AdapterSummary | undefin
 }
 
 /**
- * Adapter discovery, read job-free from `v/info/adapters` via
- * `GET /api/v1/values/*` (covia #177) — synchronous, capability-checked, no
- * Job persisted. Requires a venue >= 0.3.0; there is no invoke-path fallback
- * (unlike {@link WorkspaceManager}) since adapter listing has no `covia:*` op.
+ * Adapter introspection for a venue.
+ *
+ * Reads go through the workspace manager, so they are job-free (`GET
+ * /api/v1/values/*`, covia #177) on 0.3+ venues and transparently fall back
+ * to the invoke path on older ones — the same job-free/fallback behaviour
+ * every other workspace-backed read gets, rather than a hand-rolled fetch.
  */
 export class AdapterManager {
   constructor(private venue: AdapterManagerVenue) {}
 
-  private _headers(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    this.venue.auth.apply(headers, this.venue.venueId);
-    return headers;
-  }
-
-  private _values<T>(op: string, params: Record<string, string | number | undefined>): Promise<T> {
-    const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(params)) if (v !== undefined) qs.set(k, String(v));
-    return fetchWithError<T>(`${this.venue.baseUrl}/api/v1/values/${op}?${qs.toString()}`, { headers: this._headers() });
-  }
-
   /**
-   * List all adapters registered on this venue.
-   * @returns {Promise<AdapterInfo[]>}
+   * List the adapters registered on the venue, with their descriptions and
+   * invocable operation catalog paths. Registered-but-inactive or zero-op
+   * adapters are included — this is the true registry, not an inference
+   * from the operations catalog.
    */
   async list(): Promise<AdapterInfo[]> {
-    const result = await this._values<AdaptersSliceResult>('slice', { path: ADAPTERS_PATH, limit: LIST_LIMIT });
-    if (!result.exists) return [];
-    return (result.values ?? []).map((entry) => toAdapterInfo(entry.key, entry.value));
+    const r = await this.venue.workspace.slice(ADAPTERS_PATH, 0, LIST_LIMIT);
+    if (!r.exists || !Array.isArray(r.values)) return [];
+    const out: AdapterInfo[] = [];
+    for (const entry of r.values as unknown[]) {
+      if (!entry || typeof entry !== 'object') continue;
+      const key = 'key' in entry && typeof entry.key === 'string' ? entry.key : undefined;
+      const value = ('value' in entry ? entry.value : entry) as AdapterSummary | undefined;
+      out.push(toAdapterInfo(key, value));
+    }
+    return out;
   }
 
   /**
@@ -80,8 +70,8 @@ export class AdapterManager {
    * @returns {Promise<AdapterInfo | null>} `null` if no adapter with that name is registered
    */
   async get(name: string): Promise<AdapterInfo | null> {
-    const result = await this._values<AdapterReadResult>('read', { path: `${ADAPTERS_PATH}/${encodeURIComponent(name)}` });
-    if (!result.exists) return null;
-    return toAdapterInfo(name, result.value);
+    const r = await this.venue.workspace.read(`${ADAPTERS_PATH}/${encodeURIComponent(name)}`);
+    if (!r.exists) return null;
+    return toAdapterInfo(name, r.value as AdapterSummary);
   }
 }

@@ -1,4 +1,5 @@
 import { CoviaError, CoviaTimeoutError, GridError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
+import { AdapterManager } from './AdapterManager';
 import { AgentManager } from './AgentManager';
 import { JobManager } from './JobManager';
 import { AssetManager } from './AssetManager';
@@ -6,7 +7,6 @@ import { OperationManager } from './OperationManager';
 import { WorkspaceManager } from './WorkspaceManager';
 import { UCANManager } from './UCANManager';
 import { SecretManager } from './SecretManager';
-import { AdapterManager } from './AdapterManager';
 import { Asset } from './Asset';
 import { fetchStreamWithError, fetchWithError } from './Utils';
 import { Auth, NoAuth } from './Credentials';
@@ -79,6 +79,7 @@ export class Venue implements VenueInterface {
    */
   public lastKnownStatus?: StatusData;
 
+  private _adapters?: AdapterManager;
   private _agents?: AgentManager;
   private _jobs?: JobManager;
   private _assets?: AssetManager;
@@ -86,8 +87,8 @@ export class Venue implements VenueInterface {
   private _workspace?: WorkspaceManager;
   private _ucan?: UCANManager;
   private _secrets?: SecretManager;
-  private _adapters?: AdapterManager;
 
+  get adapters(): AdapterManager { return this._adapters ??= new AdapterManager(this); }
   get agents(): AgentManager { return this._agents ??= new AgentManager(this); }
   get jobs(): JobManager { return this._jobs ??= new JobManager(this); }
   get assets(): AssetManager { return this._assets ??= new AssetManager(this); }
@@ -95,7 +96,6 @@ export class Venue implements VenueInterface {
   get workspace(): WorkspaceManager { return this._workspace ??= new WorkspaceManager(this); }
   get ucan(): UCANManager { return this._ucan ??= new UCANManager(this); }
   get secrets(): SecretManager { return this._secrets ??= new SecretManager(this); }
-  get adapters(): AdapterManager { return this._adapters ??= new AdapterManager(this); }
 
   constructor(options: VenueOptions = {}) {
     this.baseUrl = options.baseUrl || '';
