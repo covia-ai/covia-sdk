@@ -48,9 +48,18 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing requires npm >= 11.5.1
-      - name: Update npm
-        run: npm install -g npm@latest
+      # Trusted publishing requires npm >= 11.5.1. Node 24 bundles a new
+      # enough npm; unconditionally overlaying npm@latest broke the 1.7.0
+      # publish (global install missing its sigstore module), so only
+      # upgrade — pinned to major 11 — if the bundled npm is too old.
+      - name: Ensure npm >= 11.5.1
+        run: |
+          V=$(npm --version)
+          echo "Bundled npm: $V"
+          if [ "$(printf '%s\n' 11.5.1 "$V" | sort -V | head -1)" != "11.5.1" ]; then
+            echo "npm $V < 11.5.1 — installing npm@11"
+            npm install -g npm@11
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
