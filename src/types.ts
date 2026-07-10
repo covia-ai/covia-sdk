@@ -634,6 +634,16 @@ export class JobFailedError extends CoviaError {
 }
 
 /** Raised when a requested resource is not found (404). */
+/** HTTP 429 from the venue — a rate limit or concurrent-job cap. Carries the
+ *  server's Retry-After hint (seconds). Thrown only after the SDK's bounded
+ *  automatic retries are exhausted. */
+export class RateLimitError extends GridError {
+  constructor(message: string, public retryAfterSeconds: number, body?: unknown) {
+    super(429, message, body);
+    this.name = 'RateLimitError';
+  }
+}
+
 export class NotFoundError extends GridError {
   constructor(message: string) {
     super(404, message);

@@ -1,4 +1,4 @@
-import { CoviaError, CoviaConnectionError, GridError, NotFoundError, RunStatus, SSEEvent } from './types';
+import { CoviaError, CoviaConnectionError, GridError, NotFoundError, RateLimitError, RunStatus, SSEEvent } from './types';
 import { logger } from './Logger';
 import { didUrl, Namespace } from './did';
 
@@ -55,22 +55,71 @@ function wrapError(error: unknown): CoviaError {
  * @param options - Fetch options
  * @returns {Promise<T>} The response data
  */
+// ── 429 backpressure (covia-sdk#14) ─────────────────────────────────────────
+// Venues shed load with 429 + Retry-After (request rate limit / concurrent-job
+// cap). A 429 means the request was refused BEFORE any effect (no job created),
+// so it is safe to retry automatically — even POST /invoke. Policy mirrors the
+// Java client (covia-core RetryPolicy): Retry-After is the floor, backoff uses
+// FULL jitter (randomise the whole interval — otherwise every client that got
+// the same Retry-After re-stampedes together), attempts and total wait are
+// bounded, and exhaustion throws a typed RateLimitError.
+const RETRY_MAX_ATTEMPTS = 4;      // 1 try + 3 retries
+const RETRY_BASE_MS = 200;
+const RETRY_MAX_DELAY_MS = 10_000;
+const RETRY_BUDGET_MS = 30_000;
+
+/** Parse a Retry-After header (delta-seconds or HTTP-date) to ms from now. */
+export function parseRetryAfterMs(header: string | null, nowMs: number): number {
+  if (!header) return 0;
+  const secs = Number(header);
+  if (Number.isFinite(secs)) return Math.max(0, secs * 1000);
+  const date = Date.parse(header);
+  return Number.isFinite(date) ? Math.max(0, date - nowMs) : 0;
+}
+
+/** Delay before the next attempt after a 429, or -1 to give up. Pure — random
+ *  in [0,1) supplied by the caller so tests are deterministic. */
+export function retryDelayMs(attempt: number, retryAfterMs: number,
+    remainingBudgetMs: number, random: number): number {
+  if (attempt >= RETRY_MAX_ATTEMPTS) return -1;
+  const backoff = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_MS * 2 ** (attempt - 1));
+  const delay = Math.max(retryAfterMs, Math.floor(random * backoff));
+  return delay > remainingBudgetMs ? -1 : delay;
+}
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
 export async function fetchWithError<T>(url: string, options?: RequestInit): Promise<T> {
   const method = options?.method ?? 'GET';
-  logger.debug(`${method} ${url}`);
-  let response: Response;
-  try {
-    response = await fetch(url, options);
-  } catch (error) {
-    const msg = (error as Error).message ?? String(error);
-    logger.debug(`Connection failed: ${method} ${url} — ${msg}`);
-    throw wrapError(error);
+  const deadline = Date.now() + RETRY_BUDGET_MS;
+  for (let attempt = 1; ; attempt++) {
+    logger.debug(`${method} ${url}`);
+    let response: Response;
+    try {
+      response = await fetch(url, options);
+    } catch (error) {
+      const msg = (error as Error).message ?? String(error);
+      logger.debug(`Connection failed: ${method} ${url} — ${msg}`);
+      throw wrapError(error);
+    }
+    logger.debug(`${method} ${url} → ${response.status}`);
+    if (response.status === 429) {
+      const now = Date.now();
+      const retryAfterMs = parseRetryAfterMs(response.headers?.get?.('Retry-After') ?? null, now);
+      const delay = retryDelayMs(attempt, retryAfterMs, deadline - now, Math.random());
+      if (delay < 0) {
+        const { message, body } = await parseErrorBody(response);
+        throw new RateLimitError(message, Math.max(1, Math.ceil(retryAfterMs / 1000)), body);
+      }
+      logger.debug(`429 from ${url}; retrying in ${delay}ms (attempt ${attempt})`);
+      await sleep(delay);
+      continue;
+    }
+    if (!response.ok) {
+      await throwHttpError(response);
+    }
+    return response.json() as Promise<T>;
   }
-  logger.debug(`${method} ${url} → ${response.status}`);
-  if (!response.ok) {
-    await throwHttpError(response);
-  }
-  return response.json() as Promise<T>;
 }
 
 /**

@@ -25,3 +25,5 @@ export { SecretManager } from './SecretManager';
 // Crypto utilities
 export { generateKeyPair, privateKeyToHex, hexToPrivateKey } from './crypto/keys';
 export { didFromPublicKey, encodePublicKey, decodePublicKey } from './crypto/multikey';
+export { createUCANJWT, identityToken, grant, relayDelegation, didFor, VENUE_RELAY } from './crypto/ucan';
+export type { UCANCapability } from './crypto/ucan';

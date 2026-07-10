@@ -1,9 +1,22 @@
 import { AgentManager } from '../AgentManager';
 
+// list/info are job-free GETs to /api/v1/agents (covia #180); everything else
+// stays on the invoke/job path. Fetch is mocked for the GET surface,
+// operations.run for the rest (and the old-venue fallback).
+const mockFetch = jest.fn();
+global.fetch = mockFetch as any;
+
 function createMockVenue() {
   return {
+    baseUrl: 'https://venue.example',
+    venueId: 'did:key:zVenue',
+    auth: { apply: jest.fn((h: Record<string, string>) => { h['Authorization'] = 'Bearer tok'; }) },
     operations: { run: jest.fn().mockResolvedValue({}) },
   };
+}
+
+function okJson(data: any) {
+  mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(data) });
 }
 
 describe('AgentManager', () => {
@@ -11,6 +24,7 @@ describe('AgentManager', () => {
   let agents: AgentManager;
 
   beforeEach(() => {
+    mockFetch.mockReset();
     venue = createMockVenue();
     agents = new AgentManager(venue);
   });
@@ -50,13 +64,31 @@ describe('AgentManager', () => {
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/trigger', { agentId: 'a1' });
   });
 
-  it('list calls v/ops/agent/list', async () => {
-    await agents.list(true);
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/list', { includeTerminated: true });
+  it('list GETs /api/v1/agents (no job) and binds auth', async () => {
+    okJson({ agents: ['a1'] });
+    const r = await agents.list(true) as any;
+    expect(venue.operations.run).not.toHaveBeenCalled();            // NOT the job path
+    const u = new URL(String(mockFetch.mock.calls[0][0]));
+    expect(u.pathname).toBe('/api/v1/agents');
+    expect(u.searchParams.get('includeTerminated')).toBe('true');
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
+    expect(r.agents).toEqual(['a1']);
   });
 
-  it('list defaults includeTerminated to undefined', async () => {
+  it('list omits undefined params and falls back to the op path on 404', async () => {
+    okJson({ agents: [] });
     await agents.list();
+    const u = new URL(String(mockFetch.mock.calls[0][0]));
+    expect(u.searchParams.get('includeTerminated')).toBeNull();
+
+    // Old venue: the GET 404s once, the manager remembers, list falls back.
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404,
+      json: () => Promise.resolve({ error: 'not found' }), text: () => Promise.resolve('not found') });
+    await agents.list(true);
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/list', { includeTerminated: true });
+    // Subsequent calls skip the probe entirely.
+    await agents.list();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/list', { includeTerminated: undefined });
   });
 
@@ -85,8 +117,19 @@ describe('AgentManager', () => {
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/cancel-task', { agentId: 'a1', taskId: 'task-42' });
   });
 
-  it('info calls v/ops/agent/info', async () => {
+  it('info GETs /api/v1/agents/{id} (no job)', async () => {
+    okJson({ agentId: 'a1', status: 'SLEEPING' });
+    const r = await agents.info('a1') as any;
+    expect(venue.operations.run).not.toHaveBeenCalled();
+    const u = new URL(String(mockFetch.mock.calls[0][0]));
+    expect(u.pathname).toBe('/api/v1/agents/a1');
+    expect(r.agentId).toBe('a1');
+  });
+
+  it('info falls back to v/ops/agent/info on pre-0.4 venues', async () => {
+    (venue as any).lastKnownStatus = { version: '0.3.0' };
     await agents.info('a1');
+    expect(mockFetch).not.toHaveBeenCalled();
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/info', { agentId: 'a1' });
   });
 
