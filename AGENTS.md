@@ -56,7 +56,7 @@ src/
 └── __tests__/          # Jest unit tests (one per manager + SSE, Utils, types, ...)
 examples/node/          # Node.js usage example
 venue.test.ts           # Integration test (requires live venue)
-dist/                   # Build output (CJS + ESM + .d.ts) — committed
+dist/                   # Build output (CJS + ESM + .d.ts) — gitignored; `prepare` builds it
 ```
 
 ## Key Exports

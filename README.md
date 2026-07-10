@@ -118,7 +118,25 @@ venue.metadata;   // { name, description }
 | `venue.didDocument()` | Get the venue's DID document |
 | `venue.mcpDiscovery()` | Get MCP (Model Context Protocol) discovery info |
 | `venue.agentCard()` | Get A2A (Agent-to-Agent) agent card |
+| `venue.setPrivate(enabled)` | Toggle private-jobs mode for this connection (see below) |
 | `venue.close()` | Release resources and clear caches |
+
+#### Private jobs
+
+`venue.setPrivate(true)` puts the connection in **private-jobs mode**: every
+subsequent `operations.run()` executes as a memory-only job — never persisted
+to the venue's job index, gone on venue restart. The venue must have
+`enablePrivateJobs` set. Because a completed private job is immediately
+forgotten by the venue, results are collected through the server-side invoke
+`wait` window rather than polling — so private mode works with `run()`, and
+poll-style `operations.invoke()` throws.
+
+```typescript
+venue.setPrivate(true);
+const result = await venue.operations.run("v/ops/schema/infer", {
+  value: { name: "Ada", age: 36 },
+});
+```
 
 ---
 
@@ -525,7 +543,31 @@ const token = await venue.ucan.issue("did:key:z6MkBob", att, exp);
 
 | Method | Returns | Description |
 |---|---|---|
-| `ucan.issue(aud, att, exp)` | `UCANIssueResult` | Issue a UCAN token |
+| `ucan.issue(aud, att, exp)` | `UCANIssueResult` | Issue a venue-signed UCAN token |
+| `ucan.verify(token, check?)` | `UCANVerifyResult` | Diagnose a token against the venue's trust policy |
+
+`ucan.verify` explains a token's verdict — `valid`/`reason`, `chainDepth`,
+`rootIssuer`, and a per-capability `rootAuthority` (`owner` / `venue` /
+`refused`). Pass `check: { with, can, aud }` to also ask whether the token
+would authorise a specific request (`authorises`).
+
+#### Client-side minting
+
+Tokens can also be minted locally with your own Ed25519 key — no venue
+round-trip:
+
+```typescript
+import { grant, identityToken, relayDelegation, didFor } from "@covia/covia-sdk";
+
+// Self-sovereign grant over your own namespace — verifies on ANY venue
+const token = grant(privateKey, "did:key:z6MkBob", `${didFor(privateKey)}/w/shared/`, "crud/read", 3600);
+
+// Identity token — proves control of your DID to a venue (empty attenuation)
+const idToken = identityToken(privateKey, venue.venueId);
+
+// Relay delegation — authorises the venue to forward your authority cross-venue
+const relay = relayDelegation(privateKey, venue.venueId, 300, [{ with: `${didFor(privateKey)}/w/`, can: "crud/read" }]);
+```
 
 ---
 
@@ -543,6 +585,7 @@ import {
   CoviaConnectionError,// Connection failures
   CoviaTimeoutError,   // Timeout exceeded
   JobFailedError,      // Job finished with non-COMPLETE status
+  RateLimitError,      // 429 after bounded retries (carries retryAfterSeconds)
 } from "@covia/covia-sdk";
 
 try {

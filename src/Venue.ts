@@ -65,6 +65,23 @@ export function venueBaseUrlCandidates(venueId: string): string[] {
 }
 
 export class Venue implements VenueInterface {
+  /** Connection-level private-jobs mode — see {@link setPrivate}. */
+  privateJobs = false;
+
+  /**
+   * Puts this connection in **private-jobs mode**: every subsequent
+   * `operations.run(...)` executes as a memory-only job (covia #192) — never
+   * persisted to the venue's job index, no durable record, gone on venue
+   * restart. Requires `enablePrivateJobs` on the venue.
+   *
+   * Because a completed private job is immediately forgotten, results are
+   * collected through the invoke `wait` window rather than polling — so
+   * private mode works with `run()`; a poll-style `invoke()` throws.
+   */
+  setPrivate(enabled: boolean): void {
+    this.privateJobs = enabled;
+  }
+
   public baseUrl: string;
   public venueId: string;
   public auth: Auth;

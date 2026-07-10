@@ -517,6 +517,25 @@ export interface UCANIssueInput {
   exp: number;
 }
 
+/** Result of `ucan:verify` — the diagnostic verdict on a token. */
+export interface UCANVerifyResult {
+  valid: boolean;
+  /** When invalid: a diagnosable reason (expired, bad signature, unparseable, ...). */
+  reason?: string;
+  iss?: string;
+  aud?: string;
+  exp?: number;
+  /** Delegation hops above this token (0 = a root grant). */
+  chainDepth?: number;
+  /** The DID that signed the root of the delegation chain. */
+  rootIssuer?: string;
+  /** Capabilities, each annotated with rootAuthority: owner | venue | refused. */
+  att?: Array<UCANAttenuation & { rootAuthority?: string }>;
+  /** Present when with/can supplied: whether the token authorises that request. */
+  authorises?: boolean;
+  [key: string]: unknown;
+}
+
 export interface UCANIssueResult {
   /** The issued delegation token — pass as an element of the `ucans` array on
    *  subsequent invokes. */
