@@ -236,6 +236,14 @@ export interface AgentCreateResult {
   agentId: string;
   status: string;
   created: boolean;
+  /** True when an existing SLEEPING/SUSPENDED record was updated in place
+   *  (mutually exclusive with created). Absent on venues before 0.4. */
+  updated?: boolean;
+  /** Non-fatal advisories (venue 0.5+): present only when the config looks
+   *  misconfigured but create still succeeded — e.g. an Ollama model whose
+   *  tool-calling can't be confirmed, or declared tools that don't resolve
+   *  on the venue. Each entry is a human-readable message. */
+  warnings?: string[];
 }
 
 export interface AgentRequestInput {

@@ -1,5 +1,20 @@
 import { Venue,  CoviaError, GridError, NotFoundError,  StatusData, Job, Grid, RunStatus, isJobComplete, isJobFinished, getParsedAssetId, getAssetIdFromPath, getAssetIdFromVenueId } from './src/index';
 
+// Live-venue integration suite. Required env (via .env or the shell):
+//   VENUE_HOST        - connectable venue id: did:web:<host> or a URL
+//   VENUE_URL         - the venue's base URL (https://.../ no trailing slash)
+//   VENUE_NAME        - expected venue name (status/metadata)
+//   MIN_ASSETS_VENUE  - lower bound on the venue's asset count
+//   VALID_ASSET       - asset id of the Iris Dataset on the venue
+//   VALID_OP          - an invokable op path (e.g. v/test/ops/random)
+//   VALID_OP2         - a slow/cancellable op path (e.g. v/test/ops/delay)
+//   VALID_OP2_INPUT   - JSON input for VALID_OP2 (e.g. {"delay": 8000})
+//
+// The suite is capability-aware: on a venue with the default public read-only
+// ceiling, anonymous invokes are expected to FAIL with a diagnosable
+// "Capability denied" error (venue 0.5+ names the missing capability); on a
+// permissive venue they complete. Both outcomes pass their respective checks.
+
 let venue:Venue;
 
 beforeAll(async () => {
@@ -12,12 +27,16 @@ beforeAll(async () => {
 
 test('GridConnectWithDid', async () => {
   const v = await Grid.connect(process.env.VENUE_HOST!);
-  expect(v.venueId).toBe(process.env.VENUE_HOST!);
+  // Canonical venue identity is the did:key (did:web is discovery, covia#167)
+  expect(v.venueId.startsWith('did:')).toBe(true);
+  const stats = await v.status();
+  expect(v.venueId).toBe(stats?.did);
 });
 
 test('GridConnectWithUrl', async () => {
   const v = await Grid.connect(process.env.VENUE_URL!);
-  expect(v.venueId).toBe(process.env.VENUE_HOST!);
+  const viaHost = await Grid.connect(process.env.VENUE_HOST!);
+  expect(v.venueId).toBe(viaHost.venueId);
 });
 
 test('GridConnectCheckName', async () => {
@@ -43,6 +62,13 @@ test('venueInvokeOp', async () => {
   expect(operation).not.toBeNull();
   expect(operation.id).not.toBeNull();
   const result = await operation.invoke({ length: "10" });
+  if (result.metadata.status === RunStatus.FAILED) {
+    // Public read-only ceiling: anonymous invoke is denied — the denial must
+    // be diagnosable (names the missing capability, venue 0.5+).
+    expect(String(result.metadata.error)).toContain('Capability denied');
+    expect(String(result.metadata.error)).toContain('invoke');
+    return;
+  }
   expect(result.metadata.status).toBe(RunStatus.COMPLETE);
   const jobId = result.id;
   const job = await venue.getJob(jobId);
@@ -81,14 +107,15 @@ test('venueDoesNotHaveAssetId', async () => {
 });
 
 test('venueHasNoData', async () => {
-  await expect(venue.getJob('xyz')).rejects.toThrow(NotFoundError);
+  // Valid-hex but nonexistent job id → 404 (a malformed id is a 400, not NotFound)
+  await expect(venue.getJob('00000000000000000000000000000000')).rejects.toThrow(NotFoundError);
 });
 
 test('venueRunOpAndCancel', async () => {
   const operation = await venue.getAsset(process.env.VALID_OP2!);
   expect(operation).not.toBeNull();
   expect(operation.id).not.toBeNull();
-  const result = await operation.invoke(process.env.VALID_OP2_INPUT!);
+  const result = await operation.invoke(JSON.parse(process.env.VALID_OP2_INPUT!));
   if(result.metadata.status == 'STARTED' || result.metadata.status == 'PENDING') {
     const jobId = result.id;
     const status = await venue.jobs.cancel(jobId);
@@ -100,7 +127,7 @@ test('venueInvokeOpAndCancel', async () => {
   const operation = await venue.getAsset(process.env.VALID_OP2!);
   expect(operation).not.toBeNull();
   expect(operation.id).not.toBeNull();
-  const result = await operation.invoke(process.env.VALID_OP2_INPUT!);
+  const result = await operation.invoke(JSON.parse(process.env.VALID_OP2_INPUT!));
   if(result.metadata.status == 'STARTED' || result.metadata.status == 'PENDING') {
     const jobId = result.id;
     const status = await venue.jobs.cancel(jobId);
@@ -112,7 +139,8 @@ test('venueStatus', async () => {
   const stats = await venue.status();
   expect(stats?.status).toBe("OK");
   expect(stats?.url).toBe(process.env.VENUE_URL);
-  expect(stats?.did).toBe(process.env.VENUE_HOST);
+  // The status did is the canonical did:key identity (covia#167)
+  expect(stats?.did).toBe(venue.venueId);
 });
 
 test('isJobCompleteMethod', () => {
