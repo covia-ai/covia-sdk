@@ -12,9 +12,15 @@ export class JobManager {
   constructor(private venue: JobManagerVenue) {}
 
   async list(): Promise<string[]> {
-    return fetchWithError<string[]>(`${this.venue.baseUrl}/api/v1/jobs`, {
+    const body = await fetchWithError<unknown>(`${this.venue.baseUrl}/api/v1/jobs`, {
       headers: this._buildHeaders(),
     });
+    // Venue 0.6.0 returns a paged {items, total, offset, limit} envelope
+    // (covia#229); earlier venues returned a flat id array. Accept both so
+    // one SDK spans the upgrade.
+    if (Array.isArray(body)) return body as string[];
+    const items = (body as { items?: unknown } | null)?.items;
+    return Array.isArray(items) ? (items as string[]) : [];
   }
 
   async get(jobId: string): Promise<Job> {
