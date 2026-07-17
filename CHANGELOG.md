@@ -4,6 +4,19 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.7.2
+
+Compatibility with Covia venue 0.6.0.
+
+### Fixed
+
+- **`jobs.list()` accepts the 0.6.0 paged envelope** — venue 0.6.0 serves
+  `GET /api/v1/jobs` as `{items, total, offset, limit}` (covia #229) instead of
+  a flat id array; `list()` now handles both, so one SDK spans the upgrade.
+  Every other 0.6.0 surface is already covered: enriched agent listings (#233)
+  normalise to objects, `status.stats` carries the new job counts, and skills
+  are ordinary assets read through `assets.get()` — no special handling.
+
 ## 1.7.1
 
 Job-hygiene and shape-consistency fixes. Reads never mint venue jobs on any
