@@ -109,8 +109,11 @@ export class WorkspaceManager {
   }
 
   async list(path?: string, limit?: number, offset?: number, ucans?: string[]): Promise<WorkspaceListResult> {
-    // The GET route requires a path; a root/undefined list stays on the op path.
-    if (ucans?.length || !path) return this.venue.operations.run<WorkspaceListResult>('v/ops/covia/list', { path, limit, offset }, { ucans });
+    // The GET route requires a non-empty path but serves the root as "/", so a
+    // root/undefined list normalises to "/" and stays job-free — previously it
+    // was forced onto the op path, minting a Job for every root listing.
+    path = path || '/';
+    if (ucans?.length) return this.venue.operations.run<WorkspaceListResult>('v/ops/covia/list', { path, limit, offset }, { ucans });
     return this._valuesOr('list', { path, limit, offset }, () =>
       this.venue.operations.run<WorkspaceListResult>('v/ops/covia/list', { path, limit, offset }));
   }

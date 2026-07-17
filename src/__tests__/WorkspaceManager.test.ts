@@ -139,10 +139,14 @@ describe('WorkspaceManager', () => {
     expect(mockFetch).not.toHaveBeenCalled();                       // no job-free GET when proofs are needed
   });
 
-  it('a rootless list falls back to the invoke path (GET route needs a path)', async () => {
-    await ws.list();
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/list', { path: undefined, limit: undefined, offset: undefined }, { ucans: undefined });
-    expect(mockFetch).not.toHaveBeenCalled();
+  it('a rootless list normalises to "/" and stays on the job-free GET (#16: it used to mint a Job)', async () => {
+    okJson({ exists: true, type: 'Map', count: 2, keys: ['j', 'meta'] });
+    const r = await ws.list();
+    expect(venue.operations.run).not.toHaveBeenCalled();            // NOT the job path
+    const u = new URL(fetchUrl());
+    expect(u.pathname).toBe('/api/v1/values/list');
+    expect(u.searchParams.get('path')).toBe('/');
+    expect(r.keys).toEqual(['j', 'meta']);
   });
 
   it('multi-path inspect falls back to the invoke path', async () => {
