@@ -4,6 +4,47 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.7.1
+
+Job-hygiene and shape-consistency fixes. Reads never mint venue jobs on any
+venue ≥ 0.3, in every case previously left to a fallback heuristic.
+
+### Fixed
+
+- **Rootless `workspace.list()` no longer mints a Job** (#16) — an
+  empty/undefined path normalises to `"/"` and stays on the job-free
+  `GET /api/v1/values/list` (the venue serves the root there); previously
+  every root listing ran the invoke-based `covia:list` and persisted a job.
+- **Agents 404 latch** — `GET /api/v1/agents/{id}` 404s for a *missing agent*,
+  not just a missing route, but any 404 permanently downgraded all later
+  `agents.list()`/`info()` calls to the job-minting invoke path (a 3-second
+  polling UI produced ~1k persisted jobs/hour after one transient bad agent
+  id). Only the bare list route or the distinctive unmapped-endpoint body now
+  latches the fallback; per-resource 404s propagate as `NotFoundError`.
+- **Agent list entry shape** — the job-free GET returns bare agent-id strings
+  while `agent:list` returns `{agentId, status, tasks}` objects; `list()` now
+  normalises strings to `{agentId}` so consumers always receive objects
+  (`status`/`tasks` are typed optional; venue-side parity tracked in
+  covia-ai/covia#233).
+
+### Added
+
+- **Persistent content-addressed asset metadata cache** — an asset id is the
+  Convex value hash of its metadata, so id → metadata is immutable;
+  `AssetManager` now backs its in-memory cache with a pluggable persistent
+  store (localStorage by default in browsers, `setAssetMetadataStore()` for
+  custom/Node stores), keyed by normalised bare hash across all ref forms.
+  Admission is trust-based until a TS CVM encoder enables hash verification
+  (#18, Convex-Dev/convex.ts#1).
+
+## 1.7.0
+
+Job-free adapter and agent reads, 429 backpressure handling with typed
+`RateLimitError`, client-side UCAN minting (`grant` / `identityToken` /
+`relayDelegation`), `ucan.verify` diagnostic, and connection-level
+private-jobs mode via `venue.setPrivate(true)` (covia #192). Targets Covia
+venue 0.4.0.
+
 ## 1.6.0
 
 First stable release targeting the covia 0.3.0 venue. Several items are
