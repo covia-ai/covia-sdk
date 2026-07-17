@@ -115,8 +115,14 @@ export class AgentManager {
    * venues transparently fall back to the invoke path (one probe, remembered).
    */
   async list(includeTerminated?: boolean): Promise<AgentListResult> {
-    return this._agentsOr<AgentListResult>('', { includeTerminated }, () =>
+    const result = await this._agentsOr<AgentListResult>('', { includeTerminated }, () =>
       this.venue.operations.run<AgentListResult>('v/ops/agent/list', { includeTerminated }));
+    // GET /api/v1/agents returns bare id strings; the agent:list op returns
+    // {agentId, status, tasks} objects. Normalise to objects so consumers see
+    // one shape regardless of which transport served the call.
+    const raw = (result?.agents ?? []) as Array<string | AgentListResult['agents'][number]>;
+    const agents = raw.map((a) => (typeof a === 'string' ? { agentId: a } : a));
+    return { agents };
   }
 
   async delete(agentId: string, remove?: boolean): Promise<AgentDeleteResult> {

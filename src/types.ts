@@ -296,10 +296,13 @@ export interface AgentListInput {
 }
 
 export interface AgentListResult {
+  /** Always objects. The invoke op returns enriched entries; the job-free GET
+   *  returns bare id strings, which the SDK normalises to `{agentId}` — so
+   *  `status`/`tasks` are present only when the venue supplied them. */
   agents: Array<{
     agentId: string;
-    status: string;
-    tasks: number;
+    status?: string;
+    tasks?: number;
   }>;
 }
 

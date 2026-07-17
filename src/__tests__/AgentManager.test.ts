@@ -72,7 +72,7 @@ describe('AgentManager', () => {
     expect(u.pathname).toBe('/api/v1/agents');
     expect(u.searchParams.get('includeTerminated')).toBe('true');
     expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
-    expect(r.agents).toEqual(['a1']);
+    expect(r.agents).toEqual([{ agentId: 'a1' }]); // bare ids normalised to objects
   });
 
   it('list omits undefined params and falls back to the op path on 404', async () => {
@@ -90,6 +90,20 @@ describe('AgentManager', () => {
     await agents.list();
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/list', { includeTerminated: undefined });
+  });
+
+  it('list normalises the GET route\'s bare id strings to {agentId} objects', async () => {
+    // GET /api/v1/agents returns ["a1", ...]; the invoke op returns enriched
+    // objects. Consumers must always see objects.
+    okJson({ agents: ['a1', 'a2'] });
+    const result = await agents.list();
+    expect(result.agents).toEqual([{ agentId: 'a1' }, { agentId: 'a2' }]);
+  });
+
+  it('list passes enriched object entries through unchanged', async () => {
+    okJson({ agents: [{ agentId: 'a1', status: 'SLEEPING', tasks: 2 }] });
+    const result = await agents.list();
+    expect(result.agents).toEqual([{ agentId: 'a1', status: 'SLEEPING', tasks: 2 }]);
   });
 
   it('info on a MISSING AGENT propagates the 404 — no invoke fallback, no latch', async () => {
