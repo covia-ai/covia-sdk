@@ -58,6 +58,15 @@ export class AgentManager {
           { headers: this._headers() });
       } catch (e) {
         if (!(e instanceof NotFoundError)) throw e;
+        // Not every 404 means "route missing". GET /agents/{id} 404s for a
+        // missing AGENT too ("Agent not found: …"), and latching on that
+        // permanently downgraded every later list/info to the job-minting
+        // invoke path — one transient bad agent id turned a polling UI into
+        // ~1k persisted jobs/hour. Only the bare list route (no per-resource
+        // 404 possible) or the distinctive unmapped-endpoint body proves the
+        // route is absent; a per-resource 404 propagates to the caller.
+        const routeMissing = path === '' || /\bEndpoint (GET|POST|PUT|DELETE|PATCH|HEAD) /.test(e.message);
+        if (!routeMissing) throw e;
         this.agentsGetSupported = false;
       }
     }

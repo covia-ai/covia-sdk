@@ -92,6 +92,35 @@ describe('AgentManager', () => {
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/list', { includeTerminated: undefined });
   });
 
+  it('info on a MISSING AGENT propagates the 404 — no invoke fallback, no latch', async () => {
+    // Regression: this 404 used to be read as "venue lacks the GET routes",
+    // permanently downgrading every later list/info to the job-minting invoke
+    // path (~1k persisted jobs/hour from a 3s polling UI).
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404,
+      json: () => Promise.resolve({ error: 'Agent not found: ghost' }),
+      text: () => Promise.resolve('Agent not found: ghost') });
+    await expect(agents.info('ghost')).rejects.toThrow('Agent not found: ghost');
+    expect(venue.operations.run).not.toHaveBeenCalled();
+
+    // The GET surface stays trusted: the next list still goes job-free.
+    okJson({ agents: [] });
+    await agents.list();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(venue.operations.run).not.toHaveBeenCalled();
+  });
+
+  it('info on a pre-0.4 venue (unmapped endpoint 404) falls back to invoke and latches', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404,
+      json: () => Promise.resolve({ error: 'Endpoint GET /api/v1/agents/a1 not found' }),
+      text: () => Promise.resolve('Endpoint GET /api/v1/agents/a1 not found') });
+    await agents.info('a1');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/info', { agentId: 'a1' });
+
+    await agents.list();
+    expect(mockFetch).toHaveBeenCalledTimes(1); // latched — no further GET probes
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/list', { includeTerminated: undefined });
+  });
+
   it('delete calls v/ops/agent/delete', async () => {
     await agents.delete('a1', true);
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/delete', { agentId: 'a1', remove: true });
