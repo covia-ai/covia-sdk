@@ -1,6 +1,7 @@
 import { AssetMetadata, AssetID, AssetListOptions, AssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
 import { fetchWithError, fetchStreamWithError } from './Utils';
 import { assetHash } from './did';
+import { getAssetMetadataStore, normaliseHash } from './asset-cache';
 import { Asset } from './Asset';
 import { Operation } from './Operation';
 import { DataAsset } from './DataAsset';
@@ -33,29 +34,41 @@ export class AssetManager {
    */
   async get(assetId: AssetID): Promise<Asset> {
     if (cache.has(assetId)) {
-      const cachedData = cache.get(assetId)!;
-      if (cachedData.operation) {
-        return new Operation(assetId, this.venue as unknown as VenueInterface, cachedData);
-      } else {
-        return new DataAsset(assetId, this.venue as unknown as VenueInterface, cachedData);
+      return this._wrap(assetId, cache.get(assetId)!);
+    }
+    // Content-addressed refs are immutable (id = Convex hash of the metadata),
+    // so they may also be served from the persistent store — cached once on
+    // any venue, valid on every venue, across sessions.
+    const hash = assetHash(assetId);
+    if (hash) {
+      const persisted = getAssetMetadataStore()?.get(normaliseHash(hash));
+      if (persisted) {
+        cache.set(assetId, persisted);
+        return this._wrap(assetId, persisted);
       }
     }
     try {
       const data = await fetchWithError<AssetMetadata>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`);
       // Cache only immutable, content-addressed refs — caching a mutable
       // lattice path (w/…, o/…) would serve stale data after it changes.
-      if (assetHash(assetId)) cache.set(assetId, data);
-      if (data.operation) {
-        return new Operation(assetId, this.venue as unknown as VenueInterface, data);
-      } else {
-        return new DataAsset(assetId, this.venue as unknown as VenueInterface, data);
+      if (hash) {
+        cache.set(assetId, data);
+        getAssetMetadataStore()?.put(normaliseHash(hash), data);
       }
+      return this._wrap(assetId, data);
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new AssetNotFoundError(assetId);
       }
       throw error;
     }
+  }
+
+  private _wrap(assetId: AssetID, data: AssetMetadata): Asset {
+    if (data.operation) {
+      return new Operation(assetId, this.venue as unknown as VenueInterface, data);
+    }
+    return new DataAsset(assetId, this.venue as unknown as VenueInterface, data);
   }
 
   /**
@@ -152,6 +165,7 @@ export class AssetManager {
    */
   clearCache(): void {
     cache.clear();
+    getAssetMetadataStore()?.clear();
   }
 
   // `contentType` defaults to JSON for the metadata/register endpoints. Pass

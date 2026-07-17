@@ -3,6 +3,8 @@ export * from './types';
 export * from './Credentials'
 export * from './Utils';
 export * from './did';
+export { setAssetMetadataStore, getAssetMetadataStore } from './asset-cache';
+export type { AssetMetadataStore } from './asset-cache';
 export { logger } from './Logger';
 
 // Export all classes
