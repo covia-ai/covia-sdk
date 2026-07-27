@@ -133,3 +133,48 @@ describe('AssetManager persistent metadata store', () => {
     expect(map.size).toBe(0);
   });
 });
+
+describe('AssetManager read authentication', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    setAssetMetadataStore(null);
+  });
+
+  it('applies venue auth without a content type to every asset GET', async () => {
+    const apply = jest.fn((headers: Record<string, string>, _audience?: string) => {
+      headers.Authorization = 'Bearer token';
+    });
+    const am = new AssetManager({
+      baseUrl: 'https://v',
+      venueId: 'did:web:v',
+      auth: { apply },
+      operations: { run: jest.fn() },
+    });
+    am.clearCache();
+
+    mockJsonOnce({ name: 'Asset' });
+    mockJsonOnce({ items: ['a1'], total: 1, offset: 0, limit: 100 });
+    mockJsonOnce({ name: 'Metadata' });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: new ReadableStream<Uint8Array>(),
+    });
+
+    await am.get('w/assets/auth-test');
+    await am.list();
+    await am.getMetadata('asset-1');
+    await am.getContent('asset-1');
+
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+    expect(apply).toHaveBeenCalledTimes(4);
+    for (const call of apply.mock.calls) {
+      expect(call[1]).toBe('did:web:v');
+    }
+    for (const [, options] of mockFetch.mock.calls) {
+      const headers = options?.headers as Record<string, string>;
+      expect(headers.Authorization).toBe('Bearer token');
+      expect(headers['Content-Type']).toBeUndefined();
+    }
+  });
+});

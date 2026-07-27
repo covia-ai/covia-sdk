@@ -48,7 +48,9 @@ export class AssetManager {
       }
     }
     try {
-      const data = await fetchWithError<AssetMetadata>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`);
+      const data = await fetchWithError<AssetMetadata>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`, {
+        headers: this._buildHeaders(null),
+      });
       // Cache only immutable, content-addressed refs — caching a mutable
       // lattice path (w/…, o/…) would serve stale data after it changes.
       if (hash) {
@@ -81,7 +83,9 @@ export class AssetManager {
     if (options.limit !== undefined) {
       params.set('limit', String(options.limit));
     }
-    return fetchWithError<AssetList>(`${this.venue.baseUrl}/api/v1/assets?${params.toString()}`);
+    return fetchWithError<AssetList>(`${this.venue.baseUrl}/api/v1/assets?${params.toString()}`, {
+      headers: this._buildHeaders(null),
+    });
   }
 
   /**
@@ -105,7 +109,9 @@ export class AssetManager {
    */
   async getMetadata(assetId: string): Promise<AssetMetadata> {
     try {
-      return await fetchWithError<AssetMetadata>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`);
+      return await fetchWithError<AssetMetadata>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`, {
+        headers: this._buildHeaders(null),
+      });
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new AssetNotFoundError(assetId);
@@ -141,7 +147,9 @@ export class AssetManager {
    */
   async getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null> {
     try {
-      const response = await fetchStreamWithError(`${this.venue.baseUrl}/api/v1/assets/${assetId}/content`);
+      const response = await fetchStreamWithError(`${this.venue.baseUrl}/api/v1/assets/${assetId}/content`, {
+        headers: this._buildHeaders(null),
+      });
       return response.body;
     } catch (error) {
       if (error instanceof NotFoundError) {
