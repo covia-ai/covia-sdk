@@ -1,4 +1,4 @@
-import { CoviaError, CoviaTimeoutError, GridError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
+import { ConnectionAttempt, CoviaConnectionError, CoviaError, CoviaTimeoutError, GridError, VenueIdentityChangedError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, AssetListOptions, AssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
 import { AdapterManager } from './AdapterManager';
 import { AgentManager } from './AgentManager';
 import { JobManager } from './JobManager';
@@ -62,6 +62,25 @@ export function venueBaseUrlCandidates(venueId: string): string[] {
     return [stripTrailingSlash(venueId)];
   }
   return schemelessVenueCandidates(venueId);
+}
+
+function asCoviaError(error: unknown): CoviaError {
+  if (error instanceof CoviaError) return error;
+  const message = error instanceof Error ? error.message : String(error);
+  return new CoviaError(message);
+}
+
+function assertVenueIdentity(expectedDid: string | undefined, actualDid: string | undefined, baseUrl: string): void {
+  if (expectedDid && actualDid && expectedDid !== actualDid) {
+    throw new VenueIdentityChangedError(expectedDid, actualDid, baseUrl);
+  }
+}
+
+function connectionFailureMessage(venueId: string, attempts: readonly ConnectionAttempt[]): string {
+  const detail = attempts
+    .map(({ method, url, error }) => `${method} ${url}: ${error.message}`)
+    .join('; ');
+  return `Could not connect to venue ${venueId}${detail ? `. Attempts: ${detail}` : ''}`;
 }
 
 export class Venue implements VenueInterface {
@@ -145,17 +164,23 @@ export class Venue implements VenueInterface {
    *   responded (the https candidate if an http fallback failed; the resolved
    *   endpoint for a did:web id), and `venue.venueId` is the DID the venue
    *   reported. The validated API root is `${venue.baseUrl}/api/v1`.
+   * @throws {CoviaConnectionError} If no candidate can be validated.
+   * @throws {VenueIdentityChangedError} If a known/resolved DID reports a different identity.
    */
   static async connect(venueId: string | Venue, auth?: Auth): Promise<Venue> {
 
     if (venueId instanceof Venue) {
-      return new Venue({
+      const connected = new Venue({
         baseUrl: venueId.baseUrl,
         venueId: venueId.venueId,
         name: venueId.metadata.name,
         auth: auth,
         status: venueId.lastKnownStatus
       });
+      // Reconnecting an existing handle is a validation, not a blind clone:
+      // the known DID is the identity invariant checked by status().
+      await connected.status();
+      return connected;
     }
 
     if (typeof venueId === 'string') {
@@ -163,7 +188,9 @@ export class Venue implements VenueInterface {
       // explicit schemes resolve to a single target (behaviour unchanged); only
       // schemeless inputs may produce a fallback list (see venueBaseUrlCandidates).
       let candidates: string[];
+      let expectedDid: string | undefined;
       if (venueId.startsWith('did:web:')) {
+        expectedDid = venueId;
         const didDoc = await resolver.resolve(venueId);
         if (!didDoc.didDocument) {
           throw new CoviaError('Invalid DID document');
@@ -177,10 +204,15 @@ export class Venue implements VenueInterface {
         candidates = venueBaseUrlCandidates(venueId);
       }
 
-      let lastError: unknown;
+      const attempts: ConnectionAttempt[] = [];
       for (const baseUrl of candidates) {
+        const statusUrl = baseUrl + '/api/v1/status';
         try {
-          const data = await fetchWithError<StatusData>(baseUrl+'/api/v1/status');
+          const data = await fetchWithError<StatusData>(statusUrl);
+          if (!data.did) {
+            throw new CoviaError(`Venue status at ${statusUrl} did not include a DID`);
+          }
+          assertVenueIdentity(expectedDid, data.did, baseUrl);
           return new Venue({
             baseUrl,
             venueId: data.did,
@@ -189,22 +221,34 @@ export class Venue implements VenueInterface {
             status: data
           });
         } catch (error) {
+          if (error instanceof VenueIdentityChangedError) throw error;
+          const statusError = asCoviaError(error);
+          attempts.push({ url: statusUrl, method: 'GET', error: statusError });
           // An auth-gated venue (public access disabled) 401s on /status, but its
           // did:web document at /.well-known/did.json is public by spec — identity
           // (DID, public keys, endpoints) is meant to be resolvable anonymously even
           // when the API itself is not. Validate the venue against that instead.
-          if (error instanceof GridError && (error.statusCode === 401 || error.statusCode === 403)) {
+          if (statusError instanceof GridError && (statusError.statusCode === 401 || statusError.statusCode === 403)) {
+            const didDocumentUrl = baseUrl + '/.well-known/did.json';
             try {
-              const doc = await fetchWithError<DIDDocument>(baseUrl + '/.well-known/did.json');
+              const doc = await fetchWithError<DIDDocument>(didDocumentUrl);
               if (doc?.id) {
+                assertVenueIdentity(expectedDid, doc.id, baseUrl);
                 return new Venue({ baseUrl, venueId: doc.id, auth: auth });
               }
-            } catch { /* fall through to the next candidate with the original error */ }
+              throw new CoviaError(`DID document at ${didDocumentUrl} did not include an id`);
+            } catch (fallbackError) {
+              if (fallbackError instanceof VenueIdentityChangedError) throw fallbackError;
+              attempts.push({ url: didDocumentUrl, method: 'GET', error: asCoviaError(fallbackError) });
+            }
           }
-          lastError = error;
         }
       }
-      throw lastError instanceof Error ? lastError : new CoviaError(`Could not connect to venue: ${venueId}`);
+      throw new CoviaConnectionError(connectionFailureMessage(venueId, attempts), {
+        candidates,
+        attempts,
+        cause: attempts.length > 0 ? attempts[attempts.length - 1].error : undefined,
+      });
     }
 
     throw new CoviaError('Invalid venue ID parameter. Must be a string (URL/DNS) or Venue instance.');
@@ -280,9 +324,19 @@ export class Venue implements VenueInterface {
   /**
    * Get venue status
    * @returns {Promise<StatusData>}
+   * @throws {VenueIdentityChangedError} If this address reports a different known DID.
    */
   async status():Promise<StatusData> {
       const data = await fetchWithError<StatusData>(`${this.baseUrl}/api/v1/status`);
+      if (data.did) {
+        if (this.venueId) {
+          assertVenueIdentity(this.venueId, data.did, this.baseUrl);
+        } else {
+          // A directly constructed Venue has no identity invariant yet; the
+          // first successful status establishes it for subsequent auth/checks.
+          this.venueId = data.did;
+        }
+      }
       this.lastKnownStatus = data;
       return data;
   }
@@ -299,6 +353,7 @@ export class Venue implements VenueInterface {
    * @param options.pollIntervalMs - Delay between polls (default 1000).
    * @returns The ready {@link StatusData}.
    * @throws {CoviaTimeoutError} If the venue is not ready within the timeout.
+   * @throws {VenueIdentityChangedError} Immediately if the venue's DID changed.
    */
   async waitUntilReady(options: { timeoutMs?: number; pollIntervalMs?: number } = {}): Promise<StatusData> {
     const timeoutMs = options.timeoutMs ?? 60_000;
@@ -308,7 +363,9 @@ export class Venue implements VenueInterface {
       try {
         const data = await this.status();
         if (data.status == null || data.status.toUpperCase() === 'OK') return data;
-      } catch {
+      } catch (error) {
+        // An identity mismatch is terminal, not a transient readiness state.
+        if (error instanceof VenueIdentityChangedError) throw error;
         // not ready yet — retry until the timeout
       }
       if (Date.now() - start >= timeoutMs) {

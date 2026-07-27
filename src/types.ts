@@ -625,11 +625,62 @@ export class GridError extends CoviaError {
   }
 }
 
-/** Raised when the SDK cannot connect to the venue. */
+/** One failed HTTP request made while resolving/validating a venue connection. */
+export interface ConnectionAttempt {
+  readonly url: string;
+  readonly method: string;
+  readonly error: CoviaError;
+}
+
+export interface CoviaConnectionErrorOptions {
+  /** Exact request target for a single transport failure. */
+  url?: string;
+  /** HTTP method for a single transport failure. */
+  method?: string;
+  /** Original exception, or the final failed attempt for an aggregate error. */
+  cause?: unknown;
+  /** Ordered venue base URLs considered by `Venue.connect()`. */
+  candidates?: readonly string[];
+  /** Ordered failed requests made while validating those candidates. */
+  attempts?: readonly ConnectionAttempt[];
+}
+
+/**
+ * Raised when an HTTP request cannot be made, or when `Venue.connect()` cannot
+ * validate any candidate. HTTP responses still use `GridError`; this class is
+ * for transport failures and connection-attempt aggregation.
+ */
 export class CoviaConnectionError extends CoviaError {
-  constructor(message: string) {
+  public readonly url: string | null;
+  public readonly method: string | null;
+  public readonly cause: unknown;
+  public readonly candidates: readonly string[];
+  public readonly attempts: readonly ConnectionAttempt[];
+
+  constructor(message: string, options: CoviaConnectionErrorOptions = {}) {
     super(message);
     this.name = 'CoviaConnectionError';
+    this.url = options.url ?? null;
+    this.method = options.method?.toUpperCase() ?? null;
+    this.cause = options.cause;
+    this.candidates = [...(options.candidates ?? [])];
+    this.attempts = [...(options.attempts ?? [])];
+  }
+}
+
+/**
+ * Raised when a known venue address reports a different DID. The instance
+ * remains bound to `oldDid`; callers must explicitly reconnect/re-authorise
+ * against `newDid` rather than silently continuing under a new identity.
+ */
+export class VenueIdentityChangedError extends CoviaError {
+  constructor(
+    public readonly oldDid: string,
+    public readonly newDid: string,
+    public readonly baseUrl: string,
+  ) {
+    super(`Venue identity changed at ${baseUrl}: expected ${oldDid}, received ${newDid}`);
+    this.name = 'VenueIdentityChangedError';
   }
 }
 

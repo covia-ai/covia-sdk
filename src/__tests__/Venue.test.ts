@@ -1,5 +1,5 @@
 import { Venue } from '../Venue';
-import { CoviaError, CoviaTimeoutError, RunStatus, AssetNotFoundError, JobNotFoundError, NotFoundError, GridError } from '../types';
+import { CoviaConnectionError, CoviaError, CoviaTimeoutError, RunStatus, AssetNotFoundError, JobNotFoundError, NotFoundError, GridError, VenueIdentityChangedError } from '../types';
 import { BearerAuth, NoAuth } from '../Credentials';
 import { Operation } from '../Operation';
 import { DataAsset } from '../DataAsset';
@@ -69,6 +69,15 @@ describe('Venue.waitUntilReady', () => {
     mockFetch.mockReset();
     mockFetchError(503);
     await expect(venue.waitUntilReady({ timeoutMs: 0, pollIntervalMs: 0 })).rejects.toThrow(CoviaTimeoutError);
+  });
+
+  it('does not swallow a venue identity change as a transient readiness error', async () => {
+    mockFetch.mockReset();
+    const changingVenue = new Venue({ baseUrl: 'https://v', venueId: 'did:web:old' });
+    mockFetchSuccess({ status: 'OK', did: 'did:web:new' });
+
+    await expect(changingVenue.waitUntilReady({ timeoutMs: 0, pollIntervalMs: 0 }))
+      .rejects.toThrow(VenueIdentityChangedError);
   });
 });
 
@@ -149,6 +158,7 @@ describe('Venue.connect', () => {
       venueId: 'did:web:original.com',
       name: 'Original',
     });
+    mockFetchSuccess({ did: 'did:web:original.com', name: 'Original' });
 
     const cloned = await Venue.connect(original);
     expect(cloned.baseUrl).toBe('https://original.com');
@@ -159,15 +169,66 @@ describe('Venue.connect', () => {
   it('passes auth when connecting with Venue instance', async () => {
     const original = new Venue({ baseUrl: 'https://x.com', venueId: 'v' });
     const auth = new BearerAuth('my-token');
+    mockFetchSuccess({ did: 'v' });
 
     const cloned = await Venue.connect(original, auth);
     expect(cloned.auth).toBeInstanceOf(BearerAuth);
   });
 
-  it('throws CoviaError on fetch failure during connect', async () => {
+  it('aggregates validation failures in CoviaConnectionError', async () => {
     mockFetchError(500);
 
-    await expect(Venue.connect('https://bad.com')).rejects.toThrow(CoviaError);
+    try {
+      await Venue.connect('https://bad.com');
+      throw new Error('Expected Venue.connect to reject');
+    } catch (error) {
+      const connectionError = error as CoviaConnectionError;
+      expect(connectionError).toBeInstanceOf(CoviaConnectionError);
+      expect(connectionError).toBeInstanceOf(CoviaError);
+      expect(connectionError.candidates).toEqual(['https://bad.com']);
+      expect(connectionError.attempts).toHaveLength(1);
+      expect(connectionError.attempts[0].url).toBe('https://bad.com/api/v1/status');
+      expect(connectionError.attempts[0].method).toBe('GET');
+      expect(connectionError.attempts[0].error).toBeInstanceOf(GridError);
+      expect(connectionError.cause).toBe(connectionError.attempts[0].error);
+    }
+  });
+
+  it('rejects a successful status response that cannot establish a venue DID', async () => {
+    mockFetchSuccess({ status: 'OK', name: 'Identity-less Venue' });
+
+    try {
+      await Venue.connect('https://invalid.example.com');
+      throw new Error('Expected Venue.connect to reject');
+    } catch (error) {
+      const connectionError = error as CoviaConnectionError;
+      expect(connectionError).toBeInstanceOf(CoviaConnectionError);
+      expect(connectionError.attempts).toHaveLength(1);
+      expect(connectionError.attempts[0].error.message).toContain('did not include a DID');
+    }
+  });
+
+  it('reports every schemeless local candidate and transport failure', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('Connection refused'));
+    mockFetch.mockRejectedValueOnce(new TypeError('TLS unavailable'));
+
+    try {
+      await Venue.connect('localhost:8080');
+      throw new Error('Expected Venue.connect to reject');
+    } catch (error) {
+      const connectionError = error as CoviaConnectionError;
+      expect(connectionError).toBeInstanceOf(CoviaConnectionError);
+      expect(connectionError.candidates).toEqual([
+        'http://localhost:8080',
+        'https://localhost:8080',
+      ]);
+      expect(connectionError.attempts.map((attempt) => attempt.url)).toEqual([
+        'http://localhost:8080/api/v1/status',
+        'https://localhost:8080/api/v1/status',
+      ]);
+      expect(connectionError.attempts.every((attempt) =>
+        attempt.error instanceof CoviaConnectionError)).toBe(true);
+    }
   });
 
   // An auth-gated venue (public access disabled) 401s on /api/v1/status, but its
@@ -190,11 +251,66 @@ describe('Venue.connect', () => {
     await expect(Venue.connect('https://gone.example.com')).rejects.toThrow(/401/);
   });
 
+  it('records both status and did-document failures for an auth-gated candidate', async () => {
+    mockFetchError(401);
+    mockFetchError(404);
+
+    try {
+      await Venue.connect('https://gone.example.com');
+      throw new Error('Expected Venue.connect to reject');
+    } catch (error) {
+      const connectionError = error as CoviaConnectionError;
+      expect(connectionError.attempts.map((attempt) => attempt.url)).toEqual([
+        'https://gone.example.com/api/v1/status',
+        'https://gone.example.com/.well-known/did.json',
+      ]);
+    }
+  });
+
+  it('records an identity-less public DID document as a validation failure', async () => {
+    mockFetchError(401);
+    mockFetchSuccess({});
+
+    try {
+      await Venue.connect('https://invalid-private.example.com');
+      throw new Error('Expected Venue.connect to reject');
+    } catch (error) {
+      const connectionError = error as CoviaConnectionError;
+      expect(connectionError.attempts).toHaveLength(2);
+      expect(connectionError.attempts[1].error.message).toContain('did not include an id');
+    }
+  });
+
   it('does not consult did.json on non-auth status failures', async () => {
     mockFetchError(500);
 
     await expect(Venue.connect('https://broken.example.com')).rejects.toThrow(CoviaError);
     expect(mockFetch).toHaveBeenCalledTimes(1);                 // no fallback fetch
+  });
+
+  it('rejects a resolved DID endpoint that reports a different identity', async () => {
+    mockFetchSuccess({ did: 'did:web:impostor.example.com', name: 'Wrong Venue' });
+
+    try {
+      await Venue.connect('did:web:resolved.example.com');
+      throw new Error('Expected Venue.connect to reject');
+    } catch (error) {
+      const identityError = error as VenueIdentityChangedError;
+      expect(identityError).toBeInstanceOf(VenueIdentityChangedError);
+      expect(identityError.oldDid).toBe('did:web:resolved.example.com');
+      expect(identityError.newDid).toBe('did:web:impostor.example.com');
+      expect(identityError.baseUrl).toBe('https://resolved.example.com');
+    }
+  });
+
+  it('validates the identity when reconnecting an existing Venue', async () => {
+    const original = new Venue({
+      baseUrl: 'https://original.com',
+      venueId: 'did:web:original.com',
+    });
+    mockFetchSuccess({ did: 'did:web:replacement.com' });
+
+    await expect(Venue.connect(original)).rejects.toThrow(VenueIdentityChangedError);
   });
 });
 
@@ -351,6 +467,40 @@ describe('Venue.status', () => {
     const stats = await venue.status();
     expect(stats.status).toBe('OK');
     expect(stats.url).toBe('https://test.com');
+  });
+
+  it('throws a typed error and retains the old identity on DID mismatch', async () => {
+    mockFetch.mockReset();
+    const oldStatus = { status: 'OK', did: 'did:web:old.example.com' };
+    const venue = new Venue({
+      baseUrl: 'https://test.com',
+      venueId: 'did:web:old.example.com',
+      status: oldStatus,
+    });
+    mockFetchSuccess({ status: 'OK', did: 'did:web:new.example.com' });
+
+    try {
+      await venue.status();
+      throw new Error('Expected status to reject');
+    } catch (error) {
+      const identityError = error as VenueIdentityChangedError;
+      expect(identityError).toBeInstanceOf(VenueIdentityChangedError);
+      expect(identityError.oldDid).toBe('did:web:old.example.com');
+      expect(identityError.newDid).toBe('did:web:new.example.com');
+      expect(identityError.baseUrl).toBe('https://test.com');
+    }
+    expect(venue.venueId).toBe('did:web:old.example.com');
+    expect(venue.lastKnownStatus).toBe(oldStatus);
+  });
+
+  it('establishes identity on first status for a directly constructed Venue', async () => {
+    mockFetch.mockReset();
+    const venue = new Venue({ baseUrl: 'https://test.com' });
+    mockFetchSuccess({ status: 'OK', did: 'did:web:test.com' });
+
+    await venue.status();
+
+    expect(venue.venueId).toBe('did:web:test.com');
   });
 });
 

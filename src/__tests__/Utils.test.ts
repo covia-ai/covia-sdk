@@ -197,19 +197,37 @@ describe('fetchWithError', () => {
   });
 
   it('wraps TypeError network errors in CoviaConnectionError', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const cause = new TypeError('Failed to fetch');
+    global.fetch = jest.fn().mockRejectedValue(cause);
 
-    await expect(fetchWithError('https://example.com/api')).rejects.toThrow(CoviaConnectionError);
-    await expect(fetchWithError('https://example.com/api')).rejects.toThrow(CoviaError);
+    try {
+      await fetchWithError('https://example.com/api', { method: 'POST' });
+      throw new Error('Expected fetchWithError to reject');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CoviaConnectionError);
+      expect(error).toBeInstanceOf(CoviaError);
+      const connectionError = error as CoviaConnectionError;
+      expect(connectionError.url).toBe('https://example.com/api');
+      expect(connectionError.method).toBe('POST');
+      expect(connectionError.cause).toBe(cause);
+      expect(connectionError.message).toContain('POST https://example.com/api');
+    }
   });
 
-  it('wraps other errors in CoviaError', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('Unknown failure'));
+  it('treats every exception thrown by fetch as a structured transport failure', async () => {
+    const cause = new Error('Unknown failure');
+    global.fetch = jest.fn().mockRejectedValue(cause);
 
-    await expect(fetchWithError('https://example.com/api')).rejects.toThrow(CoviaError);
-    await expect(fetchWithError('https://example.com/api')).rejects.toThrow(
-      'Request failed: Unknown failure'
-    );
+    try {
+      await fetchWithError('https://example.com/api');
+      throw new Error('Expected fetchWithError to reject');
+    } catch (error) {
+      const connectionError = error as CoviaConnectionError;
+      expect(connectionError).toBeInstanceOf(CoviaConnectionError);
+      expect(connectionError.url).toBe('https://example.com/api');
+      expect(connectionError.method).toBe('GET');
+      expect(connectionError.cause).toBe(cause);
+    }
   });
 
   it('throws GridError on 403 status', async () => {
@@ -257,16 +275,24 @@ describe('fetchStreamWithError', () => {
   });
 
   it('wraps TypeError network errors in CoviaConnectionError', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new TypeError('Connection refused'));
+    const cause = new TypeError('Connection refused');
+    global.fetch = jest.fn().mockRejectedValue(cause);
 
-    await expect(fetchStreamWithError('https://example.com/stream')).rejects.toThrow(
-      CoviaConnectionError
-    );
+    try {
+      await fetchStreamWithError('https://example.com/stream', { method: 'DELETE' });
+      throw new Error('Expected fetchStreamWithError to reject');
+    } catch (error) {
+      const connectionError = error as CoviaConnectionError;
+      expect(connectionError).toBeInstanceOf(CoviaConnectionError);
+      expect(connectionError.url).toBe('https://example.com/stream');
+      expect(connectionError.method).toBe('DELETE');
+      expect(connectionError.cause).toBe(cause);
+    }
   });
 
-  it('wraps other errors in CoviaError', async () => {
+  it('wraps other fetch exceptions in CoviaConnectionError', async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('Connection refused'));
 
-    await expect(fetchStreamWithError('https://example.com/stream')).rejects.toThrow(CoviaError);
+    await expect(fetchStreamWithError('https://example.com/stream')).rejects.toThrow(CoviaConnectionError);
   });
 });

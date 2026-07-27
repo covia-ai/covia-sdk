@@ -577,12 +577,14 @@ The SDK provides a hierarchy of typed errors:
 
 ```typescript
 import {
+  Venue,
   CoviaError,          // Base error
   GridError,           // HTTP API errors (4xx/5xx)
   NotFoundError,       // 404 responses
   AssetNotFoundError,  // Asset not found
   JobNotFoundError,    // Job not found
-  CoviaConnectionError,// Connection failures
+  CoviaConnectionError,// Transport/connect failures (url, method, attempts)
+  VenueIdentityChangedError, // Same address now reports a different DID
   CoviaTimeoutError,   // Timeout exceeded
   JobFailedError,      // Job finished with non-COMPLETE status
   RateLimitError,      // 429 after bounded retries (carries retryAfterSeconds)
@@ -605,6 +607,32 @@ try {
     console.log("Job took too long");
   } else if (err instanceof JobFailedError) {
     console.log(`Job failed: ${err.jobData.status}`);
+  }
+}
+```
+
+Transport failures include the exact request target and method. A failed
+`Venue.connect()` additionally includes every candidate and failed validation
+request:
+
+```typescript
+try {
+  await Venue.connect("localhost:8080");
+} catch (err) {
+  if (err instanceof CoviaConnectionError) {
+    console.error(err.candidates);
+    for (const attempt of err.attempts) {
+      console.error(attempt.method, attempt.url, attempt.error.message);
+    }
+  }
+}
+
+try {
+  await venue.status();
+} catch (err) {
+  if (err instanceof VenueIdentityChangedError) {
+    console.error(`Venue changed from ${err.oldDid} to ${err.newDid}`);
+    // Reconnect and re-authorise explicitly; the old handle is not rebound.
   }
 }
 ```

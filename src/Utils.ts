@@ -1,4 +1,4 @@
-import { CoviaError, CoviaConnectionError, GridError, NotFoundError, RateLimitError, RunStatus, SSEEvent } from './types';
+import { CoviaConnectionError, GridError, NotFoundError, RateLimitError, RunStatus, SSEEvent } from './types';
 import { logger } from './Logger';
 import { didUrl, Namespace } from './did';
 
@@ -36,17 +36,15 @@ async function throwHttpError(response: Response): Promise<never> {
   throw new GridError(response.status, message, body);
 }
 
-/**
- * Wrap a non-CoviaError into the appropriate subclass.
- */
-function wrapError(error: unknown): CoviaError {
-  if (error instanceof CoviaError) return error;
-  const msg = (error as Error).message ?? String(error);
-  // Detect network/connection errors from fetch
-  if (error instanceof TypeError) {
-    return new CoviaConnectionError(msg);
-  }
-  return new CoviaError(`Request failed: ${msg}`);
+/** Attach request context to any exception thrown by `fetch` itself. */
+function wrapConnectionError(error: unknown, url: string, method: string): CoviaConnectionError {
+  if (error instanceof CoviaConnectionError && error.url && error.method) return error;
+  const detail = error instanceof Error ? error.message : String(error);
+  return new CoviaConnectionError(`${method} ${url} failed: ${detail}`, {
+    url,
+    method,
+    cause: error,
+  });
 }
 
 /**
@@ -90,7 +88,7 @@ export function retryDelayMs(attempt: number, retryAfterMs: number,
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 export async function fetchWithError<T>(url: string, options?: RequestInit): Promise<T> {
-  const method = options?.method ?? 'GET';
+  const method = (options?.method ?? 'GET').toUpperCase();
   const deadline = Date.now() + RETRY_BUDGET_MS;
   for (let attempt = 1; ; attempt++) {
     logger.debug(`${method} ${url}`);
@@ -100,7 +98,7 @@ export async function fetchWithError<T>(url: string, options?: RequestInit): Pro
     } catch (error) {
       const msg = (error as Error).message ?? String(error);
       logger.debug(`Connection failed: ${method} ${url} — ${msg}`);
-      throw wrapError(error);
+      throw wrapConnectionError(error, url, method);
     }
     logger.debug(`${method} ${url} → ${response.status}`);
     if (response.status === 429) {
@@ -129,7 +127,7 @@ export async function fetchWithError<T>(url: string, options?: RequestInit): Pro
  * @returns {Promise<Response>} The fetch response
  */
 export async function fetchStreamWithError(url: string, options?: RequestInit): Promise<Response> {
-  const method = options?.method ?? 'GET';
+  const method = (options?.method ?? 'GET').toUpperCase();
   logger.debug(`${method} ${url}`);
   let response: Response;
   try {
@@ -137,7 +135,7 @@ export async function fetchStreamWithError(url: string, options?: RequestInit): 
   } catch (error) {
     const msg = (error as Error).message ?? String(error);
     logger.debug(`Connection failed: ${method} ${url} — ${msg}`);
-    throw wrapError(error);
+    throw wrapConnectionError(error, url, method);
   }
   logger.debug(`${method} ${url} → ${response.status}`);
   if (!response.ok) {
