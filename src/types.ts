@@ -322,6 +322,13 @@ export interface AgentSuspendResult {
   status: string;
 }
 
+export interface AgentRenameSessionResult {
+  agentId: string;
+  sessionId: string;
+  /** Absent when the title was cleared (an omitted/blank title on the call). */
+  title?: string;
+}
+
 export interface AgentResumeInput {
   agentId: string;
   autoWake?: boolean;
@@ -700,11 +707,16 @@ export class JobFailedError extends CoviaError {
     const id = jobData.id ?? 'unknown';
     const status = jobData.status ?? 'unknown';
     let msg = `Job ${id} ${status}`;
+    // The venue records the failure reason on the job's own top-level
+    // `error` field (Job.fail() on the server), not under `output` — a
+    // failed job generally has no output at all. `output.error` is kept as
+    // a fallback for adapters that shape their failure that way instead.
     const output = jobData.output;
-    const errText =
+    const outputErrText =
       output && typeof output === 'object' && 'error' in output
         ? (output as { error?: unknown }).error
         : undefined;
+    const errText = typeof jobData.error === 'string' ? jobData.error : outputErrText;
     if (typeof errText === 'string') {
       msg += `: ${errText}`;
     }
