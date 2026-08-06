@@ -150,6 +150,20 @@ describe('AgentManager', () => {
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/resume', { agentId: 'a1', autoWake: false });
   });
 
+  it('renameSession calls v/ops/agent/rename-session', async () => {
+    await agents.renameSession('a1', 'sess-1', 'Planning the launch');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/rename-session', {
+      agentId: 'a1', sessionId: 'sess-1', title: 'Planning the launch',
+    });
+  });
+
+  it('renameSession omits title to clear it', async () => {
+    await agents.renameSession('a1', 'sess-1');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/rename-session', {
+      agentId: 'a1', sessionId: 'sess-1', title: undefined,
+    });
+  });
+
   it('update calls v/ops/agent/update', async () => {
     await agents.update({ agentId: 'a1', state: { counter: 5 } });
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/update', { agentId: 'a1', state: { counter: 5 } });

@@ -1,4 +1,4 @@
-import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, OperationRunner, NotFoundError, StatusData } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, OperationRunner, NotFoundError, StatusData } from './types';
 import { fetchWithError } from './Utils';
 
 interface AgentManagerVenue {
@@ -103,6 +103,16 @@ export class AgentManager {
    */
   async chat(agentId: string, message: unknown, sessionId?: string): Promise<AgentChatResult> {
     return this.venue.operations.run<AgentChatResult>('v/ops/agent/chat', { agentId, message, sessionId });
+  }
+
+  /**
+   * Set (or clear, by omitting `title` / passing an empty string) a
+   * session's free-form human-facing title — persisted on the venue in
+   * the session's own metadata, visible to every client and party in the
+   * session (not a per-browser local override).
+   */
+  async renameSession(agentId: string, sessionId: string, title?: string): Promise<AgentRenameSessionResult> {
+    return this.venue.operations.run<AgentRenameSessionResult>('v/ops/agent/rename-session', { agentId, sessionId, title });
   }
 
   async trigger(agentId: string): Promise<AgentTriggerResult> {
