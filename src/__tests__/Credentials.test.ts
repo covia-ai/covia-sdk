@@ -192,8 +192,8 @@ describe('Ed25519Auth', () => {
   it('binds the JWT aud to the venue DID passed by the transport', () => {
     const auth = Ed25519Auth.generate();
     const headers: Record<string, string> = {};
-    auth.apply(headers, 'did:web:venue.covia.ai');
-    expect(decodePayload(headers).aud).toBe('did:web:venue.covia.ai');
+    auth.apply(headers, 'did:web:venue.example.com');
+    expect(decodePayload(headers).aud).toBe('did:web:venue.example.com');
   });
 
   it('omits aud when no audience is supplied', () => {
@@ -207,7 +207,7 @@ describe('Ed25519Auth', () => {
     const auth = Ed25519Auth.generate();
     auth.audience = 'did:web:pinned.example';
     const headers: Record<string, string> = {};
-    auth.apply(headers, 'did:web:venue.covia.ai');
+    auth.apply(headers, 'did:web:venue.example.com');
     expect(decodePayload(headers).aud).toBe('did:web:pinned.example');
   });
 

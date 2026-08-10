@@ -6,7 +6,7 @@ import { Grid } from './Grid';
 async function example() {
   try {
     // Create a venue connection
-    const venue  =  await Grid.connect('https://venue-4.covia.ai')
+    const venue = await Grid.connect('https://your-venue.example.com');
     
     // List all assets
     const assets = await venue.listAssets();
@@ -65,19 +65,14 @@ async function webExamples() {
   const auth = new BearerAuth("my-api-key");
 
   // Connect to a Venue
-  const venue = await Grid.connect("grid.covia.ai", auth);
+  const venue = await Grid.connect("https://your-venue.example.com", auth);
 
-  // Get AI operation by cryptographic ID
-  const op = await venue.getAsset("0xdcdda5950931489c1e7b1311dfe3321e6cb1e22cb306adfcf31aa030098e02c0");
-
-  // Run the operation
-  const result = await op.run({ 
-    prompt: [
-      'Ask 100 different AI agents for their opinion on the following question:',
-      '"What is the meaning of life?"',
-      'Then write up a summary of the survey results and publish it as a new artifact.']
+  // Use a stable catalog path rather than a deployment-specific asset hash.
+  const result = await venue.operations.run("v/ops/schema/infer", {
+    value: { name: "Ada", age: 36, admin: true },
   });
+  console.log("Inferred schema:", result);
 
 }
 
-export { example, webExamples }; 
+export { example, webExamples };

@@ -119,6 +119,6 @@ Integration tests (`venue.test.ts`) need a live venue and stay local for now.
 ## Package Details
 
 - **npm:** `@covia/covia-sdk`
-- **Version:** see `package.json` (currently 1.6.x)
+- **Version:** `package.json` is the single source of truth
 - **Entry points:** `dist/index.js` (CJS), `dist/index.mjs` (ESM), `dist/index.d.ts` (types)
 - **License:** Apache-2.0

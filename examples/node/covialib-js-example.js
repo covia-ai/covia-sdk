@@ -3,7 +3,10 @@
 
 import { Grid, Venue, KeyPairAuth, RunStatus } from "@covia/covia-sdk";
 
-const VENUE_URL = "https://venue-3.covia.ai";
+const VENUE_URL = process.env.VENUE_URL;
+if (!VENUE_URL) {
+  throw new Error("Set VENUE_URL to the Covia venue you want to use");
+}
 
 async function getSHA256Hash(input) {
   const textAsBuffer = new TextEncoder().encode(input.toString());
