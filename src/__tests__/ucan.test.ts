@@ -18,9 +18,12 @@ describe('UCAN minting', () => {
   it('identityToken: empty att, audienced to the venue, short-lived', () => {
     const { header, claims } = decode(identityToken(privateKey, venueDID, 300));
     expect(header.alg).toBe('EdDSA');
+    expect(header.typ).toBe('JWT');
     expect(claims.iss).toBe(didFor(privateKey));
     expect(claims.aud).toBe(venueDID);
     expect(claims.att).toEqual([]);                       // pure identity — grants nothing
+    expect(claims.ucv).toBe('0.10.0');                    // Convex UCAN JWT profile (0.8.11+)
+    expect(claims.prf).toEqual([]);                       // prf present even for roots
     expect(claims.exp - Math.floor(Date.now() / 1000)).toBeLessThanOrEqual(300);
   });
 
@@ -28,7 +31,14 @@ describe('UCAN minting', () => {
     const { claims } = decode(grant(privateKey, 'did:key:z6MkBob', 'did:key:zAlice/w/shared/', 'crud/read', 3600));
     expect(claims.aud).toBe('did:key:z6MkBob');
     expect(claims.att).toEqual([{ with: 'did:key:zAlice/w/shared/', can: 'crud/read' }]);
-    expect(claims.prf).toBeUndefined();                   // root grant — no chain
+    expect(claims.prf).toEqual([]);                       // root grant — present and empty per the profile
+  });
+
+  it('non-expiring tokens carry an explicit exp: null', () => {
+    const { claims } = decode(createUCANJWT(privateKey, 'did:key:z6MkBob',
+      [{ with: 'did:key:zMe/w/', can: 'crud/read' }], null));
+    expect('exp' in claims).toBe(true);                   // absent exp is malformed
+    expect(claims.exp).toBeNull();
   });
 
   it('relayDelegation: venue/relay instruction + substantive caps', () => {

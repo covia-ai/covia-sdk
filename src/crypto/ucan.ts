@@ -19,6 +19,9 @@ const encoder = new TextEncoder();
 /** The ability that instructs a venue to relay a cross-venue hop as itself. */
 export const VENUE_RELAY = 'venue/relay';
 
+/** The Convex UCAN JWT profile version emitted in the `ucv` claim. */
+export const UCV_VERSION = '0.10.0';
+
 export interface UCANCapability { with: string; can: string }
 
 /** The did:key DID for a private key. */
@@ -27,20 +30,24 @@ export function didFor(privateKey: Uint8Array): string {
 }
 
 /**
- * Mint a UCAN as an EdDSA JWT: `{iss, aud, att, exp[, prf]}` signed by
- * `privateKey` (iss = its did:key).
+ * Mint a UCAN as an EdDSA JWT in the Convex UCAN JWT profile:
+ * `{iss, aud, ucv, att, prf, exp}` signed by `privateKey` (iss = its did:key).
+ * From Convex 0.8.11 venues parse only this profile: the `ucv` claim and the
+ * `att`/`prf` arrays are always present, and the `exp` key is always present —
+ * explicitly `null` for a non-expiring token (UCAN v0.10.0; an absent `exp`
+ * is malformed).
  *
  * @param privateKey 32-byte Ed25519 private key (the issuer)
  * @param audienceDID who receives the token (`aud`)
  * @param att capabilities delegated (empty array = pure identity token)
- * @param lifetimeSeconds validity window
+ * @param lifetimeSeconds validity window, or `null` for a non-expiring token
  * @param proofs parent UCAN JWT strings (`prf`) for delegation chains
  */
 export function createUCANJWT(
   privateKey: Uint8Array,
   audienceDID: string,
   att: UCANCapability[],
-  lifetimeSeconds: number,
+  lifetimeSeconds: number | null,
   proofs: string[] = [],
 ): string {
   const multikey = encodePublicKey(getPublicKey(privateKey));
@@ -49,10 +56,11 @@ export function createUCANJWT(
   const claims: Record<string, unknown> = {
     iss: `did:key:${multikey}`,
     aud: audienceDID,
+    ucv: UCV_VERSION,
     att,
-    exp: nowSecs + lifetimeSeconds,
+    prf: proofs,
+    exp: lifetimeSeconds === null ? null : nowSecs + lifetimeSeconds,
   };
-  if (proofs.length) claims.prf = proofs;
   const signingInput =
     `${base64UrlEncode(encoder.encode(header))}.${base64UrlEncode(encoder.encode(JSON.stringify(claims)))}`;
   const signature = sign(encoder.encode(signingInput), privateKey);
