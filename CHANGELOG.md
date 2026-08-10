@@ -4,6 +4,16 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.8.0
+
+Compatibility with Covia venue 0.9.0.
+
+### Changed
+
+- **UCAN minting emits the Convex UCAN JWT profile** — `ucv` claim and
+  always-present `prf`; `exp` is always present and may be `null` for a
+  non-expiring token. Required by venues on Convex 0.8.11+ (#25)
+
 ## 1.7.2
 
 Compatibility with Covia venue 0.6.0.
