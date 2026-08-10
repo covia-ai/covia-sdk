@@ -4,6 +4,15 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## Unreleased
+
+### Changed
+
+- Removed deployment-specific venue hostnames, a hard-coded asset hash, and a
+  duplicated package-version claim from examples and contributor guidance.
+  Runnable examples now require an explicit venue environment override, while
+  illustrative snippets and URL parser tests use RFC-reserved fixtures.
+
 ## 1.8.0
 
 Compatibility with Covia venue 0.9.0.

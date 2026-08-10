@@ -39,7 +39,7 @@ export class NoAuth extends Auth {
  * Adds `Authorization: Bearer <token>` to every request.
  *
  * Example:
- *   const venue = await Grid.connect("https://venue.covia.ai", new BearerAuth("my-token"));
+ *   const venue = await Grid.connect("https://your-venue.example.com", new BearerAuth("my-token"));
  */
 export class BearerAuth extends Auth {
   private _token: string;
@@ -59,7 +59,7 @@ export class BearerAuth extends Auth {
  * Adds `Authorization: Basic <base64(username:password)>` to every request.
  *
  * Example:
- *   const venue = await Grid.connect("https://venue.covia.ai", new BasicAuth("admin", "s3cret"));
+ *   const venue = await Grid.connect("https://your-venue.example.com", new BasicAuth("admin", "s3cret"));
  */
 export class BasicAuth extends Auth {
   private _username: string;
@@ -86,7 +86,7 @@ export class BasicAuth extends Auth {
  * Example:
  *   const auth = Ed25519Auth.generate();
  *   console.log(auth.getDID()); // did:key:z6Mk...
- *   const venue = await Grid.connect("https://venue.covia.ai", auth);
+ *   const venue = await Grid.connect("https://your-venue.example.com", auth);
  */
 export class Ed25519Auth extends Auth {
   private _privateKey: Uint8Array;

@@ -20,7 +20,12 @@ Demonstrates the main features of the [@covia/covia-sdk](https://www.npmjs.com/p
 npm install
 ```
 
-Edit `covialib-js-example.js` and set `VENUE_URL` to your venue's URL.
+Set `VENUE_URL` to the venue you want to use. The example has no hard-coded
+deployment default:
+
+```bash
+VENUE_URL=https://your-venue.example.com npm start
+```
 
 ## Run
 

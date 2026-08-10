@@ -2,7 +2,7 @@ import { venueBaseUrlCandidates } from '../Venue';
 
 describe('venueBaseUrlCandidates', () => {
   it('honours an explicit scheme as a single candidate (no fallback)', () => {
-    expect(venueBaseUrlCandidates('https://venue-1.covia.ai')).toEqual(['https://venue-1.covia.ai']);
+    expect(venueBaseUrlCandidates('https://venue.example.com')).toEqual(['https://venue.example.com']);
     expect(venueBaseUrlCandidates('http://example.com:9000')).toEqual(['http://example.com:9000']);
     // explicit http on a local host is honoured, never upgraded to https
     expect(venueBaseUrlCandidates('http://localhost:8080')).toEqual(['http://localhost:8080']);
@@ -10,13 +10,13 @@ describe('venueBaseUrlCandidates', () => {
   });
 
   it('strips a single trailing slash from explicit URLs (unchanged behaviour)', () => {
-    expect(venueBaseUrlCandidates('https://venue-1.covia.ai/')).toEqual(['https://venue-1.covia.ai']);
+    expect(venueBaseUrlCandidates('https://venue.example.com/')).toEqual(['https://venue.example.com']);
   });
 
   it('uses https only for bare public hosts and IPs', () => {
-    expect(venueBaseUrlCandidates('venue-1.covia.ai')).toEqual(['https://venue-1.covia.ai']);
-    expect(venueBaseUrlCandidates('venue-1.covia.ai:8080')).toEqual(['https://venue-1.covia.ai:8080']);
-    expect(venueBaseUrlCandidates('20.204.126.163:8080')).toEqual(['https://20.204.126.163:8080']);
+    expect(venueBaseUrlCandidates('venue.example.com')).toEqual(['https://venue.example.com']);
+    expect(venueBaseUrlCandidates('venue.example.com:8080')).toEqual(['https://venue.example.com:8080']);
+    expect(venueBaseUrlCandidates('203.0.113.10:8080')).toEqual(['https://203.0.113.10:8080']);
   });
 
   it('tries http then https for schemeless local hosts', () => {

@@ -28,11 +28,11 @@ yarn add @covia/covia-sdk
 import { Grid, KeyPairAuth } from "@covia/covia-sdk";
 
 // Connect to a venue (URL, DNS name, or DID)
-const venue = await Grid.connect("https://venue.covia.ai");
+const venue = await Grid.connect("https://your-venue.example.com");
 
 // Or connect with keypair authentication
 const auth = KeyPairAuth.generate();
-const venue = await Grid.connect("did:web:venue.covia.ai", auth);
+const venue = await Grid.connect("did:web:your-venue.example.com", auth);
 
 // Run an operation and get the result
 const result = await venue.operations.run("v/ops/schema/infer", {
@@ -68,31 +68,31 @@ The SDK supports three connection methods:
 import { Grid, Venue, KeyPairAuth, BearerAuth } from "@covia/covia-sdk";
 
 // Via Grid (cached — same ID returns the same Venue instance)
-const venue = await Grid.connect("https://venue.covia.ai");
-const venue = await Grid.connect("did:web:venue.covia.ai");
-const venue = await Grid.connect("venue.covia.ai"); // DNS name → https://
+const venue = await Grid.connect("https://your-venue.example.com");
+const venue = await Grid.connect("did:web:your-venue.example.com");
+const venue = await Grid.connect("your-venue.example.com"); // DNS name → https://
 
 // Via Venue directly (no caching)
-const venue = await Venue.connect("https://venue.covia.ai");
+const venue = await Venue.connect("https://your-venue.example.com");
 ```
 
 ### Authentication
 
 ```typescript
 // No auth (default)
-const venue = await Grid.connect("https://venue.covia.ai");
+const venue = await Grid.connect("https://your-venue.example.com");
 
 // Ed25519 keypair (self-issued JWT per request)
 const auth = KeyPairAuth.generate();
 console.log(auth.getDID()); // did:key:z6Mk...
-const venue = await Grid.connect("https://venue.covia.ai", auth);
+const venue = await Grid.connect("https://your-venue.example.com", auth);
 
 // From a saved private key
 const auth = KeyPairAuth.fromHex("abcdef1234...");
 
 // Bearer token
 const auth = new BearerAuth("my-api-token");
-const venue = await Grid.connect("https://venue.covia.ai", auth);
+const venue = await Grid.connect("https://your-venue.example.com", auth);
 ```
 
 ## API Reference

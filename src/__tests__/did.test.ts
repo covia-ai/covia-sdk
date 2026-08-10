@@ -3,7 +3,7 @@ import { Namespace, isDid, didMethod, parseDidUrl, didUrl, assetHash } from '../
 describe('isDid', () => {
   it.each([
     'did:key:z6MkABC',
-    'did:web:venue.covia.ai',
+    'did:web:venue.example.com',
     'did:web:host%3A3000',
     'did:web:example.com:user:alice',
   ])('accepts bare DID %s', (v) => expect(isDid(v)).toBe(true));
@@ -13,7 +13,7 @@ describe('isDid', () => {
     'did:key:',
     'did:',
     'not-a-did',
-    'https://venue.covia.ai',
+    'https://venue.example.com',
     '',
   ])('rejects %s', (v) => expect(isDid(v)).toBe(false));
 });
