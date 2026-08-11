@@ -108,10 +108,18 @@ dist/                   # Build output (CJS + ESM + .d.ts) — gitignored; `prep
 
 ## Releasing
 
-1. Bump `version` in `package.json` (and note changes in the README if relevant)
+1. Bump `version` in `package.json` to a stable SemVer without a prerelease
+   suffix (and note changes in the README if relevant)
 2. Commit, then tag `v<version>` (must match package.json) and push the tag
 3. `.github/workflows/publish.yml` validates the tag, runs CI, publishes to npm
    via trusted publishing (OIDC — no token, no OTP), and creates a GitHub release
+
+The npm registry is stable-only: `latest` is the sole allowed dist-tag.
+`publish.yml` rejects prerelease versions and unexpected registry tags before
+the irreversible publish. Build release candidates with `pnpm pack`; test the
+resulting `.tgz` directly instead of publishing it under `next`, `beta`, or
+`rc`, because npm dist-tags persist across later stable releases and OIDC
+cannot remove them.
 
 CI (`ci.yml`) runs lint, build, and unit tests on every PR and push to `main`.
 Integration tests (`venue.test.ts`) need a live venue and stay local for now.

@@ -12,6 +12,10 @@ its own SemVer track (independent of the venue/platform version).
   duplicated package-version claim from examples and contributor guidance.
   Runnable examples now require an explicit venue environment override, while
   illustrative snippets and URL parser tests use RFC-reserved fixtures.
+- Made npm publishing stable-only: prerelease versions and unexpected dist-tags
+  fail before publication, stable releases always use `latest`, and release
+  candidates are distributed as `pnpm pack` tarballs rather than persistent
+  registry aliases.
 
 ## 1.8.0
 
