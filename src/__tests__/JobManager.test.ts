@@ -30,6 +30,20 @@ describe('JobManager.list', () => {
     expect(await jobs.list()).toEqual(['0a1b', '0c2d']);
   });
 
+  it('fetches every page before returning the list', async () => {
+    okJson({ items: ['0a1b', '0c2d'], total: 3, offset: 0, limit: 2 });
+    okJson({ items: ['0e3f'], total: 3, offset: 2, limit: 2 });
+
+    expect(await jobs.list()).toEqual(['0a1b', '0c2d', '0e3f']);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const first = new URL(String(mockFetch.mock.calls[0][0]));
+    const second = new URL(String(mockFetch.mock.calls[1][0]));
+    expect(first.searchParams.get('offset')).toBe('0');
+    expect(first.searchParams.get('limit')).toBe('1000');
+    expect(second.searchParams.get('offset')).toBe('2');
+    expect(mockFetch.mock.calls[1][1].headers.Authorization).toBe('Bearer tok');
+  });
+
   it('parses the legacy flat id array', async () => {
     okJson(['0a1b', '0c2d']);
     expect(await jobs.list()).toEqual(['0a1b', '0c2d']);
@@ -38,5 +52,10 @@ describe('JobManager.list', () => {
   it('returns empty for an empty envelope', async () => {
     okJson({ items: [], total: 0, offset: 0, limit: 1000 });
     expect(await jobs.list()).toEqual([]);
+  });
+
+  it('rejects malformed pages instead of presenting them as an empty list', async () => {
+    okJson({ items: ['0a1b'] });
+    await expect(jobs.list()).rejects.toThrow('invalid jobs page');
   });
 });

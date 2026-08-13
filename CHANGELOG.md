@@ -30,6 +30,9 @@ its own SemVer track (independent of the venue/platform version).
 - Simplified agent sessions to `AgentSession` and `AgentSessionPage`: pages use
   the common `items`/`total`/`offset`/`limit` vocabulary, exact lookup is
   `getSession()`, and the duplicate raw venue value is no longer exposed.
+- `jobs.list()` now follows the venue's page envelope until all job IDs have
+  been read and validates malformed responses instead of silently returning a
+  partial or empty list.
 - Private jobs are now selected per `operations.run(..., { private: true })`;
   the mutable connection-wide `venue.setPrivate()` switch remains available
   for compatibility but is deprecated.
