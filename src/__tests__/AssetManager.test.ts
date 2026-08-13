@@ -76,6 +76,7 @@ describe('AssetManager persistent metadata store', () => {
   let am: AssetManager;
 
   afterEach(() => {
+    am?.clearPersistentCache();
     setAssetMetadataStore(null);
     am?.clearCache();
   });
@@ -124,12 +125,15 @@ describe('AssetManager persistent metadata store', () => {
     expect(map.size).toBe(0);
   });
 
-  it('clearCache clears the persistent store too', async () => {
+  it('separates venue-local and persistent cache clearing', async () => {
     const { store, map } = makeStore();
     map.set('abcdef0123', { name: 'X' });
     setAssetMetadataStore(store);
 
     am.clearCache();
+    expect(map.size).toBe(1);
+
+    am.clearPersistentCache();
     expect(map.size).toBe(0);
   });
 });

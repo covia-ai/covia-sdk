@@ -87,6 +87,11 @@ function connectionFailureMessage(venueId: string, attempts: readonly Connection
 }
 
 export class Venue implements VenueInterface {
+  private _closed = false;
+
+  /** Whether this handle has been closed and should not be reused by Grid. */
+  get closed(): boolean { return this._closed; }
+
   /** Connection-level private-jobs mode — see {@link setPrivate}. */
   privateJobs = false;
 
@@ -415,7 +420,8 @@ export class Venue implements VenueInterface {
    * Clears cached asset data for this venue.
    */
   close(): void {
-    this.assets.clearCache();
+    this._closed = true;
+    this._assets?.clearCache();
   }
 
   /**

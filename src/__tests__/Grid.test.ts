@@ -6,6 +6,7 @@ jest.mock('../Venue', () => {
     baseUrl: 'https://example.com',
     venueId: 'did:web:example.com',
     metadata: { name: 'Test' },
+    closed: false,
   };
   return {
     Venue: {
@@ -52,6 +53,58 @@ describe('Grid', () => {
     const venueId = 'https://reauth-venue.example.com';
     await Grid.connect(venueId); // anonymous
     await Grid.connect(venueId, new BearerAuth('token')); // authenticated
+    expect(Venue.connect).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps separate cached connections for multiple auth objects', async () => {
+    const { BearerAuth } = jest.requireActual('../Credentials');
+    const venueId = 'https://multi-auth-venue.example.com';
+    const firstAuth = new BearerAuth('first');
+    const secondAuth = new BearerAuth('second');
+
+    const first = await Grid.connect(venueId, firstAuth);
+    await Grid.connect(venueId, secondAuth);
+    const firstAgain = await Grid.connect(venueId, firstAuth);
+
+    expect(Venue.connect).toHaveBeenCalledTimes(2);
+    expect(firstAgain).toBe(first);
+  });
+
+  it('deduplicates simultaneous connection attempts', async () => {
+    const venueId = 'https://concurrent-venue.example.com';
+    let resolve!: (value: unknown) => void;
+    (Venue.connect as jest.Mock).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+
+    const first = Grid.connect(venueId);
+    const second = Grid.connect(venueId);
+    expect(Venue.connect).toHaveBeenCalledTimes(1);
+
+    resolve({ baseUrl: venueId, venueId: 'did:web:concurrent', closed: false });
+    await expect(first).resolves.toBe(await second);
+  });
+
+  it('evicts a failed connection attempt', async () => {
+    const venueId = 'https://retry-venue.example.com';
+    (Venue.connect as jest.Mock)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ baseUrl: venueId, venueId: 'did:web:retry', closed: false });
+
+    await expect(Grid.connect(venueId)).rejects.toThrow('offline');
+    await expect(Grid.connect(venueId)).resolves.toMatchObject({ venueId: 'did:web:retry' });
+    expect(Venue.connect).toHaveBeenCalledTimes(2);
+  });
+
+  it('reconnects a closed cached venue', async () => {
+    const venueId = 'https://closed-venue.example.com';
+    const firstVenue = { baseUrl: venueId, venueId: 'did:web:closed', closed: false };
+    const secondVenue = { baseUrl: venueId, venueId: 'did:web:closed', closed: false };
+    (Venue.connect as jest.Mock)
+      .mockResolvedValueOnce(firstVenue)
+      .mockResolvedValueOnce(secondVenue);
+
+    expect(await Grid.connect(venueId)).toBe(firstVenue);
+    firstVenue.closed = true;
+    expect(await Grid.connect(venueId)).toBe(secondVenue);
     expect(Venue.connect).toHaveBeenCalledTimes(2);
   });
 });

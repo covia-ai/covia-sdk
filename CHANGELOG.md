@@ -20,6 +20,9 @@ its own SemVer track (independent of the venue/platform version).
 
 ### Changed
 
+- Grid connections are now cached per `(venue, auth)` with in-flight request
+  deduplication, canonical URL/DID aliases, and failed/closed-handle eviction;
+  closing one Venue no longer clears other venues' in-memory asset caches.
 - Centralised venue API transport so status, operation discovery, assets, jobs,
   agents, workspace and secrets consistently carry venue-bound authentication;
   plain-text HTTP failures are now preserved in typed errors.

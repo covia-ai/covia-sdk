@@ -1,11 +1,35 @@
 import { Auth } from "./Credentials";
 import { Venue } from "./Venue";
 
-// Reuse a connected Venue for repeated Grid.connect(id, sameAuth) calls. Keyed
-// by the auth reference as well as the id: a call with a different (or absent)
-// auth must NEVER receive a Venue bound to someone else's credentials — that
-// would silently run one caller's requests under another's identity.
-const cache = new Map<string, { auth?: Auth; venue: Venue }>();
+interface ConnectionEntry {
+  promise: Promise<Venue>;
+  venue?: Venue;
+}
+
+// Auth is identity-bearing state, so cache by object identity. Keep anonymous
+// connections separately because WeakMap cannot use undefined as a key.
+const anonymousConnections = new Map<string, ConnectionEntry>();
+const authenticatedConnections = new WeakMap<Auth, Map<string, ConnectionEntry>>();
+
+function connectionsFor(auth?: Auth): Map<string, ConnectionEntry> {
+  if (!auth) return anonymousConnections;
+  let connections = authenticatedConnections.get(auth);
+  if (!connections) {
+    connections = new Map();
+    authenticatedConnections.set(auth, connections);
+  }
+  return connections;
+}
+
+function normaliseKey(venueId: string): string {
+  return venueId.replace(/\/+$/, '');
+}
+
+function removeEntry(cache: Map<string, ConnectionEntry>, entry: ConnectionEntry): void {
+  for (const [key, candidate] of cache) {
+    if (candidate === entry) cache.delete(key);
+  }
+}
 
 export class Grid {
 
@@ -16,11 +40,30 @@ export class Grid {
    * @returns {Promise<Venue>} A new Venue instance configured appropriately
    */
   static async connect(venueId:string, auth?: Auth): Promise<Venue> {
-    const cached = cache.get(venueId);
-    if (cached && cached.auth === auth)
-        return cached.venue;
-    const connectedVenue = await Venue.connect(venueId, auth);
-    cache.set(venueId, { auth, venue: connectedVenue });
-    return connectedVenue;
+    const cache = connectionsFor(auth);
+    const key = normaliseKey(venueId);
+    const cached = cache.get(key);
+    if (cached) {
+      if (!cached.venue?.closed) return cached.promise;
+      removeEntry(cache, cached);
+    }
+
+    const entry = {} as ConnectionEntry;
+    const promise = Venue.connect(venueId, auth)
+      .then((venue) => {
+        entry.venue = venue;
+        // Learn canonical aliases after validation, so connecting by URL and
+        // later by the reported DID reuses the same authenticated handle.
+        cache.set(normaliseKey(venue.baseUrl), entry);
+        cache.set(normaliseKey(venue.venueId), entry);
+        return venue;
+      })
+      .catch((error: unknown) => {
+        removeEntry(cache, entry);
+        throw error;
+      });
+    entry = { promise };
+    cache.set(key, entry);
+    return entry.promise;
   }
 }

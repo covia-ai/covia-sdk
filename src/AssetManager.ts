@@ -10,13 +10,11 @@ interface AssetManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
 }
 
-// Cache for storing asset metadata. `GET /api/v1/assets/{id}` returns the asset
-// metadata *directly* as the body (the resolved content id travels in the ETag
-// header), so the response body is the AssetMetadata — there is no transport
-// envelope to unwrap, and `operation` is a top-level field.
-const cache = new Map<AssetID, AssetMetadata>();
-
 export class AssetManager {
+  // Memory cache is manager/venue-local. Content-addressed metadata may still
+  // be shared deliberately through the configured persistent metadata store.
+  private cache = new Map<AssetID, AssetMetadata>();
+
   constructor(private venue: AssetManagerVenue) {}
 
   /**
@@ -30,8 +28,8 @@ export class AssetManager {
    * @returns Returns either an Operation or DataAsset based on the asset's metadata
    */
   async get(assetId: AssetID): Promise<Asset> {
-    if (cache.has(assetId)) {
-      return this._wrap(assetId, cache.get(assetId)!);
+    if (this.cache.has(assetId)) {
+      return this._wrap(assetId, this.cache.get(assetId)!);
     }
     // Content-addressed refs are immutable (id = Convex hash of the metadata),
     // so they may also be served from the persistent store — cached once on
@@ -40,7 +38,7 @@ export class AssetManager {
     if (hash) {
       const persisted = getAssetMetadataStore()?.get(normaliseHash(hash));
       if (persisted) {
-        cache.set(assetId, persisted);
+        this.cache.set(assetId, persisted);
         return this._wrap(assetId, persisted);
       }
     }
@@ -53,7 +51,7 @@ export class AssetManager {
       // Cache only immutable, content-addressed refs — caching a mutable
       // lattice path (w/…, o/…) would serve stale data after it changes.
       if (hash) {
-        cache.set(assetId, data);
+        this.cache.set(assetId, data);
         getAssetMetadataStore()?.put(normaliseHash(hash), data);
       }
       return this._wrap(assetId, data);
@@ -176,7 +174,11 @@ export class AssetManager {
    * Clear the asset cache.
    */
   clearCache(): void {
-    cache.clear();
+    this.cache.clear();
+  }
+
+  /** Clear the explicitly configured cross-session metadata store. */
+  clearPersistentCache(): void {
     getAssetMetadataStore()?.clear();
   }
 
