@@ -12,6 +12,10 @@ function createMockVenue() {
     venueId: 'did:key:zVenue',
     auth: { apply: jest.fn((h: Record<string, string>) => { h['Authorization'] = 'Bearer tok'; }) },
     operations: { run: jest.fn().mockResolvedValue({}) },
+    workspace: {
+      read: jest.fn().mockResolvedValue({ exists: false }),
+      slice: jest.fn().mockResolvedValue({ exists: true, values: [], count: 0, offset: 0 }),
+    },
   };
 }
 
@@ -188,6 +192,54 @@ describe('AgentManager', () => {
     await agents.info('a1');
     expect(mockFetch).not.toHaveBeenCalled();
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/info', { agentId: 'a1' });
+  });
+
+  it('lists typed sessions through the job-free workspace surface', async () => {
+    venue.workspace.slice.mockResolvedValue({
+      exists: true,
+      count: 3,
+      offset: 1,
+      values: [{
+        key: 'sess-1',
+        value: {
+          meta: { title: 'Planning', turns: 2 },
+          pending: [{ message: 'next' }],
+          frames: [{ conversation: [] }],
+          wakeTime: 1750000000000,
+        },
+      }],
+    });
+
+    const result = await agents.listSessions('a1', { offset: 1, limit: 1 });
+
+    expect(venue.workspace.slice).toHaveBeenCalledWith('g/a1/sessions', 1, 1);
+    expect(venue.operations.run).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      count: 3,
+      offset: 1,
+      sessions: [{
+        sessionId: 'sess-1',
+        meta: { title: 'Planning', turns: 2 },
+        pending: [{ message: 'next' }],
+        wakeTime: 1750000000000,
+      }],
+    });
+  });
+
+  it('reads one session job-free and returns null when absent', async () => {
+    venue.workspace.read
+      .mockResolvedValueOnce({ exists: true, value: { meta: { title: 'One' }, pending: [] } })
+      .mockResolvedValueOnce({ exists: false });
+
+    await expect(agents.sessionInfo('a1', 'sess-1')).resolves.toMatchObject({
+      sessionId: 'sess-1', meta: { title: 'One' }, pending: [], frames: [],
+    });
+    await expect(agents.sessionInfo('a1', 'missing')).resolves.toBeNull();
+    expect(venue.workspace.read.mock.calls).toEqual([
+      ['g/a1/sessions/sess-1'],
+      ['g/a1/sessions/missing'],
+    ]);
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('fork calls v/ops/agent/fork', async () => {

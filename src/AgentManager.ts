@@ -1,4 +1,4 @@
-import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, OperationRunner, NotFoundError, StatusData } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSessionListOptions, AgentSessionListResult, AgentSessionMetadata, AgentSessionRecord, OperationRunner, NotFoundError, StatusData, WorkspaceReadResult, WorkspaceSliceResult } from './types';
 import { fetchWithError } from './Utils';
 
 interface AgentManagerVenue {
@@ -6,7 +6,30 @@ interface AgentManagerVenue {
   venueId: string;
   auth: { apply(headers: Record<string, string>, audience?: string): void };
   operations: OperationRunner;
+  workspace: {
+    read(path: string, maxSize?: number): Promise<WorkspaceReadResult>;
+    slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult>;
+  };
   lastKnownStatus?: StatusData;
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function sessionRecord(sessionId: string, value: unknown): AgentSessionRecord {
+  const session = record(value) ?? {};
+  const meta: AgentSessionMetadata | undefined = record(session.meta);
+  return {
+    sessionId,
+    meta: meta ?? {},
+    pending: Array.isArray(session.pending) ? session.pending : [],
+    frames: Array.isArray(session.frames) ? session.frames : [],
+    wakeTime: typeof session.wakeTime === 'number' ? session.wakeTime : undefined,
+    value: session,
+  };
 }
 
 /** Whether a venue version string is at least `major.minor`. Unparseable → true
@@ -160,6 +183,34 @@ export class AgentManager {
   async info(agentId: string): Promise<AgentInfoResult> {
     return this._agentsOr<AgentInfoResult>(`/${encodeURIComponent(agentId)}`, {}, () =>
       this.venue.operations.run<AgentInfoResult>('v/ops/agent/info', { agentId }));
+  }
+
+  /**
+   * Page an agent's sessions directly from `g/<agentId>/sessions`.
+   * This is a job-free Values read; session adapter-specific fields remain
+   * available on each record's `value` while common runtime fields are typed.
+   */
+  async listSessions(agentId: string, options: AgentSessionListOptions = {}): Promise<AgentSessionListResult> {
+    const result = await this.venue.workspace.slice(
+      `g/${agentId}/sessions`, options.offset, options.limit,
+    );
+    const sessions = (result.values ?? []).flatMap((entry) => {
+      const pair = record(entry);
+      if (!pair || typeof pair.key !== 'string') return [];
+      return [sessionRecord(pair.key, pair.value)];
+    });
+    return {
+      sessions,
+      count: result.count ?? sessions.length,
+      offset: result.offset ?? options.offset ?? 0,
+    };
+  }
+
+  /** Read one agent session directly from the workspace Values surface. */
+  async sessionInfo(agentId: string, sessionId: string): Promise<AgentSessionRecord | null> {
+    const result = await this.venue.workspace.read(`g/${agentId}/sessions/${sessionId}`);
+    if (!result.exists || result.value === undefined || result.value === null) return null;
+    return sessionRecord(sessionId, result.value);
   }
 
   async fork(input: AgentForkInput): Promise<AgentForkResult> {

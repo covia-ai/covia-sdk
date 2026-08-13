@@ -410,6 +410,8 @@ const clone = await mina.fork("Mina-v2", { includeTimeline: true });
 | `agent.trigger()` | `AgentTriggerResult` | Trigger agent execution |
 | `agent.query()` | `AgentQueryResult` | Query agent state |
 | `agent.info()` | `AgentInfoResult` | Get agent info |
+| `agent.listSessions(options?)` | `AgentSessionListResult` | Page sessions (job-free) |
+| `agent.sessionInfo(sessionId)` | `AgentSessionRecord \| null` | Read one session (job-free) |
 | `agent.context(task?)` | `string` | Get agent context |
 | `agent.suspend()` | `AgentSuspendResult` | Suspend the agent |
 | `agent.resume(autoWake?)` | `AgentSuspendResult` | Resume the agent |
@@ -450,6 +452,8 @@ await venue.agents.chat("my-agent", "hi");
 | `agents.trigger(id)` | `AgentTriggerResult` | Trigger agent execution |
 | `agents.query(id)` | `AgentQueryResult` | Query agent state |
 | `agents.info(id)` | `AgentInfoResult` | Get agent info |
+| `agents.listSessions(id, options?)` | `AgentSessionListResult` | Page sessions (job-free) |
+| `agents.sessionInfo(id, sessionId)` | `AgentSessionRecord \| null` | Read one session (job-free) |
 | `agents.suspend(id)` | `AgentSuspendResult` | Suspend an agent |
 | `agents.resume(id, autoWake?)` | `AgentSuspendResult` | Resume an agent |
 | `agents.update(input)` | `any` | Update agent config/state |
@@ -500,8 +504,6 @@ const byKind = await venue.workspace.aggregate("w/my-app/events", { depth: 2, gr
 | `workspace.count(path, {depth?})` | `WorkspaceCountResult` | Count entries at a depth (job-free) |
 | `workspace.aggregate(path, {depth?, groupBy?})` | `WorkspaceAggregateResult` | Count, optionally grouped by a field (job-free) |
 | `workspace.copy(from, to)` | `WorkspaceCopyResult` | Copy a value between paths (job) |
-
----
 
 ### Secrets — `venue.secrets`
 

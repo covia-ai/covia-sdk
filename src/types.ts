@@ -355,6 +355,42 @@ export interface AgentInfoResult {
   error?: string;
 }
 
+/** Metadata stored on a conversational agent session. Venues may add fields. */
+export interface AgentSessionMetadata {
+  id?: string;
+  parties?: string[];
+  title?: string;
+  status?: string;
+  created?: number;
+  started?: number;
+  lastActivity?: number;
+  turns?: number;
+  turnCount?: number;
+  [key: string]: unknown;
+}
+
+/** A session record read directly from `g/<agentId>/sessions`. */
+export interface AgentSessionRecord {
+  sessionId: string;
+  meta: AgentSessionMetadata;
+  pending: unknown[];
+  frames: unknown[];
+  wakeTime?: number;
+  /** Complete venue value, retained for adapter-specific session fields. */
+  value: Record<string, unknown>;
+}
+
+export interface AgentSessionListOptions {
+  offset?: number;
+  limit?: number;
+}
+
+export interface AgentSessionListResult {
+  sessions: AgentSessionRecord[];
+  count: number;
+  offset: number;
+}
+
 export interface AgentForkInput {
   sourceId: string;
   agentId: string;

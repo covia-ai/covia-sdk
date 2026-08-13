@@ -6,6 +6,12 @@ its own SemVer track (independent of the venue/platform version).
 
 ## Unreleased
 
+### Added
+
+- **Agent session reads** — paginated `listSessions` and `sessionInfo` methods
+  on both `AgentManager` and bound `Agent` handles, backed by job-free workspace
+  reads of `g/<agent>/sessions`.
+
 ### Changed
 
 - Removed deployment-specific venue hostnames, a hard-coded asset hash, and a
