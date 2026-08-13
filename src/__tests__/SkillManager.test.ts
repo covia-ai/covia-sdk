@@ -1,5 +1,6 @@
 import type { Asset } from '../Asset';
 import { SkillManager } from '../SkillManager';
+import { CoviaError } from '../types';
 
 function asset(id: string, metadata: Record<string, unknown> = {}): Asset {
   return { id, metadata } as unknown as Asset;
@@ -62,6 +63,33 @@ describe('SkillManager', () => {
 
     await expect(new SkillManager(venue).list('w/skills')).resolves.toEqual([]);
     expect(venue.assets.get).not.toHaveBeenCalled();
+  });
+
+  it('throws when the venue returns a page that does not advance', async () => {
+    // A venue/proxy that ignores the offset param must not loop forever.
+    const venue = createVenue();
+    venue.workspace.list.mockResolvedValue({
+      exists: true,
+      type: 'Map',
+      count: 300,
+      offset: 0,
+      keys: ['a', 'b'],
+    });
+    venue.assets.get.mockImplementation((path: string) => Promise.resolve(asset(path)));
+
+    await expect(new SkillManager(venue).list('w/skills')).rejects.toThrow(
+      /did not advance/,
+    );
+  });
+
+  it('throws when the listing vanishes mid-pagination instead of discarding collected skills', async () => {
+    const venue = createVenue();
+    venue.workspace.list
+      .mockResolvedValueOnce({ exists: true, type: 'Map', count: 200, offset: 0, keys: ['a'] })
+      .mockResolvedValueOnce({ exists: false, type: 'Missing' });
+    venue.assets.get.mockImplementation((path: string) => Promise.resolve(asset(path)));
+
+    await expect(new SkillManager(venue).list('w/skills')).rejects.toThrow(CoviaError);
   });
 
   it('gets exactly one asset without interpreting its metadata or content', async () => {

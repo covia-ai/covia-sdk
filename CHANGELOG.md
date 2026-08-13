@@ -6,6 +6,24 @@ its own SemVer track (independent of the venue/platform version).
 
 ## 1.9.0
 
+### Security
+
+- **Connect no longer sends credentials to unverified hosts.** The connect-time
+  status probe is anonymous again (as in 1.8.0): candidate hosts (typo'd DNS,
+  http fallback) receive no `Authorization` header of any kind. The first
+  authenticated request is made by the returned venue, with the token audience
+  bound to the DID pinned at validation.
+- **`Ed25519Auth` refuses to mint an unbound token.** A JWT without an `aud`
+  claim is replayable at any venue that accepts the caller's DID; `apply()` now
+  throws if no venue audience is known. Connect via `Grid.connect()` /
+  `Venue.connect()` (which pins the venue DID), or pin `auth.audience`
+  explicitly for hand-constructed venues.
+- **A URL connect can no longer claim a DID's cache slot.** `Grid` registers a
+  venue's reported DID as a cache alias only when the caller connected by that
+  DID (resolved and identity-asserted); a URL connect's self-reported DID is
+  trust-on-first-use and no longer aliases, so a later connect by DID always
+  performs full resolution and identity checking.
+
 ### Added
 
 - **Asset-based skill access** — `venue.skills.list(path)` returns the ordinary
@@ -50,6 +68,21 @@ its own SemVer track (independent of the venue/platform version).
   fail before publication, stable releases always use `latest`, and release
   candidates are distributed as `pnpm pack` tarballs rather than persistent
   registry aliases.
+- `assets.clearCache()` now clears only the in-memory cache; purging a
+  configured persistent metadata store is the new, explicit
+  `assets.clearPersistentCache()`. `venue.close()` accordingly no longer wipes
+  the persistent store — entries are content-addressed and immutable, so they
+  remain valid across sessions. Call `clearPersistentCache()` at sign-out if
+  the store must be emptied.
+- Reads that exceed the venue's single-read cap are no longer misreported:
+  a truncated `getSession` read assembles the session from per-field reads and
+  a truncated `memory.list` pages entries through `slice`, instead of
+  reporting "session not found" / an empty memory list.
+- Requests without a body no longer send a default `Content-Type` header, so
+  browser GETs stay simple CORS requests (no per-call preflight).
+- `Ed25519Auth.fromHex` / `hexToPrivateKey` now validate the stored key
+  (exactly 64 hex chars, optional `0x` prefix) instead of silently deriving a
+  different identity from corrupted input.
 
 ## 1.8.0
 

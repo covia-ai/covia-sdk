@@ -1,5 +1,5 @@
 import { Asset } from './Asset';
-import { AssetMetadata, WorkspaceListResult } from './types';
+import { AssetMetadata, CoviaError, WorkspaceListResult } from './types';
 
 /** Agent behaviour optionally attached to otherwise ordinary asset metadata. */
 export interface SkillFacet {
@@ -45,7 +45,13 @@ export class SkillManager {
 
     for (;;) {
       const page = await this.venue.workspace.list(location, PAGE_SIZE, offset);
-      if (!page.exists) return [];
+      // An absent location means "no skills" — but only on the first page.
+      // Once entries have been collected, a vanishing page is a venue fault
+      // and must not silently discard what was already listed.
+      if (!page.exists) {
+        if (skills.length === 0) return [];
+        throw new CoviaError(`Skill listing at ${location} disappeared mid-listing`);
+      }
 
       const keys = page.keys ?? [];
       const assets = await Promise.all(
@@ -55,6 +61,11 @@ export class SkillManager {
 
       const nextOffset = (page.offset ?? offset) + keys.length;
       if (keys.length === 0 || nextOffset >= (page.count ?? nextOffset)) break;
+      // A venue/proxy that ignores the offset param would otherwise loop
+      // forever re-fetching the same page (cf. the JobManager guard).
+      if (nextOffset <= offset) {
+        throw new CoviaError('Venue returned a skills page that did not advance');
+      }
       offset = nextOffset;
     }
 

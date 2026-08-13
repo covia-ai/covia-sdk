@@ -57,6 +57,31 @@ describe('private-jobs mode', () => {
     expect(mockFetch).not.toHaveBeenCalled();            // refused before any request
   });
 
+  it('per-call { private: false } opts out of connection-wide private mode', async () => {
+    // run() and invoke() must agree on precedence: an explicit per-call
+    // option (true OR false) overrides the deprecated venue-wide flag.
+    const v = venueWith({ id: 'j1', status: 'COMPLETE', output: { answer: 7 } });
+    v.setPrivate(true);
+    const out = await v.operations.run<any>('v/test/ops/echo', { x: 1 }, { private: false });
+    expect(out.answer).toBe(7);
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.private).toBeUndefined();                // took the normal invoke path
+    expect(body.wait).toBeUndefined();
+  });
+
+  it('invoke() honours a per-call { private: false } opt-out under private mode', async () => {
+    const v = venueWith({ id: 'j1', status: 'COMPLETE', output: {} });
+    v.setPrivate(true);
+    const job = await v.operations.invoke('v/test/ops/echo', {}, { private: false });
+    expect(job.id).toBe('j1');
+  });
+
+  it('POST requests still default Content-Type to application/json', async () => {
+    const v = venueWith({ id: 'j1', status: 'COMPLETE', output: {} });
+    await v.operations.invoke('v/test/ops/echo', {});
+    expect(mockFetch.mock.calls[0][1].headers['Content-Type']).toBe('application/json');
+  });
+
   it('setPrivate(false) restores normal invoke', async () => {
     const v = venueWith({ id: 'j1', status: 'COMPLETE', output: {} });
     v.setPrivate(true);

@@ -37,11 +37,20 @@ export function privateKeyToHex(key: Uint8Array): string {
 
 /**
  * Convert a hex string back to a private key Uint8Array.
+ *
+ * Strict by design: this is an identity primitive that round-trips through
+ * storage, and lax parsing would turn a corrupted stored key into a
+ * *different valid key* (a new DID) with no error. Accepts exactly 64 hex
+ * chars, with an optional `0x` prefix.
  */
 export function hexToPrivateKey(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
+  const cleaned = hex.startsWith('0x') || hex.startsWith('0X') ? hex.slice(2) : hex;
+  if (!/^[0-9a-fA-F]{64}$/.test(cleaned)) {
+    throw new Error('Invalid Ed25519 private key: expected 64 hex characters (32 bytes)');
+  }
+  const bytes = new Uint8Array(32);
   for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+    bytes[i] = parseInt(cleaned.substring(i * 2, i * 2 + 2), 16);
   }
   return bytes;
 }

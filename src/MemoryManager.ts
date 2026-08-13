@@ -4,21 +4,18 @@ import {
   MemoryEntry,
   OperationRunner,
   WorkspaceReadResult,
+  WorkspaceSliceResult,
 } from './types';
+import { record, sliceAll } from './values-util';
 
 const DEFAULT_MEMORY_PATH = 'w/memory';
 
 interface MemoryManagerVenue {
   workspace: {
     read(path: string, maxSize?: number): Promise<WorkspaceReadResult>;
+    slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult>;
   };
   operations: OperationRunner;
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
 }
 
 function memoryChange(value: unknown): MemoryChange {
@@ -40,13 +37,23 @@ export class MemoryManager {
    */
   async list(path = DEFAULT_MEMORY_PATH): Promise<MemoryEntry[]> {
     const result = await this.venue.workspace.read(path);
-    if (!result.exists || result.value === undefined || result.value === null) {
+    if (!result.exists) {
       return [];
     }
-    if (!Array.isArray(result.value)) {
+    let raw: unknown[];
+    if (result.truncated) {
+      // The list exceeds the venue's single-read cap, so `value` was
+      // withheld — the memory exists and must not be misreported as empty.
+      // Page it through slice instead.
+      raw = await sliceAll(this.venue.workspace, path);
+    } else if (result.value === undefined || result.value === null) {
+      return [];
+    } else if (Array.isArray(result.value)) {
+      raw = result.value;
+    } else {
       throw new CoviaError(`Memory at ${path} is not a flat list`);
     }
-    const entries = result.value.map((value, index): MemoryEntry => {
+    const entries = raw.map((value, index): MemoryEntry => {
       const item = record(value);
       const text = typeof value === 'string'
         ? value

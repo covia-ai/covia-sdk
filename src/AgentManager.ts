@@ -1,5 +1,7 @@
 import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, OperationRunner, NotFoundError, StatusData, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
+import { ROUTE_MISSING_404, versionAtLeast } from './venue-features';
+import { record, sliceAll } from './values-util';
 
 interface AgentManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
@@ -8,12 +10,6 @@ interface AgentManagerVenue extends VenueRequestContext {
     slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult>;
   };
   lastKnownStatus?: StatusData;
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
 }
 
 function sessionRecord(sessionId: string, value: unknown): AgentSession {
@@ -26,15 +22,6 @@ function sessionRecord(sessionId: string, value: unknown): AgentSession {
     frames: Array.isArray(session.frames) ? session.frames : [],
     wakeTime: typeof session.wakeTime === 'number' ? session.wakeTime : undefined,
   };
-}
-
-/** Whether a venue version string is at least `major.minor`. Unparseable → true
- *  (optimistic — the 404 probe corrects a wrong yes; a wrong no never recovers). */
-function versionAtLeast(version: string | undefined, major: number, minor: number): boolean {
-  const m = version?.match(/^(\d+)\.(\d+)/);
-  if (!m) return true;
-  const [maj, min] = [Number(m[1]), Number(m[2])];
-  return maj > major || (maj === major && min >= minor);
 }
 
 export class AgentManager {
@@ -78,7 +65,7 @@ export class AgentManager {
         // ~1k persisted jobs/hour. Only the bare list route (no per-resource
         // 404 possible) or the distinctive unmapped-endpoint body proves the
         // route is absent; a per-resource 404 propagates to the caller.
-        const routeMissing = path === '' || /\bEndpoint (GET|POST|PUT|DELETE|PATCH|HEAD) /.test(e.message);
+        const routeMissing = path === '' || ROUTE_MISSING_404.test(e.message);
         if (!routeMissing) throw e;
         this.agentsGetSupported = false;
       }
@@ -197,11 +184,36 @@ export class AgentManager {
 
   /** Read one agent session directly from the workspace Values surface. */
   async getSession(agentId: string, sessionId: string): Promise<AgentSession> {
-    const result = await this.venue.workspace.read(`g/${agentId}/sessions/${sessionId}`);
-    if (!result.exists || result.value === undefined || result.value === null) {
+    const path = `g/${agentId}/sessions/${sessionId}`;
+    const result = await this.venue.workspace.read(path);
+    if (!result.exists) {
+      throw new AgentSessionNotFoundError(agentId, sessionId);
+    }
+    // A session over the venue's single-read cap answers {exists:true,
+    // truncated:true} with `value` withheld — it is present, not missing.
+    // Assemble it from per-field reads (frames/pending are the growing parts).
+    if (result.truncated) {
+      return this._readLargeSession(path, sessionId);
+    }
+    if (result.value === undefined || result.value === null) {
       throw new AgentSessionNotFoundError(agentId, sessionId);
     }
     return sessionRecord(sessionId, result.value);
+  }
+
+  private async _readLargeSession(path: string, sessionId: string): Promise<AgentSession> {
+    const [meta, wakeTime, pending, frames] = await Promise.all([
+      this.venue.workspace.read(`${path}/meta`),
+      this.venue.workspace.read(`${path}/wakeTime`),
+      sliceAll(this.venue.workspace, `${path}/pending`),
+      sliceAll(this.venue.workspace, `${path}/frames`),
+    ]);
+    return sessionRecord(sessionId, {
+      meta: meta.exists ? (meta.value as unknown) : undefined,
+      wakeTime: wakeTime.exists ? (wakeTime.value as unknown) : undefined,
+      pending,
+      frames,
+    });
   }
 
   async fork(input: AgentForkInput): Promise<AgentForkResult> {

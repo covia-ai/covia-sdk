@@ -1,4 +1,4 @@
-import { OperationInfo, InvokeOptions, JobMetadata, VenueInterface, CoviaError, JobFailedError, RunStatus } from './types';
+import { OperationInfo, InvokeOptions, JobMetadata, VenueInterface, CoviaError, JobFailedError, NotFoundError, RunStatus } from './types';
 import { isJobComplete, isJobFinished } from './Utils';
 import { Job } from './Job';
 import { venueJson, VenueRequestContext } from './VenueTransport';
@@ -71,6 +71,10 @@ export class OperationManager {
       const job = new Job(rec.id ?? '', this.venue as unknown as VenueInterface, rec);
       return (await job.result()) as T;
     } catch (e) {
+      // Only a vanished record means "completed while unobserved". A job that
+      // genuinely failed, timed out, or hit a transport error must surface as
+      // itself, not be misreported as an invisible success.
+      if (!(e instanceof NotFoundError)) throw e;
       throw new CoviaError(
         'Private job completed while unobserved — its record is already forgotten, so the ' +
         'result could not be collected. Private jobs that outlive the venue wait window ' +
@@ -85,7 +89,9 @@ export class OperationManager {
    * @param options - Invoke options (e.g., ucans)
    */
   async invoke(assetId: string, input?: unknown, options?: InvokeOptions): Promise<Job> {
-    if (options?.private || this.venue.privateJobs) {
+    // Same precedence rule as run(): an explicit per-call `private` (true OR
+    // false) overrides the deprecated connection-wide flag.
+    if (options?.private ?? this.venue.privateJobs) {
       throw new CoviaError(
         'Private-jobs mode requires run(): a completed private job is immediately forgotten ' +
         'by the venue, so a poll-style Job cannot collect its result.');

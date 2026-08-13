@@ -10,7 +10,10 @@ export interface VenueRequestContext {
 
 export type VenueRequestInit = Omit<RequestInit, 'headers'> & {
   headers?: Record<string, string>;
-  /** Defaults to application/json. Pass null for binary bodies. */
+  /** Defaults to application/json on requests WITH a body; bodiless requests
+   *  send no Content-Type (in browsers it makes every GET a non-simple CORS
+   *  request, forcing a preflight per call on the hottest read paths).
+   *  Pass null to suppress it on binary bodies. */
   contentType?: string | null;
 };
 
@@ -19,13 +22,16 @@ function requestOptions(
   options: VenueRequestInit,
 ): RequestInit {
   const {
-    contentType = 'application/json',
+    contentType,
     headers: suppliedHeaders = {},
     ...request
   } = options;
   const headers = { ...suppliedHeaders };
-  if (contentType && headers['Content-Type'] === undefined) {
-    headers['Content-Type'] = contentType;
+  const effectiveContentType = contentType !== undefined
+    ? contentType
+    : (request.body != null ? 'application/json' : null);
+  if (effectiveContentType && headers['Content-Type'] === undefined) {
+    headers['Content-Type'] = effectiveContentType;
   }
   venue.auth.apply(headers, venue.venueId);
   return { ...request, headers };

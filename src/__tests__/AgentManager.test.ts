@@ -244,6 +244,38 @@ describe('AgentManager', () => {
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
+  it('assembles a truncated session from per-field reads instead of reporting not-found', async () => {
+    // A session over the venue's single-read cap answers {exists, truncated}
+    // with the value withheld — it exists and must not surface as missing.
+    venue.workspace.read.mockImplementation((path: string) => {
+      if (path === 'g/a1/sessions/big') {
+        return Promise.resolve({ exists: true, truncated: true, type: 'Map', valueBytes: 2_000_000 });
+      }
+      if (path === 'g/a1/sessions/big/meta') {
+        return Promise.resolve({ exists: true, value: { title: 'Big' } });
+      }
+      if (path === 'g/a1/sessions/big/wakeTime') {
+        return Promise.resolve({ exists: true, value: 1234 });
+      }
+      return Promise.resolve({ exists: false });
+    });
+    venue.workspace.slice.mockImplementation((path: string) => {
+      if (path === 'g/a1/sessions/big/frames') {
+        return Promise.resolve({ exists: true, count: 2, offset: 0, values: [{ n: 1 }, { n: 2 }] });
+      }
+      return Promise.resolve({ exists: false });
+    });
+
+    await expect(agents.getSession('a1', 'big')).resolves.toMatchObject({
+      id: 'big',
+      metadata: { title: 'Big' },
+      wakeTime: 1234,
+      pending: [],
+      frames: [{ n: 1 }, { n: 2 }],
+    });
+    expect(venue.operations.run).not.toHaveBeenCalled();
+  });
+
   it('fork calls v/ops/agent/fork', async () => {
     await agents.fork({ sourceId: 'a1', agentId: 'a2', includeTimeline: true });
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/fork', { sourceId: 'a1', agentId: 'a2', includeTimeline: true });

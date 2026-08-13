@@ -1,5 +1,5 @@
 import { WorkspaceManager } from '../WorkspaceManager';
-import { UnsupportedVenueFeatureError } from '../types';
+import { NotFoundError, UnsupportedVenueFeatureError } from '../types';
 
 // Reads are job-free GETs to /api/v1/values/* (covia #177); writes stay on the
 // invoke/job path. So the tests split: fetch is mocked for the GET read surface,
@@ -209,6 +209,30 @@ describe('WorkspaceManager', () => {
     (venue as any).lastKnownStatus = { version: '0.2.5' };          // e.g. venue.status() resolved
     await expect(ws.read('w/second')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
     expect(mockFetch).toHaveBeenCalledTimes(1);                     // no second GET
+    expect(venue.operations.run).not.toHaveBeenCalled();
+  });
+
+  it('bodiless GETs carry no Content-Type (keeps browser CORS requests simple)', async () => {
+    okJson({ exists: true, value: 1 });
+    await ws.read('w/mydata');
+    expect(mockFetch.mock.calls[0][1].headers['Content-Type']).toBeUndefined();
+  });
+
+  it('a stray 404 without the unmapped-endpoint body propagates and does not latch', async () => {
+    // A reverse proxy or mid-deploy gateway can 404 a perfectly good route.
+    // Only the venue's distinctive "Endpoint GET ... not found" body proves
+    // the route is absent; anything else must not permanently downgrade
+    // every workspace read on this connection.
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: () => Promise.resolve('<html>proxy: no upstream</html>'),
+    });
+    await expect(ws.read('w/first')).rejects.toBeInstanceOf(NotFoundError);
+
+    okJson({ exists: true, value: 42 });
+    await expect(ws.read('w/second')).resolves.toMatchObject({ value: 42 });
+    expect(mockFetch).toHaveBeenCalledTimes(2);                     // still on the GET path
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 

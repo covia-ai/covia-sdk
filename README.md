@@ -25,13 +25,13 @@ yarn add @covia/covia-sdk
 ## Quick Start
 
 ```typescript
-import { Grid, KeyPairAuth } from "@covia/covia-sdk";
+import { Grid, Ed25519Auth } from "@covia/covia-sdk";
 
 // Connect to a venue (URL, DNS name, or DID)
 const venue = await Grid.connect("https://your-venue.example.com");
 
 // Or connect with keypair authentication
-const auth = KeyPairAuth.generate();
+const auth = Ed25519Auth.generate();
 const venue = await Grid.connect("did:web:your-venue.example.com", auth);
 
 // Run an operation and get the result
@@ -65,7 +65,7 @@ venue.close();
 The SDK supports three connection methods:
 
 ```typescript
-import { Grid, Venue, KeyPairAuth, BearerAuth } from "@covia/covia-sdk";
+import { Grid, Venue, Ed25519Auth, BearerAuth } from "@covia/covia-sdk";
 
 // Via Grid (cached — same ID returns the same Venue instance)
 const venue = await Grid.connect("https://your-venue.example.com");
@@ -83,12 +83,12 @@ const venue = await Venue.connect("https://your-venue.example.com");
 const venue = await Grid.connect("https://your-venue.example.com");
 
 // Ed25519 keypair (self-issued JWT per request)
-const auth = KeyPairAuth.generate();
+const auth = Ed25519Auth.generate();
 console.log(auth.getDID()); // did:key:z6Mk...
 const venue = await Grid.connect("https://your-venue.example.com", auth);
 
 // From a saved private key
-const auth = KeyPairAuth.fromHex("abcdef1234...");
+const auth = Ed25519Auth.fromHex("abcdef1234...");
 
 // Bearer token
 const auth = new BearerAuth("my-api-token");
@@ -377,7 +377,6 @@ const mina = venue.agent("Mina");
 const response = await mina.request({ text: "hello" });
 await mina.message({ event: "update" });
 await mina.trigger();
-const state = await mina.query();
 const info = await mina.info();
 
 // Session-scoped chat — ChatSession manages the sessionId for you
@@ -410,7 +409,6 @@ const clone = await mina.fork("Mina-v2", { includeTimeline: true });
 | `agent.chat(message, sessionId?)` | `AgentChatResult` | Single chat call (manual sessionId) |
 | `agent.chatSession(sessionId?)` | `ChatSession` | Create a session that manages sessionId |
 | `agent.trigger()` | `AgentTriggerResult` | Trigger agent execution |
-| `agent.query()` | `AgentQueryResult` | Query agent state |
 | `agent.info()` | `AgentInfoResult` | Get agent info |
 | `agent.listSessions(options?)` | `AgentSessionPage` | Page sessions (job-free) |
 | `agent.getSession(sessionId)` | `AgentSession` | Get one session (job-free) |
@@ -452,7 +450,6 @@ await venue.agents.chat("my-agent", "hi");
 | `agents.message(id, message)` | `AgentMessageResult` | Send a message |
 | `agents.chat(id, message, sessionId?)` | `AgentChatResult` | Session-scoped chat |
 | `agents.trigger(id)` | `AgentTriggerResult` | Trigger agent execution |
-| `agents.query(id)` | `AgentQueryResult` | Query agent state |
 | `agents.info(id)` | `AgentInfoResult` | Get agent info |
 | `agents.listSessions(id, options?)` | `AgentSessionPage` | Page sessions (job-free) |
 | `agents.getSession(id, sessionId)` | `AgentSession` | Get one session (job-free) |
@@ -486,8 +483,8 @@ const data = await venue.workspace.read("w/my-app/config");
 await venue.workspace.append("w/my-app/log", "new entry");
 await venue.workspace.delete("w/my-app/config");
 
-// List and slice
-const entries = await venue.workspace.list("w/my-app/log", 100, 0);
+// List (map keys) and slice (sequence elements)
+const entries = await venue.workspace.list("w/my-app/config", 100, 0);
 const slice = await venue.workspace.slice("w/my-app/log", 0, 10);
 
 // Server-side tallies — count / group-by without reading every record
@@ -711,10 +708,35 @@ import {
   AdapterManager, AssetManager, OperationManager, JobManager,
   AgentManager, WorkspaceManager, SecretManager, UCANManager, SkillManager,
   MemoryManager,
-  KeyPairAuth, BearerAuth,
+  Ed25519Auth, BearerAuth,
   RunStatus, CoviaError,
 } from "@covia/covia-sdk";
 ```
+
+## Upgrading from 1.8
+
+1.9.0 keeps every exported signature compatible, but three behaviours changed
+deliberately:
+
+- **Reads never create jobs — and no longer fall back to the job path.**
+  In 1.8.x, workspace reads with UCAN proofs, multi-path `inspect`, and
+  `agents.list()`/`info()` on older venues silently fell back to invoking an
+  operation, persisting a Job per read. These calls now throw
+  `UnsupportedVenueFeatureError` instead. If creating a persisted job is
+  genuinely intended, invoke the corresponding operation explicitly
+  (e.g. `operations.run("v/ops/covia/read", ...)`).
+- **`Ed25519Auth` requires a venue audience.** Tokens are always bound to the
+  venue's DID (`aud` claim) so they cannot be replayed at another venue.
+  Connect via `Grid.connect()` / `Venue.connect()` and this happens
+  automatically; hand-constructed `new Venue({...})` usage must either call
+  `venue.status()`-style validation first or pin `auth.audience` explicitly.
+  Connect-time probing itself is anonymous — credentials are only ever sent to
+  a venue whose identity has been pinned.
+- **`assets.clearCache()` clears only the in-memory cache.** Purging a
+  configured persistent metadata store (e.g. localStorage) is the new
+  `assets.clearPersistentCache()`. Cached entries are content-addressed and
+  immutable, so keeping them across sessions is safe; call
+  `clearPersistentCache()` at sign-out if your app must empty the store.
 
 ## Resources
 

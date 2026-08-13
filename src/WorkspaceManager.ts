@@ -5,19 +5,11 @@ import {
   UnsupportedVenueFeatureError,
 } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
+import { ROUTE_MISSING_404, versionAtLeast } from './venue-features';
 
 interface WorkspaceManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
   lastKnownStatus?: StatusData;
-}
-
-/** Whether a venue version string is at least `major.minor`. Unparseable → true
- *  (optimistic — the 404 probe corrects a wrong yes; a wrong no never recovers). */
-function versionAtLeast(version: string | undefined, major: number, minor: number): boolean {
-  const m = version?.match(/^(\d+)\.(\d+)/);
-  if (!m) return true;
-  const [maj, min] = [Number(m[1]), Number(m[2])];
-  return maj > major || (maj === major && min >= minor);
 }
 
 /**
@@ -81,6 +73,13 @@ export class WorkspaceManager {
         return await this._values<T>(op, params);
       } catch (e) {
         if (!(e instanceof NotFoundError)) throw e;
+        // An absent PATH answers {exists:false} with status 200, so a mapped
+        // values route never 404s per-resource — but a reverse proxy or
+        // mid-deploy gateway can. Only the distinctive unmapped-endpoint body
+        // proves the route is absent (pre-0.3 venue) and may latch it off for
+        // this connection; any other 404 propagates (cf. AgentManager,
+        // covia#180 — a stray 404 must not permanently downgrade all reads).
+        if (!ROUTE_MISSING_404.test(e.message)) throw e;
         this.valuesSupported = false;
       }
     }
@@ -90,7 +89,7 @@ export class WorkspaceManager {
   // ── job-free reads (#177) ───────────────────────────────────────────────────
 
   async read(path: string, maxSize?: number, ucans?: string[]): Promise<WorkspaceReadResult> {
-    if (ucans?.length) return this.unsupported('UCAN-authorized workspace reads');
+    if (ucans?.length) return this.unsupported('UCAN-authorised workspace reads');
     return this.valuesRead('read', { path, maxSize });
   }
 
@@ -99,19 +98,19 @@ export class WorkspaceManager {
     // root/undefined list normalises to "/" and stays job-free — previously it
     // was forced onto the op path, minting a Job for every root listing.
     path = path || '/';
-    if (ucans?.length) return this.unsupported('UCAN-authorized workspace listings');
+    if (ucans?.length) return this.unsupported('UCAN-authorised workspace listings');
     return this.valuesRead('list', { path, limit, offset });
   }
 
   async slice(path: string, offset?: number, limit?: number, ucans?: string[]): Promise<WorkspaceSliceResult> {
-    if (ucans?.length) return this.unsupported('UCAN-authorized workspace slices');
+    if (ucans?.length) return this.unsupported('UCAN-authorised workspace slices');
     return this.valuesRead('slice', { path, offset, limit });
   }
 
   async inspect(paths: string | string[], budget?: number, compact?: boolean, ucans?: string[]): Promise<WorkspaceInspectResult> {
     // The GET route renders a single path; multi-path (or proof tokens) use the op.
     if (ucans?.length || Array.isArray(paths)) return this.unsupported(
-      Array.isArray(paths) ? 'multi-path workspace inspection' : 'UCAN-authorized workspace inspection',
+      Array.isArray(paths) ? 'multi-path workspace inspection' : 'UCAN-authorised workspace inspection',
     );
     return this.valuesRead('inspect', { path: paths, budget, compact });
   }
@@ -126,7 +125,7 @@ export class WorkspaceManager {
    */
   async count(path: string, opts: { depth?: number; ucans?: string[] } = {}): Promise<WorkspaceCountResult> {
     const { depth, ucans } = opts;
-    if (ucans?.length) return this.unsupported('UCAN-authorized workspace counts');
+    if (ucans?.length) return this.unsupported('UCAN-authorised workspace counts');
     return this.valuesRead('count', { path, depth });
   }
 
@@ -140,7 +139,7 @@ export class WorkspaceManager {
    */
   async aggregate(path: string, opts: { depth?: number; groupBy?: string; ucans?: string[] } = {}): Promise<WorkspaceAggregateResult> {
     const { depth, groupBy, ucans } = opts;
-    if (ucans?.length) return this.unsupported('UCAN-authorized workspace aggregation');
+    if (ucans?.length) return this.unsupported('UCAN-authorised workspace aggregation');
     return this.valuesRead('aggregate', { path, depth, groupBy });
   }
 

@@ -4,6 +4,7 @@ function createVenue(value: unknown = undefined, exists = true) {
   return {
     workspace: {
       read: jest.fn().mockResolvedValue({ exists, value }),
+      slice: jest.fn().mockResolvedValue({ exists: false }),
     },
     operations: {
       run: jest.fn().mockResolvedValue({}),
@@ -37,6 +38,23 @@ describe('MemoryManager', () => {
         updatedAt: undefined,
       },
     ]);
+  });
+
+  it('pages a truncated memory list through slice instead of reporting it empty', async () => {
+    // A memory list over the venue's single-read cap answers {exists,
+    // truncated} with the value withheld — it must not read as "no memory".
+    const venue = createVenue();
+    venue.workspace.read.mockResolvedValue({ exists: true, truncated: true, type: 'List' });
+    venue.workspace.slice
+      .mockResolvedValueOnce({ exists: true, count: 3, offset: 0, values: ['one', 'two'] })
+      .mockResolvedValueOnce({ exists: true, count: 3, offset: 2, values: ['three'] });
+    const memory = new MemoryManager(venue);
+
+    const result = await memory.list();
+
+    expect(result.map((entry) => entry.text)).toEqual(['one', 'two', 'three']);
+    expect(venue.workspace.slice).toHaveBeenCalledTimes(2);
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('treats an absent memory path as an empty list', async () => {
