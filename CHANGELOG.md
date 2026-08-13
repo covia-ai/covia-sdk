@@ -4,7 +4,7 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
-## Unreleased
+## 1.9.0
 
 ### Added
 
