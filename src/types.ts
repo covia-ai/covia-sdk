@@ -372,14 +372,12 @@ export interface AgentSessionMetadata {
 }
 
 /** A session record read directly from `g/<agentId>/sessions`. */
-export interface AgentSessionRecord {
-  sessionId: string;
-  meta: AgentSessionMetadata;
+export interface AgentSession {
+  id: string;
+  metadata: AgentSessionMetadata;
   pending: unknown[];
   frames: unknown[];
   wakeTime?: number;
-  /** Complete venue value, retained for adapter-specific session fields. */
-  value: Record<string, unknown>;
 }
 
 export interface AgentSessionListOptions {
@@ -387,10 +385,11 @@ export interface AgentSessionListOptions {
   limit?: number;
 }
 
-export interface AgentSessionListResult {
-  sessions: AgentSessionRecord[];
-  count: number;
+export interface AgentSessionPage {
+  items: AgentSession[];
+  total: number;
   offset: number;
+  limit: number;
 }
 
 export interface AgentForkInput {
@@ -832,5 +831,16 @@ export class JobNotFoundError extends NotFoundError {
     super(`Job not found: ${jobId}`);
     this.name = 'JobNotFoundError';
     this.jobId = jobId;
+  }
+}
+
+/** Raised when an exact agent-session lookup finds no session. */
+export class AgentSessionNotFoundError extends CoviaError {
+  constructor(
+    public readonly agentId: string,
+    public readonly sessionId: string,
+  ) {
+    super(`Agent session not found: ${agentId}/${sessionId}`, 404);
+    this.name = 'AgentSessionNotFoundError';
   }
 }

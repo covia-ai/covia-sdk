@@ -1,5 +1,5 @@
 import { AgentManager } from '../AgentManager';
-import { UnsupportedVenueFeatureError } from '../types';
+import { AgentSessionNotFoundError, UnsupportedVenueFeatureError } from '../types';
 
 // list/info are job-free GETs to /api/v1/agents (covia #180); everything else
 // stays on the invoke/job path. Fetch is mocked for the GET surface,
@@ -216,26 +216,27 @@ describe('AgentManager', () => {
     expect(venue.workspace.slice).toHaveBeenCalledWith('g/a1/sessions', 1, 1);
     expect(venue.operations.run).not.toHaveBeenCalled();
     expect(result).toMatchObject({
-      count: 3,
+      total: 3,
       offset: 1,
-      sessions: [{
-        sessionId: 'sess-1',
-        meta: { title: 'Planning', turns: 2 },
+      limit: 1,
+      items: [{
+        id: 'sess-1',
+        metadata: { title: 'Planning', turns: 2 },
         pending: [{ message: 'next' }],
         wakeTime: 1750000000000,
       }],
     });
   });
 
-  it('reads one session job-free and returns null when absent', async () => {
+  it('gets one session job-free and throws a typed error when absent', async () => {
     venue.workspace.read
       .mockResolvedValueOnce({ exists: true, value: { meta: { title: 'One' }, pending: [] } })
       .mockResolvedValueOnce({ exists: false });
 
-    await expect(agents.sessionInfo('a1', 'sess-1')).resolves.toMatchObject({
-      sessionId: 'sess-1', meta: { title: 'One' }, pending: [], frames: [],
+    await expect(agents.getSession('a1', 'sess-1')).resolves.toMatchObject({
+      id: 'sess-1', metadata: { title: 'One' }, pending: [], frames: [],
     });
-    await expect(agents.sessionInfo('a1', 'missing')).resolves.toBeNull();
+    await expect(agents.getSession('a1', 'missing')).rejects.toBeInstanceOf(AgentSessionNotFoundError);
     expect(venue.workspace.read.mock.calls).toEqual([
       ['g/a1/sessions/sess-1'],
       ['g/a1/sessions/missing'],

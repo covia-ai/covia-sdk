@@ -1,4 +1,4 @@
-import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSessionListOptions, AgentSessionListResult, AgentSessionMetadata, AgentSessionRecord, OperationRunner, NotFoundError, StatusData, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, OperationRunner, NotFoundError, StatusData, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
 
 interface AgentManagerVenue extends VenueRequestContext {
@@ -16,16 +16,15 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function sessionRecord(sessionId: string, value: unknown): AgentSessionRecord {
+function sessionRecord(sessionId: string, value: unknown): AgentSession {
   const session = record(value) ?? {};
   const meta: AgentSessionMetadata | undefined = record(session.meta);
   return {
-    sessionId,
-    meta: meta ?? {},
+    id: sessionId,
+    metadata: meta ?? {},
     pending: Array.isArray(session.pending) ? session.pending : [],
     frames: Array.isArray(session.frames) ? session.frames : [],
     wakeTime: typeof session.wakeTime === 'number' ? session.wakeTime : undefined,
-    value: session,
   };
 }
 
@@ -179,7 +178,7 @@ export class AgentManager {
    * This is a job-free Values read; session adapter-specific fields remain
    * available on each record's `value` while common runtime fields are typed.
    */
-  async listSessions(agentId: string, options: AgentSessionListOptions = {}): Promise<AgentSessionListResult> {
+  async listSessions(agentId: string, options: AgentSessionListOptions = {}): Promise<AgentSessionPage> {
     const result = await this.venue.workspace.slice(
       `g/${agentId}/sessions`, options.offset, options.limit,
     );
@@ -189,16 +188,19 @@ export class AgentManager {
       return [sessionRecord(pair.key, pair.value)];
     });
     return {
-      sessions,
-      count: result.count ?? sessions.length,
+      items: sessions,
+      total: result.count ?? sessions.length,
       offset: result.offset ?? options.offset ?? 0,
+      limit: options.limit ?? sessions.length,
     };
   }
 
   /** Read one agent session directly from the workspace Values surface. */
-  async sessionInfo(agentId: string, sessionId: string): Promise<AgentSessionRecord | null> {
+  async getSession(agentId: string, sessionId: string): Promise<AgentSession> {
     const result = await this.venue.workspace.read(`g/${agentId}/sessions/${sessionId}`);
-    if (!result.exists || result.value === undefined || result.value === null) return null;
+    if (!result.exists || result.value === undefined || result.value === null) {
+      throw new AgentSessionNotFoundError(agentId, sessionId);
+    }
     return sessionRecord(sessionId, result.value);
   }
 

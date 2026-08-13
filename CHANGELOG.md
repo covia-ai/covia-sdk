@@ -14,7 +14,7 @@ its own SemVer track (independent of the venue/platform version).
   application concerns.
 - **Structured user memory** — `venue.memory.list` reads `w/memory` job-free;
   `remember`, `update` and `forget` retain the venue's audited operation path.
-- **Agent session reads** — paginated `listSessions` and `sessionInfo` methods
+- **Agent session reads** — paginated `listSessions` and exact `getSession` methods
   on both `AgentManager` and bound `Agent` handles, backed by job-free workspace
   reads of `g/<agent>/sessions`.
 
@@ -27,6 +27,9 @@ its own SemVer track (independent of the venue/platform version).
 - Simplified memory results: `memory.list()` now returns `MemoryEntry[]`
   directly, entries have required text without a duplicate raw value, and all
   mutations return the same validated `{ number, count }` shape.
+- Simplified agent sessions to `AgentSession` and `AgentSessionPage`: pages use
+  the common `items`/`total`/`offset`/`limit` vocabulary, exact lookup is
+  `getSession()`, and the duplicate raw venue value is no longer exposed.
 - Private jobs are now selected per `operations.run(..., { private: true })`;
   the mutable connection-wide `venue.setPrivate()` switch remains available
   for compatibility but is deprecated.

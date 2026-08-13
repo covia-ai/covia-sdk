@@ -10,8 +10,8 @@ import {
   AgentForkResult,
   AgentDeleteResult,
   AgentSessionListOptions,
-  AgentSessionListResult,
-  AgentSessionRecord,
+  AgentSessionPage,
+  AgentSession,
   VenueInterface,
 } from './types';
 
@@ -29,8 +29,8 @@ interface AgentOps {
   fork(input: AgentForkInput): Promise<AgentForkResult>;
   context(agentId: string, task?: unknown): Promise<string>;
   delete(agentId: string, remove?: boolean): Promise<AgentDeleteResult>;
-  listSessions(agentId: string, options?: AgentSessionListOptions): Promise<AgentSessionListResult>;
-  sessionInfo(agentId: string, sessionId: string): Promise<AgentSessionRecord | null>;
+  listSessions(agentId: string, options?: AgentSessionListOptions): Promise<AgentSessionPage>;
+  getSession(agentId: string, sessionId: string): Promise<AgentSession>;
 }
 
 export class Agent {
@@ -89,13 +89,13 @@ export class Agent {
   }
 
   /** Page this agent's sessions through the job-free workspace Values API. */
-  async listSessions(options?: AgentSessionListOptions): Promise<AgentSessionListResult> {
+  async listSessions(options?: AgentSessionListOptions): Promise<AgentSessionPage> {
     return this._agents.listSessions(this.id, options);
   }
 
   /** Read one session through the job-free workspace Values API. */
-  async sessionInfo(sessionId: string): Promise<AgentSessionRecord | null> {
-    return this._agents.sessionInfo(this.id, sessionId);
+  async getSession(sessionId: string): Promise<AgentSession> {
+    return this._agents.getSession(this.id, sessionId);
   }
 
   /**
