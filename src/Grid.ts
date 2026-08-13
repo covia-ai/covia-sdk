@@ -48,7 +48,6 @@ export class Grid {
       removeEntry(cache, cached);
     }
 
-    const entry = {} as ConnectionEntry;
     const promise = Venue.connect(venueId, auth)
       .then((venue) => {
         entry.venue = venue;
@@ -62,7 +61,7 @@ export class Grid {
         removeEntry(cache, entry);
         throw error;
       });
-    entry = { promise };
+    const entry: ConnectionEntry = { promise };
     cache.set(key, entry);
     return entry.promise;
   }
