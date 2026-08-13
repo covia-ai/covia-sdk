@@ -24,6 +24,9 @@ its own SemVer track (independent of the venue/platform version).
   is unavailable. They now throw `UnsupportedVenueFeatureError`; callers that
   intend to create a persisted job can invoke the corresponding operation
   explicitly.
+- Simplified memory results: `memory.list()` now returns `MemoryEntry[]`
+  directly, entries have required text without a duplicate raw value, and all
+  mutations return the same validated `{ number, count }` shape.
 - Private jobs are now selected per `operations.run(..., { private: true })`;
   the mutable connection-wide `venue.setPrivate()` switch remains available
   for compatibility but is deprecated.

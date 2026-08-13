@@ -535,7 +535,7 @@ Read the conventional `w/memory` vector as structured entries. Reads are
 job-free; edits use the venue memory operation and therefore leave an audit Job.
 
 ```typescript
-const { entries } = await venue.memory.list();
+const entries = await venue.memory.list();
 await venue.memory.remember("Prefers concise answers");
 await venue.memory.update(1, "Prefers concise technical answers");
 await venue.memory.forget(1);

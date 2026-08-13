@@ -565,23 +565,15 @@ export interface WorkspaceAggregateResult {
 export interface MemoryEntry {
   /** 1-based position used by the venue memory mutation operation. */
   number: number;
-  value: unknown;
-  text?: string;
+  text: string;
   createdAt?: number;
   updatedAt?: number;
 }
 
-export interface MemoryListResult {
-  path: string;
-  entries: MemoryEntry[];
-}
-
-export interface MemoryMutationResult {
-  count?: number;
-  n?: number;
-  remembered?: boolean;
-  updated?: boolean;
-  forgotten?: boolean;
+/** Position affected by a memory mutation and the resulting list size. */
+export interface MemoryChange {
+  number: number;
+  count: number;
 }
 
 // ── UCAN Types ──
