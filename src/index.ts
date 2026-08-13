@@ -23,6 +23,8 @@ export { OperationManager } from './OperationManager';
 export { WorkspaceManager } from './WorkspaceManager';
 export { UCANManager } from './UCANManager';
 export { SecretManager } from './SecretManager';
+export { SkillManager } from './SkillManager';
+export type { Skill, SkillFacet, SkillMetadata } from './SkillManager';
 
 // Crypto utilities
 export { generateKeyPair, privateKeyToHex, hexToPrivateKey } from './crypto/keys';

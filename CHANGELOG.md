@@ -8,6 +8,10 @@ its own SemVer track (independent of the venue/platform version).
 
 ### Added
 
+- **Asset-based skill access** — `venue.skills.list(path)` returns the ordinary
+  asset objects at one collection location and `venue.skills.get(path)` returns
+  the ordinary asset at one exact path. Discovery and interpretation remain
+  application concerns.
 - **Agent session reads** — paginated `listSessions` and `sessionInfo` methods
   on both `AgentManager` and bound `Agent` handles, backed by job-free workspace
   reads of `g/<agent>/sessions`.

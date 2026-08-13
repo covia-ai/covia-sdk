@@ -505,6 +505,26 @@ const byKind = await venue.workspace.aggregate("w/my-app/events", { depth: 2, gr
 | `workspace.aggregate(path, {depth?, groupBy?})` | `WorkspaceAggregateResult` | Count, optionally grouped by a field (job-free) |
 | `workspace.copy(from, to)` | `WorkspaceCopyResult` | Copy a value between paths (job) |
 
+### Skills — `venue.skills`
+
+Skills are ordinary assets with optional agent-behaviour metadata. The SDK only
+provides exact location/path access; applications decide how to combine, search
+or prioritise collections.
+
+```typescript
+const skills = await venue.skills.list("w/skills");
+const reviewer = await venue.skills.get("w/skills/reviewer");
+
+reviewer.metadata.name;
+reviewer.metadata.skill?.tools;
+const content = await reviewer.getContent();
+```
+
+`list(path)` follows internal collection pagination and returns the asset objects
+at that location. `get(path)` is the corresponding typed asset lookup.
+
+---
+
 ### Secrets — `venue.secrets`
 
 Manage secrets stored on the venue.
@@ -669,7 +689,7 @@ RunStatus.AUTH_REQUIRED;   // Waiting for authentication
 import {
   Venue, Grid, Job, Agent, ChatSession, Asset, Operation, DataAsset,
   AdapterManager, AssetManager, OperationManager, JobManager,
-  AgentManager, WorkspaceManager, SecretManager, UCANManager,
+  AgentManager, WorkspaceManager, SecretManager, UCANManager, SkillManager,
   KeyPairAuth, BearerAuth,
   RunStatus, CoviaError,
 } from "@covia/covia-sdk";
