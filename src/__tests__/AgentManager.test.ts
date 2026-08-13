@@ -1,8 +1,9 @@
 import { AgentManager } from '../AgentManager';
+import { UnsupportedVenueFeatureError } from '../types';
 
 // list/info are job-free GETs to /api/v1/agents (covia #180); everything else
 // stays on the invoke/job path. Fetch is mocked for the GET surface,
-// operations.run for the rest (and the old-venue fallback).
+// operations.run for mutations. Unsupported reads reject without minting jobs.
 const mockFetch = jest.fn();
 global.fetch = mockFetch as any;
 
@@ -79,21 +80,21 @@ describe('AgentManager', () => {
     expect(r.agents).toEqual([{ agentId: 'a1' }]); // bare ids normalised to objects
   });
 
-  it('list omits undefined params and falls back to the op path on 404', async () => {
+  it('list omits undefined params and rejects without invoking on a route 404', async () => {
     okJson({ agents: [] });
     await agents.list();
     const u = new URL(String(mockFetch.mock.calls[0][0]));
     expect(u.searchParams.get('includeTerminated')).toBeNull();
 
-    // Old venue: the GET 404s once, the manager remembers, list falls back.
+    // Old venue: the GET 404s once and the manager remembers it.
     mockFetch.mockResolvedValueOnce({ ok: false, status: 404,
       json: () => Promise.resolve({ error: 'not found' }), text: () => Promise.resolve('not found') });
-    await agents.list(true);
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/list', { includeTerminated: true });
+    await expect(agents.list(true)).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
+    expect(venue.operations.run).not.toHaveBeenCalled();
     // Subsequent calls skip the probe entirely.
-    await agents.list();
+    await expect(agents.list()).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
     expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/list', { includeTerminated: undefined });
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('list normalises the GET route\'s bare id strings to {agentId} objects', async () => {
@@ -127,16 +128,16 @@ describe('AgentManager', () => {
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
-  it('info on a pre-0.4 venue (unmapped endpoint 404) falls back to invoke and latches', async () => {
+  it('info on a pre-0.4 venue rejects without invoking and latches', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 404,
       json: () => Promise.resolve({ error: 'Endpoint GET /api/v1/agents/a1 not found' }),
       text: () => Promise.resolve('Endpoint GET /api/v1/agents/a1 not found') });
-    await agents.info('a1');
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/info', { agentId: 'a1' });
+    await expect(agents.info('a1')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
+    expect(venue.operations.run).not.toHaveBeenCalled();
 
-    await agents.list();
+    await expect(agents.list()).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
     expect(mockFetch).toHaveBeenCalledTimes(1); // latched — no further GET probes
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/list', { includeTerminated: undefined });
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('delete calls v/ops/agent/delete', async () => {
@@ -187,11 +188,11 @@ describe('AgentManager', () => {
     expect(r.agentId).toBe('a1');
   });
 
-  it('info falls back to v/ops/agent/info on pre-0.4 venues', async () => {
+  it('info rejects without invoking on known pre-0.4 venues', async () => {
     (venue as any).lastKnownStatus = { version: '0.3.0' };
-    await agents.info('a1');
+    await expect(agents.info('a1')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
     expect(mockFetch).not.toHaveBeenCalled();
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/info', { agentId: 'a1' });
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('lists typed sessions through the job-free workspace surface', async () => {

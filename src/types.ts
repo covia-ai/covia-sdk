@@ -701,6 +701,21 @@ export interface ConnectionAttempt {
   readonly error: CoviaError;
 }
 
+/**
+ * Raised when a requested read has no job-free transport on the connected
+ * venue. Callers may explicitly invoke the corresponding operation when
+ * creating a persisted job is the intended action.
+ */
+export class UnsupportedVenueFeatureError extends CoviaError {
+  constructor(public readonly feature: string) {
+    super(
+      `The connected venue cannot serve ${feature} without creating a job. ` +
+      'Invoke the corresponding operation explicitly if creating a persisted job is intended.',
+    );
+    this.name = 'UnsupportedVenueFeatureError';
+  }
+}
+
 export interface CoviaConnectionErrorOptions {
   /** Exact request target for a single transport failure. */
   url?: string;

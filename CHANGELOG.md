@@ -20,6 +20,10 @@ its own SemVer track (independent of the venue/platform version).
 
 ### Changed
 
+- Read methods no longer silently invoke operations when a job-free endpoint
+  is unavailable. They now throw `UnsupportedVenueFeatureError`; callers that
+  intend to create a persisted job can invoke the corresponding operation
+  explicitly.
 - Private jobs are now selected per `operations.run(..., { private: true })`;
   the mutable connection-wide `venue.setPrivate()` switch remains available
   for compatibility but is deprecated.

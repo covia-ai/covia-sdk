@@ -38,9 +38,8 @@ function toAdapterInfo(name: string | undefined, value: AdapterSummary | undefin
  * Adapter introspection for a venue.
  *
  * Reads go through the workspace manager, so they are job-free (`GET
- * /api/v1/values/*`, covia #177) on 0.3+ venues and transparently fall back
- * to the invoke path on older ones — the same job-free/fallback behaviour
- * every other workspace-backed read gets, rather than a hand-rolled fetch.
+ * /api/v1/values/*`, covia #177) on 0.3+ venues. Older venues reject rather
+ * than turning a metadata read into a persisted job.
  */
 export class AdapterManager {
   constructor(private venue: AdapterManagerVenue) {}

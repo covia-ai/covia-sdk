@@ -474,8 +474,10 @@ Read and write shared state in the venue's workspace.
 `GET /api/v1/values/*` (covia #177) — synchronous, capability-checked, and **no job is
 persisted**. This matters under load: routing reads through the invoke/job path writes a
 durable job record per read, growing the venue's etch without bound. **Writes stay on the
-job path** (they should leave an audit record). A read that needs UCAN **proof tokens**
-(cross-DID) transparently falls back to the invoke path.
+job path** (they should leave an audit record). Reads that need UCAN proof tokens,
+multi-path inspection, or a venue without the Values surface reject with
+`UnsupportedVenueFeatureError` rather than silently creating a persisted job. Invoke
+the corresponding operation explicitly when a persisted job is intended.
 
 ```typescript
 // CRUD (reads are job-free; writes are jobs)

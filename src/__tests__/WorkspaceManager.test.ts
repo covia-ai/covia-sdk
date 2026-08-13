@@ -1,8 +1,10 @@
 import { WorkspaceManager } from '../WorkspaceManager';
+import { UnsupportedVenueFeatureError } from '../types';
 
 // Reads are job-free GETs to /api/v1/values/* (covia #177); writes stay on the
 // invoke/job path. So the tests split: fetch is mocked for the GET read surface,
-// operations.run for the write surface (and the cross-DID / old-venue fallbacks).
+// operations.run for the write surface. Unsupported reads reject rather than
+// silently persisting jobs.
 const mockFetch = jest.fn();
 global.fetch = mockFetch as any;
 
@@ -130,13 +132,13 @@ describe('WorkspaceManager', () => {
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/copy', { from: 'v/ops/json/merge', to: 'o/merge' }, { ucans: undefined });
   });
 
-  // ── fallbacks to the invoke path: cross-DID proofs, multi-path, old venues ──
+  // ── reads unsupported by job-free transport reject without invoking ───────
 
-  it('a read with ucans (cross-DID proof) falls back to the invoke path', async () => {
-    await ws.read('did:key:zAlice/w/shared', undefined, ['eyJ.proof']);
-    expect(venue.operations.run).toHaveBeenCalledWith(
-      'v/ops/covia/read', { path: 'did:key:zAlice/w/shared', maxSize: undefined }, { ucans: ['eyJ.proof'] });
-    expect(mockFetch).not.toHaveBeenCalled();                       // no job-free GET when proofs are needed
+  it('a read with ucans rejects rather than creating a job', async () => {
+    await expect(ws.read('did:key:zAlice/w/shared', undefined, ['eyJ.proof']))
+      .rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
+    expect(venue.operations.run).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('a rootless list normalises to "/" and stays on the job-free GET (#16: it used to mint a Job)', async () => {
@@ -149,17 +151,19 @@ describe('WorkspaceManager', () => {
     expect(r.keys).toEqual(['j', 'meta']);
   });
 
-  it('multi-path inspect falls back to the invoke path', async () => {
-    await ws.inspect(['v/ops/json/merge', 'w/mydata'], 2000, false);
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/inspect', { paths: ['v/ops/json/merge', 'w/mydata'], budget: 2000, compact: false }, { ucans: undefined });
+  it('multi-path inspect rejects rather than creating a job', async () => {
+    await expect(ws.inspect(['v/ops/json/merge', 'w/mydata'], 2000, false))
+      .rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
-  it('count with ucans falls back to the covia:aggregate op', async () => {
-    await ws.count('did:key:zAlice/w/x', { depth: 2, ucans: ['eyJ.proof'] });
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/aggregate', { path: 'did:key:zAlice/w/x', depth: 2 }, { ucans: ['eyJ.proof'] });
+  it('count with ucans rejects rather than creating a job', async () => {
+    await expect(ws.count('did:key:zAlice/w/x', { depth: 2, ucans: ['eyJ.proof'] }))
+      .rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
-  // ── old venues (< 0.3, no /values routes): 404 → invoke path, remembered ────
+  // ── old venues (< 0.3, no /values routes): reject and remember ─────────────
   // A 404 can only mean the route is missing — an absent path is 200 {exists:false}.
 
   function notFound() {
@@ -170,28 +174,25 @@ describe('WorkspaceManager', () => {
     });
   }
 
-  it('a read against a pre-0.3 venue falls back to the invoke path', async () => {
+  it('a read against a pre-0.3 venue rejects without invoking', async () => {
     notFound();
-    venue.operations.run.mockResolvedValueOnce({ exists: true, value: 7 });
-    const r = await ws.read('w/mydata');
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/read', { path: 'w/mydata', maxSize: undefined });
-    expect(r.value).toBe(7);
+    await expect(ws.read('w/mydata')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('remembers a pre-0.3 venue — later reads skip the GET probe entirely', async () => {
     notFound();
-    await ws.read('w/first');
-    await ws.list('w/second');
+    await expect(ws.read('w/first')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
+    await expect(ws.list('w/second')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
     expect(mockFetch).toHaveBeenCalledTimes(1);                     // only the first probe
-    expect(venue.operations.run).toHaveBeenCalledTimes(2);
-    expect(venue.operations.run).toHaveBeenLastCalledWith('v/ops/covia/list', { path: 'w/second', limit: undefined, offset: undefined });
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('a status without a version marks the venue pre-0.3 — no GET probe at all', async () => {
     (venue as any).lastKnownStatus = { name: 'Old Stable', did: 'did:key:zVenue' }; // no version field
-    await ws.read('w/mydata');
+    await expect(ws.read('w/mydata')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
     expect(mockFetch).not.toHaveBeenCalled();
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/read', { path: 'w/mydata', maxSize: undefined });
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('a status reporting ≥0.3 keeps reads on the job-free GET path', async () => {
@@ -206,9 +207,9 @@ describe('WorkspaceManager', () => {
     okJson({ exists: true, value: 1 });
     await ws.read('w/first');                                       // GET while nothing is known
     (venue as any).lastKnownStatus = { version: '0.2.5' };          // e.g. venue.status() resolved
-    await ws.read('w/second');
+    await expect(ws.read('w/second')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
     expect(mockFetch).toHaveBeenCalledTimes(1);                     // no second GET
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/covia/read', { path: 'w/second', maxSize: undefined });
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('non-404 errors from the GET surface propagate — no invoke fallback', async () => {

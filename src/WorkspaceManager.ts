@@ -2,6 +2,7 @@ import {
   WorkspaceReadResult, WorkspaceWriteResult, WorkspaceDeleteResult, WorkspaceAppendResult,
   WorkspaceListResult, WorkspaceSliceResult, WorkspaceCopyResult, WorkspaceInspectResult,
   WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner, NotFoundError, StatusData,
+  UnsupportedVenueFeatureError,
 } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
 
@@ -32,17 +33,10 @@ function versionAtLeast(version: string | undefined, major: number, minor: numbe
  * `operations.run`) — a mutation *should* leave an audit record.
  *
  * Paths resolve against the caller's own DID unless fully qualified
- * (`<DID>/w/...`). Reading another DID's namespace is capability-gated: the
- * job-free GET path carries only the caller's identity token, so a read that
- * needs UCAN **proof tokens** (`ucans`) transparently falls back to the invoke
- * path (the only transport that carries a proof array). Own-namespace reads —
- * the common case — never need this and stay fully job-free.
- *
- * Venues that predate the `/values` routes (< covia 0.3) are accommodated
- * here, not in application code: a 404 from the GET surface can only mean the
- * route is missing (an absent path is `200 {exists:false}`), so reads fall
- * back to the invoke path and the venue is remembered as pre-0.3 for the rest
- * of this manager's lifetime.
+ * (`<DID>/w/...`). Reads that require proof tokens, multi-path inspection, or
+ * a pre-0.3 venue cannot use the Values GET surface and reject by default.
+ * Applications may explicitly invoke the corresponding operation when
+ * creating a persisted job is intended.
  */
 export class WorkspaceManager {
   // Whether this venue serves GET /api/v1/values/* — flipped on the first 404
@@ -73,11 +67,14 @@ export class WorkspaceManager {
     return this.valuesSupported;
   }
 
-  /** A job-free values read, falling back to the invoke path on pre-0.3 venues. */
-  private async _valuesOr<T>(
+  private unsupported<T>(feature: string): Promise<T> {
+    throw new UnsupportedVenueFeatureError(feature);
+  }
+
+  /** A job-free Values read that rejects when the endpoint is unavailable. */
+  private async valuesRead<T>(
     op: string,
     params: Record<string, string | number | boolean | undefined>,
-    fallback: () => Promise<T>,
   ): Promise<T> {
     if (this.supportsValues()) {
       try {
@@ -87,15 +84,14 @@ export class WorkspaceManager {
         this.valuesSupported = false;
       }
     }
-    return fallback();
+    return this.unsupported(`workspace ${op} reads`);
   }
 
   // ── job-free reads (#177) ───────────────────────────────────────────────────
 
   async read(path: string, maxSize?: number, ucans?: string[]): Promise<WorkspaceReadResult> {
-    if (ucans?.length) return this.venue.operations.run<WorkspaceReadResult>('v/ops/covia/read', { path, maxSize }, { ucans });
-    return this._valuesOr('read', { path, maxSize }, () =>
-      this.venue.operations.run<WorkspaceReadResult>('v/ops/covia/read', { path, maxSize }));
+    if (ucans?.length) return this.unsupported('UCAN-authorized workspace reads');
+    return this.valuesRead('read', { path, maxSize });
   }
 
   async list(path?: string, limit?: number, offset?: number, ucans?: string[]): Promise<WorkspaceListResult> {
@@ -103,22 +99,21 @@ export class WorkspaceManager {
     // root/undefined list normalises to "/" and stays job-free — previously it
     // was forced onto the op path, minting a Job for every root listing.
     path = path || '/';
-    if (ucans?.length) return this.venue.operations.run<WorkspaceListResult>('v/ops/covia/list', { path, limit, offset }, { ucans });
-    return this._valuesOr('list', { path, limit, offset }, () =>
-      this.venue.operations.run<WorkspaceListResult>('v/ops/covia/list', { path, limit, offset }));
+    if (ucans?.length) return this.unsupported('UCAN-authorized workspace listings');
+    return this.valuesRead('list', { path, limit, offset });
   }
 
   async slice(path: string, offset?: number, limit?: number, ucans?: string[]): Promise<WorkspaceSliceResult> {
-    if (ucans?.length) return this.venue.operations.run<WorkspaceSliceResult>('v/ops/covia/slice', { path, offset, limit }, { ucans });
-    return this._valuesOr('slice', { path, offset, limit }, () =>
-      this.venue.operations.run<WorkspaceSliceResult>('v/ops/covia/slice', { path, offset, limit }));
+    if (ucans?.length) return this.unsupported('UCAN-authorized workspace slices');
+    return this.valuesRead('slice', { path, offset, limit });
   }
 
   async inspect(paths: string | string[], budget?: number, compact?: boolean, ucans?: string[]): Promise<WorkspaceInspectResult> {
     // The GET route renders a single path; multi-path (or proof tokens) use the op.
-    if (ucans?.length || Array.isArray(paths)) return this.venue.operations.run<WorkspaceInspectResult>('v/ops/covia/inspect', { paths, budget, compact }, { ucans });
-    return this._valuesOr('inspect', { path: paths, budget, compact }, () =>
-      this.venue.operations.run<WorkspaceInspectResult>('v/ops/covia/inspect', { paths, budget, compact }));
+    if (ucans?.length || Array.isArray(paths)) return this.unsupported(
+      Array.isArray(paths) ? 'multi-path workspace inspection' : 'UCAN-authorized workspace inspection',
+    );
+    return this.valuesRead('inspect', { path: paths, budget, compact });
   }
 
   /**
@@ -131,11 +126,8 @@ export class WorkspaceManager {
    */
   async count(path: string, opts: { depth?: number; ucans?: string[] } = {}): Promise<WorkspaceCountResult> {
     const { depth, ucans } = opts;
-    if (ucans?.length) return this.venue.operations.run<WorkspaceCountResult>('v/ops/covia/aggregate', { path, depth }, { ucans });
-    // Pre-0.3 venues lack the covia:aggregate op as well as the route, so the
-    // fallback fails there too — but with the honest "no such operation" error.
-    return this._valuesOr('count', { path, depth }, () =>
-      this.venue.operations.run<WorkspaceCountResult>('v/ops/covia/aggregate', { path, depth }));
+    if (ucans?.length) return this.unsupported('UCAN-authorized workspace counts');
+    return this.valuesRead('count', { path, depth });
   }
 
   /**
@@ -148,9 +140,8 @@ export class WorkspaceManager {
    */
   async aggregate(path: string, opts: { depth?: number; groupBy?: string; ucans?: string[] } = {}): Promise<WorkspaceAggregateResult> {
     const { depth, groupBy, ucans } = opts;
-    if (ucans?.length) return this.venue.operations.run<WorkspaceAggregateResult>('v/ops/covia/aggregate', { path, depth, groupBy }, { ucans });
-    return this._valuesOr('aggregate', { path, depth, groupBy }, () =>
-      this.venue.operations.run<WorkspaceAggregateResult>('v/ops/covia/aggregate', { path, depth, groupBy }));
+    if (ucans?.length) return this.unsupported('UCAN-authorized workspace aggregation');
+    return this.valuesRead('aggregate', { path, depth, groupBy });
   }
 
   // ── writes stay on the job path (they should leave an audit record) ─────────

@@ -1,4 +1,4 @@
-import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSessionListOptions, AgentSessionListResult, AgentSessionMetadata, AgentSessionRecord, OperationRunner, NotFoundError, StatusData, WorkspaceReadResult, WorkspaceSliceResult } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSessionListOptions, AgentSessionListResult, AgentSessionMetadata, AgentSessionRecord, OperationRunner, NotFoundError, StatusData, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
 
 interface AgentManagerVenue extends VenueRequestContext {
@@ -56,11 +56,10 @@ export class AgentManager {
     return this.agentsGetSupported;
   }
 
-  /** A job-free agents GET, falling back to the invoke path on pre-0.4 venues. */
-  private async _agentsOr<T>(
+  /** A job-free agents GET that rejects when the endpoint is unavailable. */
+  private async agentsGet<T>(
     path: string,
     params: Record<string, string | boolean | undefined>,
-    fallback: () => Promise<T>,
   ): Promise<T> {
     if (this.supportsAgentsGet()) {
       try {
@@ -85,7 +84,7 @@ export class AgentManager {
         this.agentsGetSupported = false;
       }
     }
-    return fallback();
+    throw new UnsupportedVenueFeatureError('agent reads');
   }
 
   async create(input: AgentCreateInput): Promise<AgentCreateResult> {
@@ -137,11 +136,10 @@ export class AgentManager {
   /**
    * List the caller's agents. **Job-free** on covia ≥ 0.4: goes through
    * `GET /api/v1/agents` (covia#180) — synchronous, no Job persisted. Older
-   * venues transparently fall back to the invoke path (one probe, remembered).
+   * venues reject rather than silently creating a persisted Job.
    */
   async list(includeTerminated?: boolean): Promise<AgentListResult> {
-    const result = await this._agentsOr<AgentListResult>('', { includeTerminated }, () =>
-      this.venue.operations.run<AgentListResult>('v/ops/agent/list', { includeTerminated }));
+    const result = await this.agentsGet<AgentListResult>('', { includeTerminated });
     // GET /api/v1/agents returns bare id strings; the agent:list op returns
     // {agentId, status, tasks} objects. Normalise to objects so consumers see
     // one shape regardless of which transport served the call.
@@ -171,10 +169,9 @@ export class AgentManager {
   }
 
   /** Agent info. **Job-free** on covia ≥ 0.4 (`GET /api/v1/agents/{id}`,
-   *  covia#180); older venues fall back to the invoke path. */
+   *  covia#180); older venues require an explicit compatibility opt-in. */
   async info(agentId: string): Promise<AgentInfoResult> {
-    return this._agentsOr<AgentInfoResult>(`/${encodeURIComponent(agentId)}`, {}, () =>
-      this.venue.operations.run<AgentInfoResult>('v/ops/agent/info', { agentId }));
+    return this.agentsGet<AgentInfoResult>(`/${encodeURIComponent(agentId)}`, {});
   }
 
   /**
