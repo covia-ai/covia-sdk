@@ -217,7 +217,7 @@ export class Venue implements VenueInterface {
         if (typeof endpoint !== 'string') {
           throw new CoviaError('No (string) endpoint found for DID');
         }
-        candidates = [endpoint.replace(/\/api\/v1/, '')];
+        candidates = [stripTrailingSlash(endpoint).replace(/\/api\/v1$/, '')];
       } else {
         candidates = venueBaseUrlCandidates(venueId);
       }
@@ -226,10 +226,15 @@ export class Venue implements VenueInterface {
       for (const baseUrl of candidates) {
         const statusUrl = baseUrl + '/api/v1/status';
         try {
+          // Probe anonymously: candidates are unverified hosts (typo'd DNS,
+          // http fallback), so credentials must never be sent here — an
+          // Ed25519 JWT could not be aud-bound yet, and bearer/basic secrets
+          // would leak verbatim. The returned Venue makes the first
+          // authenticated call, with `aud` bound to the DID pinned below.
           const data = await venueJson<StatusData>({
             baseUrl,
             venueId: expectedDid ?? '',
-            auth: auth ?? new NoAuth(),
+            auth: new NoAuth(),
           }, '/api/v1/status');
           if (!data.did) {
             throw new CoviaError(`Venue status at ${statusUrl} did not include a DID`);

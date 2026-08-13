@@ -186,13 +186,17 @@ describe('Venue.connect', () => {
     expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer existing-token');
   });
 
-  it('uses supplied auth for the initial status probe', async () => {
+  it('probes the initial status anonymously — credentials only flow after identity is pinned', async () => {
+    // Candidate hosts are unverified (typo'd DNS, http fallback): sending
+    // credentials here would leak them, and an Ed25519 JWT could not be
+    // aud-bound yet. The returned venue makes the authenticated calls.
     const auth = new BearerAuth('connect-token');
     mockFetchSuccess({ did: 'did:web:private.example.com' });
 
-    await Venue.connect('https://private.example.com', auth);
+    const venue = await Venue.connect('https://private.example.com', auth);
 
-    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer connect-token');
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBeUndefined();
+    expect(venue.auth).toBe(auth);
   });
 
   it('aggregates validation failures in CoviaConnectionError', async () => {

@@ -94,6 +94,34 @@ describe('Grid', () => {
     expect(Venue.connect).toHaveBeenCalledTimes(2);
   });
 
+  it('does not let a URL connect claim a DID cache slot', async () => {
+    // A URL connect's reported DID is trust-on-first-use: registering it as
+    // an alias would let any host claim a trusted DID and be served from
+    // cache — skipping the resolution and identity check a DID connect does.
+    const url = 'https://impostor.example.com';
+    (Venue.connect as jest.Mock)
+      .mockResolvedValueOnce({ baseUrl: url, venueId: 'did:web:trusted.example.com', closed: false })
+      .mockResolvedValueOnce({ baseUrl: 'https://trusted.example.com', venueId: 'did:web:trusted.example.com', closed: false });
+
+    const byUrl = await Grid.connect(url);
+    const byDid = await Grid.connect('did:web:trusted.example.com');
+
+    expect(Venue.connect).toHaveBeenCalledTimes(2);
+    expect(byDid).not.toBe(byUrl);
+  });
+
+  it('aliases the validated base URL of a DID connect', async () => {
+    const did = 'did:web:shared.example.com';
+    (Venue.connect as jest.Mock)
+      .mockResolvedValueOnce({ baseUrl: 'https://shared.example.com', venueId: did, closed: false });
+
+    const byDid = await Grid.connect(did);
+    const byUrl = await Grid.connect('https://shared.example.com');
+
+    expect(Venue.connect).toHaveBeenCalledTimes(1);
+    expect(byUrl).toBe(byDid);
+  });
+
   it('reconnects a closed cached venue', async () => {
     const venueId = 'https://closed-venue.example.com';
     const firstVenue = { baseUrl: venueId, venueId: 'did:web:closed', closed: false };

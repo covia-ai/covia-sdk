@@ -1,6 +1,18 @@
 import { getPublicKey, generateKeyPair, hexToPrivateKey } from './crypto/keys';
 import { didFromPublicKey } from './crypto/multikey';
 import { createEdDSAJWT } from './crypto/jwt';
+import { CoviaError } from './types';
+
+// UTF-8-safe base64 that exists in both browsers and Node ≥ 16 — the SDK's
+// primary consumer is a browser app, where Buffer is not defined.
+function base64Encode(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
 
 /**
  * Abstract base class for authentication strategies.
@@ -72,7 +84,7 @@ export class BasicAuth extends Auth {
   }
 
   apply(headers: Record<string, string>, _audience?: string): void {
-    const credentials = Buffer.from(`${this._username}:${this._password}`, 'utf-8').toString('base64');
+    const credentials = base64Encode(`${this._username}:${this._password}`);
     headers["Authorization"] = `Basic ${credentials}`;
   }
 }
@@ -109,8 +121,16 @@ export class Ed25519Auth extends Auth {
 
   apply(headers: Record<string, string>, audience?: string): void {
     // An explicitly-pinned audience wins; otherwise bind the JWT `aud` to the
-    // venue DID the transport supplies. With neither, no `aud` is sent.
-    const jwt = createEdDSAJWT(this._privateKey, this._lifetime, this._audience ?? audience);
+    // venue DID the transport supplies. A token with no `aud` is replayable
+    // at any venue that accepts the caller's DID, so minting one is refused
+    // rather than silently weakened.
+    const aud = this._audience ?? (audience || undefined);
+    if (!aud) {
+      throw new CoviaError(
+        'Ed25519Auth requires a venue audience to bind the token to: connect via ' +
+        'Grid.connect()/Venue.connect() so the venue DID is known, or pin auth.audience explicitly.');
+    }
+    const jwt = createEdDSAJWT(this._privateKey, this._lifetime, aud);
     headers['Authorization'] = `Bearer ${jwt}`;
   }
 

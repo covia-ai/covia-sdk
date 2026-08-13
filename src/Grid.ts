@@ -48,20 +48,28 @@ export class Grid {
       removeEntry(cache, cached);
     }
 
-    const promise = Venue.connect(venueId, auth)
+    const entry = {} as ConnectionEntry;
+    entry.promise = Venue.connect(venueId, auth)
       .then((venue) => {
         entry.venue = venue;
-        // Learn canonical aliases after validation, so connecting by URL and
-        // later by the reported DID reuses the same authenticated handle.
+        // Learn the validated base URL as an alias, so URL and DID connects
+        // to the same venue share one authenticated handle.
         cache.set(normaliseKey(venue.baseUrl), entry);
-        cache.set(normaliseKey(venue.venueId), entry);
+        // The reported DID becomes an alias only when the caller connected BY
+        // that DID (resolved and identity-asserted by Venue.connect). A URL
+        // connect's DID is self-reported / trust-on-first-use: registering it
+        // would let any host claim a trusted DID's cache slot, and a later
+        // connect by that DID would be served the impostor without the
+        // resolution and identity check a fresh DID connect performs.
+        if (key.startsWith('did:')) {
+          cache.set(normaliseKey(venue.venueId), entry);
+        }
         return venue;
       })
       .catch((error: unknown) => {
         removeEntry(cache, entry);
         throw error;
       });
-    const entry: ConnectionEntry = { promise };
     cache.set(key, entry);
     return entry.promise;
   }

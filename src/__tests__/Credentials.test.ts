@@ -154,7 +154,7 @@ describe('Ed25519Auth', () => {
   it('apply() sets Authorization Bearer header with valid JWT', () => {
     const auth = Ed25519Auth.generate();
     const headers: Record<string, string> = {};
-    auth.apply(headers);
+    auth.apply(headers, 'did:web:venue.example.com');
 
     expect(headers['Authorization']).toMatch(/^Bearer /);
     const jwt = headers['Authorization'].replace('Bearer ', '');
@@ -196,11 +196,12 @@ describe('Ed25519Auth', () => {
     expect(decodePayload(headers).aud).toBe('did:web:venue.example.com');
   });
 
-  it('omits aud when no audience is supplied', () => {
+  it('refuses to mint a token when no audience is available', () => {
+    // An unbound JWT is replayable at any venue that accepts the caller's
+    // DID — minting one must fail rather than silently weaken the token.
     const auth = Ed25519Auth.generate();
-    const headers: Record<string, string> = {};
-    auth.apply(headers);
-    expect(decodePayload(headers).aud).toBeUndefined();
+    expect(() => auth.apply({})).toThrow(/audience/);
+    expect(() => auth.apply({}, '')).toThrow(/audience/);
   });
 
   it('an explicitly pinned audience overrides the transport-supplied one', () => {
@@ -214,7 +215,7 @@ describe('Ed25519Auth', () => {
   it('respects custom token lifetime', () => {
     const auth = Ed25519Auth.generate(600);
     const headers: Record<string, string> = {};
-    auth.apply(headers);
+    auth.apply(headers, 'did:web:venue.example.com');
 
     const jwt = headers['Authorization'].replace('Bearer ', '');
     const payload = JSON.parse(
@@ -231,12 +232,26 @@ describe('Ed25519Auth', () => {
     expect(auth2.getDID()).toBe(auth1.getDID());
   });
 
+  it('fromHex() rejects corrupted keys instead of deriving a different identity', () => {
+    // Lax parsing would turn a corrupted stored key into a valid but
+    // DIFFERENT key (a new DID) with no error — silent identity loss.
+    expect(() => Ed25519Auth.fromHex('zz'.repeat(32))).toThrow(/hex/);
+    expect(() => Ed25519Auth.fromHex('abcd')).toThrow(/hex/);
+    expect(() => Ed25519Auth.fromHex('')).toThrow(/hex/);
+  });
+
+  it('fromHex() accepts an 0x-prefixed key', () => {
+    const { privateKey } = generateKeyPair();
+    const hex = privateKeyToHex(privateKey);
+    expect(Ed25519Auth.fromHex(`0x${hex}`).getDID()).toBe(new Ed25519Auth(privateKey).getDID());
+  });
+
   it('generates fresh JWT on each apply() call', () => {
     const auth = Ed25519Auth.generate();
     const h1: Record<string, string> = {};
     const h2: Record<string, string> = {};
-    auth.apply(h1);
-    auth.apply(h2);
+    auth.apply(h1, 'did:web:venue.example.com');
+    auth.apply(h2, 'did:web:venue.example.com');
     // Signature part should differ due to different iat (or at minimum be valid)
     // Both should be valid JWTs with same DID
     expect(h1['Authorization']).toMatch(/^Bearer /);
