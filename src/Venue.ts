@@ -10,12 +10,13 @@ import { SecretManager } from './SecretManager';
 import { SkillManager } from './SkillManager';
 import { MemoryManager } from './MemoryManager';
 import { Asset } from './Asset';
-import { fetchStreamWithError, fetchWithError } from './Utils';
+import { fetchWithError } from './Utils';
 import { Auth, NoAuth } from './Credentials';
 import { Resolver } from 'did-resolver'
 import { getResolver } from 'web-did-resolver'
 import { Job } from './Job';
 import { Agent } from './Agent';
+import { venueJson, venueStream } from './VenueTransport';
 
 const webResolver = getResolver()
 const resolver = new Resolver(webResolver)
@@ -180,7 +181,7 @@ export class Venue implements VenueInterface {
         baseUrl: venueId.baseUrl,
         venueId: venueId.venueId,
         name: venueId.metadata.name,
-        auth: auth,
+        auth: auth ?? venueId.auth,
         status: venueId.lastKnownStatus
       });
       // Reconnecting an existing handle is a validation, not a blind clone:
@@ -214,7 +215,11 @@ export class Venue implements VenueInterface {
       for (const baseUrl of candidates) {
         const statusUrl = baseUrl + '/api/v1/status';
         try {
-          const data = await fetchWithError<StatusData>(statusUrl);
+          const data = await venueJson<StatusData>({
+            baseUrl,
+            venueId: expectedDid ?? '',
+            auth: auth ?? new NoAuth(),
+          }, '/api/v1/status');
           if (!data.did) {
             throw new CoviaError(`Venue status at ${statusUrl} did not include a DID`);
           }
@@ -310,9 +315,10 @@ export class Venue implements VenueInterface {
    * @returns {Promise<string[]>}
    */
   async listSecrets(): Promise<string[]> {
-    const result = await fetchWithError<{ items: string[]; total: number }>(`${this.baseUrl}/api/v1/secrets`, {
-      headers: this._buildHeaders(),
-    });
+    const result = await venueJson<{ items: string[]; total: number }>(
+      this,
+      '/api/v1/secrets',
+    );
     return Array.isArray(result.items) ? result.items : [];
   }
 
@@ -321,9 +327,8 @@ export class Venue implements VenueInterface {
    * @param name - Secret name
    */
   async deleteSecret(name: string): Promise<void> {
-    await fetchStreamWithError(`${this.baseUrl}/api/v1/secrets/${encodeURIComponent(name)}`, {
+    await venueStream(this, `/api/v1/secrets/${encodeURIComponent(name)}`, {
       method: 'DELETE',
-      headers: this._buildHeaders(),
     });
   }
 
@@ -333,7 +338,7 @@ export class Venue implements VenueInterface {
    * @throws {VenueIdentityChangedError} If this address reports a different known DID.
    */
   async status():Promise<StatusData> {
-      const data = await fetchWithError<StatusData>(`${this.baseUrl}/api/v1/status`);
+      const data = await venueJson<StatusData>(this, '/api/v1/status');
       if (data.did) {
         if (this.venueId) {
           assertVenueIdentity(this.venueId, data.did, this.baseUrl);
@@ -420,11 +425,4 @@ export class Venue implements VenueInterface {
     this.close();
   }
 
-  private _buildHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    // Bind auth to this venue's DID (the JWT `aud`), so tokens can't be
-    // replayed at another venue and pass the venue's audience check.
-    this.auth.apply(headers, this.venueId);
-    return headers;
-  }
 }

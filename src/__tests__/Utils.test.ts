@@ -245,6 +245,17 @@ describe('fetchWithError', () => {
       expect((e as GridError).statusCode).toBe(403);
     }
   });
+
+  it('preserves a plain-text error body', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: () => Promise.resolve('Upstream unavailable'),
+    });
+
+    await expect(fetchWithError('https://example.com/api'))
+      .rejects.toThrow('HTTP 502: Upstream unavailable');
+  });
 });
 
 // ── fetchStreamWithError ───────────────────────────────────────────────

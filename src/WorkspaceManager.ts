@@ -1,14 +1,11 @@
-import { fetchWithError } from './Utils';
 import {
   WorkspaceReadResult, WorkspaceWriteResult, WorkspaceDeleteResult, WorkspaceAppendResult,
   WorkspaceListResult, WorkspaceSliceResult, WorkspaceCopyResult, WorkspaceInspectResult,
   WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner, NotFoundError, StatusData,
 } from './types';
+import { venueJson, VenueRequestContext } from './VenueTransport';
 
-interface WorkspaceManagerVenue {
-  baseUrl: string;
-  venueId: string;
-  auth: { apply(headers: Record<string, string>, audience?: string): void };
+interface WorkspaceManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
   lastKnownStatus?: StatusData;
 }
@@ -54,18 +51,11 @@ export class WorkspaceManager {
 
   constructor(private venue: WorkspaceManagerVenue) {}
 
-  private _headers(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    // Bind the token to this venue's DID (JWT `aud`) — same as every other request.
-    this.venue.auth.apply(headers, this.venue.venueId);
-    return headers;
-  }
-
   /** GET a job-free `/api/v1/values/{op}` read; omit undefined params. */
   private _values<T>(op: string, params: Record<string, string | number | boolean | undefined>): Promise<T> {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v !== undefined) qs.set(k, String(v));
-    return fetchWithError<T>(`${this.venue.baseUrl}/api/v1/values/${op}?${qs.toString()}`, { headers: this._headers() });
+    return venueJson<T>(this.venue, `/api/v1/values/${op}?${qs.toString()}`);
   }
 
   /**

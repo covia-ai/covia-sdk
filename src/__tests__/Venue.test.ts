@@ -175,6 +175,26 @@ describe('Venue.connect', () => {
     expect(cloned.auth).toBeInstanceOf(BearerAuth);
   });
 
+  it('preserves the existing auth when reconnecting a Venue without an override', async () => {
+    const auth = new BearerAuth('existing-token');
+    const original = new Venue({ baseUrl: 'https://x.com', venueId: 'v', auth });
+    mockFetchSuccess({ did: 'v' });
+
+    const connected = await Venue.connect(original);
+
+    expect(connected.auth).toBe(auth);
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer existing-token');
+  });
+
+  it('uses supplied auth for the initial status probe', async () => {
+    const auth = new BearerAuth('connect-token');
+    mockFetchSuccess({ did: 'did:web:private.example.com' });
+
+    await Venue.connect('https://private.example.com', auth);
+
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer connect-token');
+  });
+
   it('aggregates validation failures in CoviaConnectionError', async () => {
     mockFetchError(500);
 
@@ -560,6 +580,22 @@ describe('Venue auth headers', () => {
     const headers = mockFetch.mock.calls[0][1].headers;
     expect(headers['Authorization']).toBeUndefined();
     expect(headers['Content-Type']).toBe('application/json');
+  });
+
+  it('authenticates status and operation catalogue reads', async () => {
+    const auth = new BearerAuth('read-token');
+    const venue = new Venue({ baseUrl: 'https://test.com', venueId: 'v', auth });
+    mockFetchSuccess({ did: 'v', status: 'OK' });
+    mockFetchSuccess([]);
+    mockFetchSuccess({ name: 'echo', asset: 'v/ops/echo' });
+
+    await venue.status();
+    await venue.operations.list();
+    await venue.operations.get('v/ops/echo');
+
+    for (const call of mockFetch.mock.calls) {
+      expect(call[1].headers.Authorization).toBe('Bearer read-token');
+    }
   });
 });
 

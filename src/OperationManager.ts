@@ -1,11 +1,9 @@
 import { OperationInfo, InvokeOptions, JobMetadata, VenueInterface, CoviaError, JobFailedError, RunStatus } from './types';
-import { fetchWithError, isJobComplete, isJobFinished } from './Utils';
+import { isJobComplete, isJobFinished } from './Utils';
 import { Job } from './Job';
+import { venueJson, VenueRequestContext } from './VenueTransport';
 
-interface OperationManagerVenue {
-  baseUrl: string;
-  venueId: string;
-  auth: { apply(headers: Record<string, string>, audience?: string): void };
+interface OperationManagerVenue extends VenueRequestContext {
   privateJobs?: boolean;
 }
 
@@ -16,7 +14,7 @@ export class OperationManager {
    * List all named operations available on this venue
    */
   async list(): Promise<OperationInfo[]> {
-    return fetchWithError<OperationInfo[]>(`${this.venue.baseUrl}/api/v1/operations`);
+    return venueJson<OperationInfo[]>(this.venue, '/api/v1/operations');
   }
 
   /**
@@ -24,7 +22,7 @@ export class OperationManager {
    * @param name - Operation name (e.g., "v/ops/schema/infer")
    */
   async get(name: string): Promise<OperationInfo> {
-    return fetchWithError<OperationInfo>(`${this.venue.baseUrl}/api/v1/operations/${name}`);
+    return venueJson<OperationInfo>(this.venue, `/api/v1/operations/${name}`);
   }
 
   /**
@@ -57,9 +55,8 @@ export class OperationManager {
       wait: true,
     };
     if (options?.ucans) payload.ucans = options.ucans;
-    const rec = await fetchWithError<JobMetadata>(`${this.venue.baseUrl}/api/v1/invoke`, {
+    const rec = await venueJson<JobMetadata>(this.venue, '/api/v1/invoke', {
       method: 'POST',
-      headers: this._buildHeaders(),
       body: JSON.stringify(payload),
     });
     // Terminality is decided from the invoke response — a private job's
@@ -100,17 +97,10 @@ export class OperationManager {
     if (options?.ucans) {
       payload.ucans = options.ucans;
     }
-    const response = await fetchWithError<JobMetadata>(`${this.venue.baseUrl}/api/v1/invoke`, {
+    const response = await venueJson<JobMetadata>(this.venue, '/api/v1/invoke', {
       method: 'POST',
-      headers: this._buildHeaders(),
       body: JSON.stringify(payload),
     });
     return new Job(response.id ?? '', this.venue as unknown as VenueInterface, response);
-  }
-
-  private _buildHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    this.venue.auth.apply(headers, this.venue.venueId);
-    return headers;
   }
 }

@@ -1,20 +1,15 @@
 import { JobMetadata, SSEEvent, NotFoundError, JobNotFoundError, VenueInterface } from './types';
-import { fetchWithError, fetchStreamWithError, parseSSEStream } from './Utils';
+import { parseSSEStream } from './Utils';
 import { Job } from './Job';
+import { venueJson, VenueRequestContext, venueStream } from './VenueTransport';
 
-interface JobManagerVenue {
-  baseUrl: string;
-  venueId: string;
-  auth: { apply(headers: Record<string, string>, audience?: string): void };
-}
+type JobManagerVenue = VenueRequestContext;
 
 export class JobManager {
   constructor(private venue: JobManagerVenue) {}
 
   async list(): Promise<string[]> {
-    const body = await fetchWithError<unknown>(`${this.venue.baseUrl}/api/v1/jobs`, {
-      headers: this._buildHeaders(),
-    });
+    const body = await venueJson<unknown>(this.venue, '/api/v1/jobs');
     // Venue 0.6.0 returns a paged {items, total, offset, limit} envelope
     // (covia#229); earlier venues returned a flat id array. Accept both so
     // one SDK spans the upgrade.
@@ -25,9 +20,7 @@ export class JobManager {
 
   async get(jobId: string): Promise<Job> {
     try {
-      const data = await fetchWithError<JobMetadata>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`, {
-        headers: this._buildHeaders(),
-      });
+      const data = await venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}`);
       return new Job(jobId, this.venue as unknown as VenueInterface, data);
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -39,9 +32,8 @@ export class JobManager {
 
   async cancel(jobId: string): Promise<JobMetadata> {
     try {
-      return await fetchWithError<JobMetadata>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}/cancel`, {
+      return await venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/cancel`, {
         method: 'PUT',
-        headers: this._buildHeaders(),
       });
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -53,9 +45,8 @@ export class JobManager {
 
   async delete(jobId: string): Promise<void> {
     try {
-      await fetchStreamWithError(`${this.venue.baseUrl}/api/v1/jobs/${jobId}/delete`, {
+      await venueStream(this.venue, `/api/v1/jobs/${jobId}/delete`, {
         method: 'PUT',
-        headers: this._buildHeaders(),
       });
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -67,9 +58,8 @@ export class JobManager {
 
   async pause(jobId: string): Promise<JobMetadata> {
     try {
-      return await fetchWithError<JobMetadata>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}/pause`, {
+      return await venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/pause`, {
         method: 'PUT',
-        headers: this._buildHeaders(),
       });
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -81,9 +71,8 @@ export class JobManager {
 
   async resume(jobId: string): Promise<JobMetadata> {
     try {
-      return await fetchWithError<JobMetadata>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}/resume`, {
+      return await venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/resume`, {
         method: 'PUT',
-        headers: this._buildHeaders(),
       });
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -95,9 +84,8 @@ export class JobManager {
 
   async sendMessage(jobId: string, message: unknown): Promise<unknown> {
     try {
-      return await fetchWithError<unknown>(`${this.venue.baseUrl}/api/v1/jobs/${jobId}`, {
+      return await venueJson<unknown>(this.venue, `/api/v1/jobs/${jobId}`, {
         method: 'POST',
-        headers: this._buildHeaders(),
         body: JSON.stringify(message),
       });
     } catch (error) {
@@ -109,15 +97,9 @@ export class JobManager {
   }
 
   async *stream(jobId: string): AsyncGenerator<SSEEvent> {
-    const response = await fetchStreamWithError(`${this.venue.baseUrl}/api/v1/jobs/${jobId}/sse`, {
-      headers: { ...this._buildHeaders(), 'Accept': 'text/event-stream' },
+    const response = await venueStream(this.venue, `/api/v1/jobs/${jobId}/sse`, {
+      headers: { 'Accept': 'text/event-stream' },
     });
     yield* parseSSEStream(response);
-  }
-
-  private _buildHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    this.venue.auth.apply(headers, this.venue.venueId);
-    return headers;
   }
 }

@@ -20,6 +20,9 @@ its own SemVer track (independent of the venue/platform version).
 
 ### Changed
 
+- Centralised venue API transport so status, operation discovery, assets, jobs,
+  agents, workspace and secrets consistently carry venue-bound authentication;
+  plain-text HTTP failures are now preserved in typed errors.
 - Removed deployment-specific venue hostnames, a hard-coded asset hash, and a
   duplicated package-version claim from examples and contributor guidance.
   Runnable examples now require an explicit venue environment override, while

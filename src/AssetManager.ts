@@ -1,15 +1,12 @@
 import { AssetMetadata, AssetID, AssetListOptions, AssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
-import { fetchWithError, fetchStreamWithError } from './Utils';
 import { assetHash } from './did';
 import { getAssetMetadataStore, normaliseHash } from './asset-cache';
 import { Asset } from './Asset';
 import { Operation } from './Operation';
 import { DataAsset } from './DataAsset';
+import { venueJson, VenueRequestContext, venueStream } from './VenueTransport';
 
-interface AssetManagerVenue {
-  baseUrl: string;
-  venueId: string;
-  auth: { apply(headers: Record<string, string>, audience?: string): void };
+interface AssetManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
 }
 
@@ -48,9 +45,11 @@ export class AssetManager {
       }
     }
     try {
-      const data = await fetchWithError<AssetMetadata>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`, {
-        headers: this._buildHeaders(null),
-      });
+      const data = await venueJson<AssetMetadata>(
+        this.venue,
+        `/api/v1/assets/${assetId}`,
+        { contentType: null },
+      );
       // Cache only immutable, content-addressed refs — caching a mutable
       // lattice path (w/…, o/…) would serve stale data after it changes.
       if (hash) {
@@ -83,9 +82,11 @@ export class AssetManager {
     if (options.limit !== undefined) {
       params.set('limit', String(options.limit));
     }
-    return fetchWithError<AssetList>(`${this.venue.baseUrl}/api/v1/assets?${params.toString()}`, {
-      headers: this._buildHeaders(null),
-    });
+    return venueJson<AssetList>(
+      this.venue,
+      `/api/v1/assets?${params.toString()}`,
+      { contentType: null },
+    );
   }
 
   /**
@@ -96,9 +97,8 @@ export class AssetManager {
     // POST /api/v1/assets returns the new asset's id as a bare (JSON-encoded)
     // string — confirmed against the venue (buildResult(201, id.toHexString()))
     // and the Python SDK — so feeding it straight into get() is correct.
-    return fetchWithError<AssetID>(`${this.venue.baseUrl}/api/v1/assets`, {
+    return venueJson<AssetID>(this.venue, '/api/v1/assets', {
       method: 'POST',
-      headers: this._buildHeaders(),
       body: JSON.stringify(assetData),
     }).then(response => this.get(response));
   }
@@ -109,9 +109,11 @@ export class AssetManager {
    */
   async getMetadata(assetId: string): Promise<AssetMetadata> {
     try {
-      return await fetchWithError<AssetMetadata>(`${this.venue.baseUrl}/api/v1/assets/${assetId}`, {
-        headers: this._buildHeaders(null),
-      });
+      return await venueJson<AssetMetadata>(
+        this.venue,
+        `/api/v1/assets/${assetId}`,
+        { contentType: null },
+      );
     } catch (error) {
       if (error instanceof NotFoundError) {
         throw new AssetNotFoundError(assetId);
@@ -128,9 +130,9 @@ export class AssetManager {
    */
   async putContent(assetId: string, content: BodyInit): Promise<ContentHashResult> {
     try {
-      return await fetchWithError<ContentHashResult>(`${this.venue.baseUrl}/api/v1/assets/${assetId}/content`, {
+      return await venueJson<ContentHashResult>(this.venue, `/api/v1/assets/${assetId}/content`, {
         method: 'PUT',
-        headers: this._buildHeaders(null),
+        contentType: null,
         body: content,
       });
     } catch (error) {
@@ -147,9 +149,11 @@ export class AssetManager {
    */
   async getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null> {
     try {
-      const response = await fetchStreamWithError(`${this.venue.baseUrl}/api/v1/assets/${assetId}/content`, {
-        headers: this._buildHeaders(null),
-      });
+      const response = await venueStream(
+        this.venue,
+        `/api/v1/assets/${assetId}/content`,
+        { contentType: null },
+      );
       return response.body;
     } catch (error) {
       if (error instanceof NotFoundError) {
@@ -176,13 +180,4 @@ export class AssetManager {
     getAssetMetadataStore()?.clear();
   }
 
-  // `contentType` defaults to JSON for the metadata/register endpoints. Pass
-  // `undefined` for binary content upload so fetch infers the type from the
-  // body — forcing application/json would mislabel a Blob/ArrayBuffer/stream.
-  private _buildHeaders(contentType: string | null = 'application/json'): Record<string, string> {
-    const headers: Record<string, string> = {};
-    if (contentType) headers['Content-Type'] = contentType;
-    this.venue.auth.apply(headers, this.venue.venueId);
-    return headers;
-  }
 }

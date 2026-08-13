@@ -1,10 +1,7 @@
 import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSessionListOptions, AgentSessionListResult, AgentSessionMetadata, AgentSessionRecord, OperationRunner, NotFoundError, StatusData, WorkspaceReadResult, WorkspaceSliceResult } from './types';
-import { fetchWithError } from './Utils';
+import { venueJson, VenueRequestContext } from './VenueTransport';
 
-interface AgentManagerVenue {
-  baseUrl: string;
-  venueId: string;
-  auth: { apply(headers: Record<string, string>, audience?: string): void };
+interface AgentManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
   workspace: {
     read(path: string, maxSize?: number): Promise<WorkspaceReadResult>;
@@ -48,12 +45,6 @@ export class AgentManager {
 
   constructor(private venue: AgentManagerVenue) {}
 
-  private _headers(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    this.venue.auth.apply(headers, this.venue.venueId);
-    return headers;
-  }
-
   /** Whether the venue serves `GET /api/v1/agents`: no if a probe already
    *  404'd, or if the venue's last known status identifies it as pre-0.4. */
   private supportsAgentsGet(): boolean {
@@ -76,9 +67,10 @@ export class AgentManager {
         const qs = new URLSearchParams();
         for (const [k, v] of Object.entries(params)) if (v !== undefined) qs.set(k, String(v));
         const q = qs.toString();
-        return await fetchWithError<T>(
-          `${this.venue.baseUrl}/api/v1/agents${path}${q ? `?${q}` : ''}`,
-          { headers: this._headers() });
+        return await venueJson<T>(
+          this.venue,
+          `/api/v1/agents${path}${q ? `?${q}` : ''}`,
+        );
       } catch (e) {
         if (!(e instanceof NotFoundError)) throw e;
         // Not every 404 means "route missing". GET /agents/{id} 404s for a

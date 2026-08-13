@@ -9,18 +9,29 @@ async function parseErrorBody(response: Response): Promise<{ message: string; bo
   let body: unknown = null;
   let message = `Request failed with status ${response.status}`;
   try {
-    body = (await response.json()) as unknown;
+    // Read the response body exactly once. Calling json() and then text() loses
+    // plain-text errors because the first parse attempt consumes the stream.
+    if (typeof response.text === 'function') {
+      const text = await response.text();
+      if (text) {
+        try {
+          body = JSON.parse(text) as unknown;
+        } catch {
+          body = text;
+          message = text;
+        }
+      }
+    } else {
+      // Test doubles and non-standard fetch implementations may only expose
+      // json(); real WHATWG Responses always take the text path above.
+      body = (await response.json()) as unknown;
+    }
     if (body && typeof body === 'object' && 'error' in body) {
       const err = (body as { error?: unknown }).error;
       if (typeof err === 'string') message = err;
     }
   } catch {
-    try {
-      const text = await response.text();
-      if (text) message = text;
-    } catch {
-      // use default message
-    }
+    // use default message
   }
   return { message, body };
 }
