@@ -118,25 +118,27 @@ venue.metadata;   // { name, description }
 | `venue.didDocument()` | Get the venue's DID document |
 | `venue.mcpDiscovery()` | Get MCP (Model Context Protocol) discovery info |
 | `venue.agentCard()` | Get A2A (Agent-to-Agent) agent card |
-| `venue.setPrivate(enabled)` | Toggle private-jobs mode for this connection (see below) |
+| `venue.setPrivate(enabled)` | Deprecated connection-wide private-jobs mode (see below) |
 | `venue.close()` | Release resources and clear caches |
 
 #### Private jobs
 
-`venue.setPrivate(true)` puts the connection in **private-jobs mode**: every
-subsequent `operations.run()` executes as a memory-only job — never persisted
-to the venue's job index, gone on venue restart. The venue must have
-`enablePrivateJobs` set. Because a completed private job is immediately
-forgotten by the venue, results are collected through the server-side invoke
-`wait` window rather than polling — so private mode works with `run()`, and
-poll-style `operations.invoke()` throws.
+Pass `{ private: true }` to `operations.run()` to execute as a memory-only job:
+it is never persisted to the venue's job index and is gone on venue restart.
+The venue must have `enablePrivateJobs` set. Because a completed private job is
+immediately forgotten by the venue, results are collected through the
+server-side invoke `wait` window rather than polling. Private execution works
+with `run()`; poll-style `operations.invoke()` rejects it.
 
 ```typescript
-venue.setPrivate(true);
 const result = await venue.operations.run("v/ops/schema/infer", {
   value: { name: "Ada", age: 36 },
-});
+}, { private: true });
 ```
+
+`venue.setPrivate(true)` remains available for compatibility, but is
+deprecated because it mutates execution behaviour for every user of the same
+cached connection.
 
 ---
 

@@ -17,6 +17,22 @@ function venueWith(response: any) {
 }
 
 describe('private-jobs mode', () => {
+  it('can be selected per run without mutating the venue', async () => {
+    const v = venueWith({ id: 'j1', status: 'COMPLETE', output: { answer: 42 } });
+    const out = await v.operations.run<{ answer: number }>('v/test/ops/echo', { x: 1 }, { private: true });
+    expect(out.answer).toBe(42);
+    expect(v.privateJobs).toBe(false);
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.private).toBe(true);
+    expect(body.wait).toBe(true);
+  });
+
+  it('rejects per-invocation private mode before making a request', async () => {
+    const v = venueWith({});
+    await expect(v.operations.invoke('v/test/ops/echo', {}, { private: true })).rejects.toBeInstanceOf(CoviaError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('run() sends private+wait and returns the terminal output without polling', async () => {
     const v = venueWith({ id: 'j1', status: 'COMPLETE', output: { answer: 42 } });
     v.setPrivate(true);

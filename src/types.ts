@@ -22,6 +22,8 @@ export interface VenueConstructor {
 
 export interface InvokeOptions {
   ucans?: string[];
+  /** Execute this run as a memory-only private job. Only supported by `run()`. */
+  private?: boolean;
 }
 
 /**

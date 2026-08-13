@@ -20,6 +20,9 @@ its own SemVer track (independent of the venue/platform version).
 
 ### Changed
 
+- Private jobs are now selected per `operations.run(..., { private: true })`;
+  the mutable connection-wide `venue.setPrivate()` switch remains available
+  for compatibility but is deprecated.
 - Grid connections are now cached per `(venue, auth)` with in-flight request
   deduplication, canonical URL/DID aliases, and failed/closed-handle eviction;
   closing one Venue no longer clears other venues' in-memory asset caches.

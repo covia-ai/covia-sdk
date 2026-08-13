@@ -92,7 +92,10 @@ export class Venue implements VenueInterface {
   /** Whether this handle has been closed and should not be reused by Grid. */
   get closed(): boolean { return this._closed; }
 
-  /** Connection-level private-jobs mode — see {@link setPrivate}. */
+  /**
+   * Connection-level private-jobs mode — see {@link setPrivate}.
+   * @deprecated Pass `{ private: true }` to `operations.run()` instead.
+   */
   privateJobs = false;
 
   /**
@@ -103,7 +106,10 @@ export class Venue implements VenueInterface {
    *
    * Because a completed private job is immediately forgotten, results are
    * collected through the invoke `wait` window rather than polling — so
-   * private mode works with `run()`; a poll-style `invoke()` throws.
+  * private mode works with `run()`; a poll-style `invoke()` throws.
+   *
+   * @deprecated Pass `{ private: true }` to `operations.run()` instead. The
+   * per-call option avoids mutable connection-wide execution state.
    */
   setPrivate(enabled: boolean): void {
     this.privateJobs = enabled;

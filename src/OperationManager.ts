@@ -29,10 +29,10 @@ export class OperationManager {
    * Execute an operation and wait for the result
    * @param assetId - Operation asset ID or named operation
    * @param input - Operation input parameters
-   * @param options - Invoke options (e.g., ucans)
+   * @param options - Execution options (e.g., ucans or private execution)
    */
   async run<T = unknown>(assetId: string, input?: unknown, options?: InvokeOptions): Promise<T> {
-    if (this.venue.privateJobs) {
+    if (options?.private ?? this.venue.privateJobs) {
       return this._runPrivate<T>(assetId, input, options);
     }
     const job = await this.invoke(assetId, input, options);
@@ -85,7 +85,7 @@ export class OperationManager {
    * @param options - Invoke options (e.g., ucans)
    */
   async invoke(assetId: string, input?: unknown, options?: InvokeOptions): Promise<Job> {
-    if (this.venue.privateJobs) {
+    if (options?.private || this.venue.privateJobs) {
       throw new CoviaError(
         'Private-jobs mode requires run(): a completed private job is immediately forgotten ' +
         'by the venue, so a poll-style Job cannot collect its result.');
