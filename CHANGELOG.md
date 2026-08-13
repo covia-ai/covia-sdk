@@ -12,6 +12,8 @@ its own SemVer track (independent of the venue/platform version).
   asset objects at one collection location and `venue.skills.get(path)` returns
   the ordinary asset at one exact path. Discovery and interpretation remain
   application concerns.
+- **Structured user memory** — `venue.memory.list` reads `w/memory` job-free;
+  `remember`, `update` and `forget` retain the venue's audited operation path.
 - **Agent session reads** — paginated `listSessions` and `sessionInfo` methods
   on both `AgentManager` and bound `Agent` handles, backed by job-free workspace
   reads of `g/<agent>/sessions`.

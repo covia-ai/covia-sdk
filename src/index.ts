@@ -25,6 +25,7 @@ export { UCANManager } from './UCANManager';
 export { SecretManager } from './SecretManager';
 export { SkillManager } from './SkillManager';
 export type { Skill, SkillFacet, SkillMetadata } from './SkillManager';
+export { MemoryManager } from './MemoryManager';
 
 // Crypto utilities
 export { generateKeyPair, privateKeyToHex, hexToPrivateKey } from './crypto/keys';

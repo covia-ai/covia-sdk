@@ -558,6 +558,30 @@ export interface WorkspaceAggregateResult {
   groups?: Record<string, GroupCount>;
 }
 
+// ── Memory Types ──
+
+export interface MemoryEntry {
+  /** 1-based position used by the venue memory mutation operation. */
+  number: number;
+  value: unknown;
+  text?: string;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface MemoryListResult {
+  path: string;
+  entries: MemoryEntry[];
+}
+
+export interface MemoryMutationResult {
+  count?: number;
+  n?: number;
+  remembered?: boolean;
+  updated?: boolean;
+  forgotten?: boolean;
+}
+
 // ── UCAN Types ──
 
 export interface UCANAttenuation {

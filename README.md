@@ -525,6 +525,22 @@ at that location. `get(path)` is the corresponding typed asset lookup.
 
 ---
 
+### Memory — `venue.memory`
+
+Read the conventional `w/memory` vector as structured entries. Reads are
+job-free; edits use the venue memory operation and therefore leave an audit Job.
+
+```typescript
+const { entries } = await venue.memory.list();
+await venue.memory.remember("Prefers concise answers");
+await venue.memory.update(1, "Prefers concise technical answers");
+await venue.memory.forget(1);
+```
+
+An alternative path can be passed to each method.
+
+---
+
 ### Secrets — `venue.secrets`
 
 Manage secrets stored on the venue.
@@ -690,6 +706,7 @@ import {
   Venue, Grid, Job, Agent, ChatSession, Asset, Operation, DataAsset,
   AdapterManager, AssetManager, OperationManager, JobManager,
   AgentManager, WorkspaceManager, SecretManager, UCANManager, SkillManager,
+  MemoryManager,
   KeyPairAuth, BearerAuth,
   RunStatus, CoviaError,
 } from "@covia/covia-sdk";

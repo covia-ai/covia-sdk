@@ -8,6 +8,7 @@ import { WorkspaceManager } from './WorkspaceManager';
 import { UCANManager } from './UCANManager';
 import { SecretManager } from './SecretManager';
 import { SkillManager } from './SkillManager';
+import { MemoryManager } from './MemoryManager';
 import { Asset } from './Asset';
 import { fetchStreamWithError, fetchWithError } from './Utils';
 import { Auth, NoAuth } from './Credentials';
@@ -125,6 +126,7 @@ export class Venue implements VenueInterface {
   private _ucan?: UCANManager;
   private _secrets?: SecretManager;
   private _skills?: SkillManager;
+  private _memory?: MemoryManager;
 
   get adapters(): AdapterManager { return this._adapters ??= new AdapterManager(this); }
   get agents(): AgentManager { return this._agents ??= new AgentManager(this); }
@@ -135,6 +137,7 @@ export class Venue implements VenueInterface {
   get ucan(): UCANManager { return this._ucan ??= new UCANManager(this); }
   get secrets(): SecretManager { return this._secrets ??= new SecretManager(this); }
   get skills(): SkillManager { return this._skills ??= new SkillManager(this); }
+  get memory(): MemoryManager { return this._memory ??= new MemoryManager(this); }
 
   constructor(options: VenueOptions = {}) {
     this.baseUrl = options.baseUrl || '';
