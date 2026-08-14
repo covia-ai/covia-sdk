@@ -4,6 +4,16 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.9.1
+
+### Added
+
+- **`Ed25519Auth.identityToken(audience?, lifetimeSeconds?)`** — mint and
+  return the bearer-usable identity JWT that `apply()` attaches to requests,
+  for presenting the identity outside the SDK (CLI tools, curl, another
+  client). Same audience rules as `apply()`: the `aud` claim is required and
+  binds the token to one venue.
+
 ## 1.9.0
 
 ### Security

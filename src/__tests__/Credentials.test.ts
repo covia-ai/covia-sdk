@@ -196,6 +196,18 @@ describe('Ed25519Auth', () => {
     expect(decodePayload(headers).aud).toBe('did:web:venue.example.com');
   });
 
+  it('identityToken() returns the aud-bound JWT apply() would send, with a lifetime override', () => {
+    const auth = Ed25519Auth.generate();
+    const token = auth.identityToken('did:web:venue.example.com', 3600);
+    const claims = JSON.parse(
+      Buffer.from(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(),
+    );
+    expect(claims.aud).toBe('did:web:venue.example.com');
+    expect(claims.exp - claims.iat).toBe(3600);
+    expect(claims.sub).toBe(auth.getDID());
+    expect(() => auth.identityToken()).toThrow(/audience/);
+  });
+
   it('refuses to mint a token when no audience is available', () => {
     // An unbound JWT is replayable at any venue that accepts the caller's
     // DID — minting one must fail rather than silently weaken the token.

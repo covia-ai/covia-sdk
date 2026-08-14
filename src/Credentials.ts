@@ -120,18 +120,31 @@ export class Ed25519Auth extends Auth {
   }
 
   apply(headers: Record<string, string>, audience?: string): void {
-    // An explicitly-pinned audience wins; otherwise bind the JWT `aud` to the
-    // venue DID the transport supplies. A token with no `aud` is replayable
-    // at any venue that accepts the caller's DID, so minting one is refused
-    // rather than silently weakened.
+    headers['Authorization'] = `Bearer ${this.identityToken(audience)}`;
+  }
+
+  /**
+   * Mint a bearer-usable identity JWT for this key — the same token
+   * {@link apply} attaches to every request, exposed for callers that need
+   * to present this identity elsewhere (CLI tools, curl, another client:
+   * `Authorization: Bearer <token>`).
+   *
+   * An explicitly-pinned {@link audience} wins; otherwise the JWT `aud` is
+   * bound to the venue DID given here. A token with no `aud` is replayable
+   * at any venue that accepts the caller's DID, so minting one is refused
+   * rather than silently weakened.
+   *
+   * @param audience - The venue DID the token is bound to (`aud` claim).
+   * @param lifetimeSeconds - Token lifetime; defaults to this instance's.
+   */
+  identityToken(audience?: string, lifetimeSeconds?: number): string {
     const aud = this._audience ?? (audience || undefined);
     if (!aud) {
       throw new CoviaError(
         'Ed25519Auth requires a venue audience to bind the token to: connect via ' +
         'Grid.connect()/Venue.connect() so the venue DID is known, or pin auth.audience explicitly.');
     }
-    const jwt = createEdDSAJWT(this._privateKey, this._lifetime, aud);
-    headers['Authorization'] = `Bearer ${jwt}`;
+    return createEdDSAJWT(this._privateKey, lifetimeSeconds ?? this._lifetime, aud);
   }
 
   /** The caller's DID derived from the public key. */
