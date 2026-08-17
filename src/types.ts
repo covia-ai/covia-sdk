@@ -164,6 +164,23 @@ export interface AssetList {
   limit: number;
 }
 
+// The caller's own per-user a/ namespace (populated by AssetManager.store/
+// pin) — a separate bucket from the venue-wide catalog AssetList reads, so
+// items carry a name/type/description summary rather than bare id strings.
+export interface AssetSummary {
+  id: string;
+  name?: string;
+  type?: string;
+  description?: string;
+}
+
+export interface MyAssetList {
+  items: AssetSummary[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 export interface MCPDiscovery {
   mcp_version?: string;
   server_url?: string;

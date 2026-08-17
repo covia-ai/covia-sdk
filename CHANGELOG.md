@@ -46,6 +46,14 @@ its own SemVer track (independent of the venue/platform version).
   on both `AgentManager` and bound `Agent` handles, backed by job-free workspace
   reads of `g/<agent>/sessions`.
 
+### Added
+
+- `AssetManager.listMine(options)` — job-free listing of the authenticated
+  caller's own assets (the per-user `a/` namespace populated by `store`/
+  `pin`), via the new `GET /api/v1/assets/mine` endpoint. Returns `MyAssetList`
+  (`AssetSummary[]` items with `name`/`type`/`description`), distinct from the
+  venue-wide catalog `list()` reads.
+
 ### Changed
 
 - Read methods no longer silently invoke operations when a job-free endpoint
