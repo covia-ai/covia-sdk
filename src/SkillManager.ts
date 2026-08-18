@@ -37,7 +37,14 @@ const PAGE_SIZE = 100;
 export class SkillManager {
   constructor(private venue: SkillManagerVenue) {}
 
-  /** Return every skill asset directly contained at `path`. */
+  /**
+   * Return every skill asset directly contained at `path`. A single entry
+   * that fails to resolve (e.g. a legacy bare-string alias the plain assets
+   * endpoint can't follow — see covia-ai/frontend#229) is skipped rather
+   * than failing the whole listing: one broken skill must not take down
+   * every other skill at this location, the same "don't discard what was
+   * already collected" principle this method already applies across pages.
+   */
   async list(path: string): Promise<Skill[]> {
     const location = path.replace(/\/+$/, '');
     const skills: Skill[] = [];
@@ -54,10 +61,12 @@ export class SkillManager {
       }
 
       const keys = page.keys ?? [];
-      const assets = await Promise.all(
+      const results = await Promise.allSettled(
         keys.map((key) => this.get(`${location}/${key}`)),
       );
-      skills.push(...assets);
+      for (const result of results) {
+        if (result.status === 'fulfilled') skills.push(result.value);
+      }
 
       const nextOffset = (page.offset ?? offset) + keys.length;
       if (keys.length === 0 || nextOffset >= (page.count ?? nextOffset)) break;
