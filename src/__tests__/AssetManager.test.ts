@@ -146,13 +146,13 @@ describe('AssetManager.listMine', () => {
     am = new AssetManager(makeVenue());
   });
 
-  it('hits the job-free /api/v1/assets/mine endpoint, not the venue-wide catalog', async () => {
+  it('hits the job-free GET /api/v1/assets?scope=own endpoint, not the venue-wide catalog', async () => {
     mockJsonOnce({ items: [{ id: 'a1', name: 'Mine', type: 'document', description: 'x' }], total: 1, offset: 0, limit: 100 });
     const result = await am.listMine();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url] = mockFetch.mock.calls[0];
-    expect(url).toBe('https://v/api/v1/assets/mine?offset=0');
+    expect(url).toBe('https://v/api/v1/assets?scope=own&offset=0');
     expect(result.items).toEqual([{ id: 'a1', name: 'Mine', type: 'document', description: 'x' }]);
   });
 
@@ -161,7 +161,7 @@ describe('AssetManager.listMine', () => {
     await am.listMine({ offset: 5, limit: 10 });
 
     const [url] = mockFetch.mock.calls[0];
-    expect(url).toBe('https://v/api/v1/assets/mine?offset=5&limit=10');
+    expect(url).toBe('https://v/api/v1/assets?scope=own&offset=5&limit=10');
   });
 });
 

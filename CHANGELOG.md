@@ -50,7 +50,7 @@ its own SemVer track (independent of the venue/platform version).
 
 - `AssetManager.listMine(options)` — job-free listing of the authenticated
   caller's own assets (the per-user `a/` namespace populated by `store`/
-  `pin`), via the new `GET /api/v1/assets/mine` endpoint. Returns `MyAssetList`
+  `pin`), via `GET /api/v1/assets?scope=own`. Returns `MyAssetList`
   (`AssetSummary[]` items with `name`/`type`/`description`), distinct from the
   venue-wide catalog `list()` reads.
 
