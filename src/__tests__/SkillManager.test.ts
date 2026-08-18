@@ -65,6 +65,31 @@ describe('SkillManager', () => {
     expect(venue.assets.get).not.toHaveBeenCalled();
   });
 
+  it('skips an entry that fails to resolve instead of failing the whole listing', async () => {
+    // A legacy bare-string alias (or any other unreadable entry) 404s
+    // through the plain assets endpoint — see covia-ai/frontend#229.
+    const venue = createVenue();
+    venue.workspace.list.mockResolvedValue({
+      exists: true,
+      type: 'Map',
+      count: 3,
+      offset: 0,
+      keys: ['good-one', 'broken-alias', 'good-two'],
+    });
+    venue.assets.get.mockImplementation((path: string) =>
+      path.includes('broken-alias')
+        ? Promise.reject(new Error('Asset not found'))
+        : Promise.resolve(asset(path)),
+    );
+
+    const skills = await new SkillManager(venue).list('w/skills');
+
+    expect(skills.map((skill) => skill.id)).toEqual([
+      'w/skills/good-one',
+      'w/skills/good-two',
+    ]);
+  });
+
   it('throws when the venue returns a page that does not advance', async () => {
     // A venue/proxy that ignores the offset param must not loop forever.
     const venue = createVenue();

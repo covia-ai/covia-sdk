@@ -4,6 +4,15 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.10.1
+
+### Fixed
+
+- `SkillManager.list(path)` no longer fails the entire listing when one
+  entry can't be resolved (e.g. a legacy bare-string alias the plain assets
+  endpoint can't follow) — that entry is now skipped, and every other skill
+  at the location is still returned.
+
 ## 1.10.0
 
 ### Added
