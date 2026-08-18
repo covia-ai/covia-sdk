@@ -138,6 +138,33 @@ describe('AssetManager persistent metadata store', () => {
   });
 });
 
+describe('AssetManager.listMine', () => {
+  let am: AssetManager;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    am = new AssetManager(makeVenue());
+  });
+
+  it('hits the job-free GET /api/v1/assets?scope=own endpoint, not the venue-wide catalog', async () => {
+    mockJsonOnce({ items: [{ id: 'a1', name: 'Mine', type: 'document', description: 'x' }], total: 1, offset: 0, limit: 100 });
+    const result = await am.listMine();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://v/api/v1/assets?scope=own&offset=0');
+    expect(result.items).toEqual([{ id: 'a1', name: 'Mine', type: 'document', description: 'x' }]);
+  });
+
+  it('passes offset/limit through as query params', async () => {
+    mockJsonOnce({ items: [], total: 0, offset: 5, limit: 10 });
+    await am.listMine({ offset: 5, limit: 10 });
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://v/api/v1/assets?scope=own&offset=5&limit=10');
+  });
+});
+
 describe('AssetManager read authentication', () => {
   beforeEach(() => {
     mockFetch.mockReset();
@@ -158,6 +185,7 @@ describe('AssetManager read authentication', () => {
 
     mockJsonOnce({ name: 'Asset' });
     mockJsonOnce({ items: ['a1'], total: 1, offset: 0, limit: 100 });
+    mockJsonOnce({ items: [], total: 0, offset: 0, limit: 100 });
     mockJsonOnce({ name: 'Metadata' });
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -167,11 +195,12 @@ describe('AssetManager read authentication', () => {
 
     await am.get('w/assets/auth-test');
     await am.list();
+    await am.listMine();
     await am.getMetadata('asset-1');
     await am.getContent('asset-1');
 
-    expect(mockFetch).toHaveBeenCalledTimes(4);
-    expect(apply).toHaveBeenCalledTimes(4);
+    expect(mockFetch).toHaveBeenCalledTimes(5);
+    expect(apply).toHaveBeenCalledTimes(5);
     for (const call of apply.mock.calls) {
       expect(call[1]).toBe('did:web:v');
     }

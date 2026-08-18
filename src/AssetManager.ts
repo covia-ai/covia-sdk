@@ -1,4 +1,4 @@
-import { AssetMetadata, AssetID, AssetListOptions, AssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
+import { AssetMetadata, AssetID, AssetListOptions, AssetList, MyAssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
 import { assetHash } from './did';
 import { getAssetMetadataStore, normaliseHash } from './asset-cache';
 import { Asset } from './Asset';
@@ -81,6 +81,26 @@ export class AssetManager {
       params.set('limit', String(options.limit));
     }
     return venueJson<AssetList>(
+      this.venue,
+      `/api/v1/assets?${params.toString()}`,
+      { contentType: null },
+    );
+  }
+
+  /**
+   * List the authenticated caller's own assets — the per-user a/ namespace
+   * populated by `store`/`pin`, distinct from the venue-wide catalog `list()`
+   * reads. Job-free (a plain GET, not an operation invocation).
+   * @param options - Pagination options (offset, limit)
+   */
+  async listMine(options: AssetListOptions = {}): Promise<MyAssetList> {
+    const params = new URLSearchParams();
+    params.set('scope', 'own');
+    params.set('offset', String(options.offset ?? 0));
+    if (options.limit !== undefined) {
+      params.set('limit', String(options.limit));
+    }
+    return venueJson<MyAssetList>(
       this.venue,
       `/api/v1/assets?${params.toString()}`,
       { contentType: null },
