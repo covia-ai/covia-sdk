@@ -4,6 +4,16 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.10.0
+
+### Added
+
+- `AssetManager.listMine(options)` — job-free listing of the authenticated
+  caller's own assets (the per-user `a/` namespace populated by `store`/
+  `pin`), via `GET /api/v1/assets?scope=own`. Returns `MyAssetList`
+  (`AssetSummary[]` items with `name`/`type`/`description`), distinct from the
+  venue-wide catalog `list()` reads.
+
 ## 1.9.1
 
 ### Added
@@ -45,14 +55,6 @@ its own SemVer track (independent of the venue/platform version).
 - **Agent session reads** — paginated `listSessions` and exact `getSession` methods
   on both `AgentManager` and bound `Agent` handles, backed by job-free workspace
   reads of `g/<agent>/sessions`.
-
-### Added
-
-- `AssetManager.listMine(options)` — job-free listing of the authenticated
-  caller's own assets (the per-user `a/` namespace populated by `store`/
-  `pin`), via `GET /api/v1/assets?scope=own`. Returns `MyAssetList`
-  (`AssetSummary[]` items with `name`/`type`/`description`), distinct from the
-  venue-wide catalog `list()` reads.
 
 ### Changed
 
