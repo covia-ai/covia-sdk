@@ -4,6 +4,16 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.11.0
+
+### Added
+
+- `AssetManager.list(options)` / `Venue.listAssets(options)` accept
+  `expand: 'metadata'`, matching the venue's `GET /api/v1/assets?expand=
+  metadata`. Returns `ExpandedAssetList` (`AssetListItem[]` items —
+  `{id, metadata}`) instead of bare id strings, sparing callers a per-id
+  metadata hydration pass. The default call (no `expand`) is unchanged.
+
 ## 1.10.1
 
 ### Fixed
