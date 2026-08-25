@@ -1,4 +1,4 @@
-import { AssetMetadata, AssetID, AssetListOptions, AssetList, MyAssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
+import { AssetMetadata, AssetID, AssetListOptions, AssetList, ExpandedAssetList, MyAssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
 import { assetHash } from './did';
 import { getAssetMetadataStore, normaliseHash } from './asset-cache';
 import { Asset } from './Asset';
@@ -72,15 +72,22 @@ export class AssetManager {
 
   /**
    * List assets with pagination support
-   * @param options - Pagination options (offset, limit)
+   * @param options - Pagination options (offset, limit). Pass
+   * `{ expand: 'metadata' }` to get each item's metadata inlined as
+   * `{id, metadata}` instead of a bare id string, sparing a per-id fetch.
    */
-  async list(options: AssetListOptions = {}): Promise<AssetList> {
+  async list(options: AssetListOptions & { expand: 'metadata' }): Promise<ExpandedAssetList>;
+  async list(options?: AssetListOptions): Promise<AssetList>;
+  async list(options: AssetListOptions = {}): Promise<AssetList | ExpandedAssetList> {
     const params = new URLSearchParams();
     params.set('offset', String(options.offset ?? 0));
     if (options.limit !== undefined) {
       params.set('limit', String(options.limit));
     }
-    return venueJson<AssetList>(
+    if (options.expand !== undefined) {
+      params.set('expand', options.expand);
+    }
+    return venueJson<AssetList | ExpandedAssetList>(
       this.venue,
       `/api/v1/assets?${params.toString()}`,
       { contentType: null },
