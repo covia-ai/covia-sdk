@@ -138,6 +138,38 @@ describe('AssetManager persistent metadata store', () => {
   });
 });
 
+describe('AssetManager.list', () => {
+  let am: AssetManager;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    am = new AssetManager(makeVenue());
+  });
+
+  it('returns bare id strings by default', async () => {
+    mockJsonOnce({ items: ['a1', 'a2'], total: 2, offset: 0, limit: 100 });
+    const result = await am.list();
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://v/api/v1/assets?offset=0');
+    expect(result.items).toEqual(['a1', 'a2']);
+  });
+
+  it('passes expand=metadata through and returns {id, metadata} items', async () => {
+    mockJsonOnce({
+      items: [{ id: 'a1', metadata: { name: 'Asset One' } }],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    });
+    const result = await am.list({ expand: 'metadata' });
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://v/api/v1/assets?offset=0&expand=metadata');
+    expect(result.items).toEqual([{ id: 'a1', metadata: { name: 'Asset One' } }]);
+  });
+});
+
 describe('AssetManager.listMine', () => {
   let am: AssetManager;
 

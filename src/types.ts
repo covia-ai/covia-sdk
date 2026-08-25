@@ -45,6 +45,7 @@ export interface VenueInterface {
   getJob(jobId:string):Promise<Job>;
   listJobs():Promise<string[]>;
   getAsset(assetId: AssetID): Promise<Asset>;
+  listAssets(options: AssetListOptions & { expand: 'metadata' }): Promise<ExpandedAssetList>;
   listAssets(options?: AssetListOptions): Promise<AssetList>;
   didDocument(): Promise<DIDDocument>;
   mcpDiscovery(): Promise<MCPDiscovery>;
@@ -155,10 +156,26 @@ export interface StatsData {
 export interface AssetListOptions {
   offset?: number;
   limit?: number;
+  expand?: 'metadata';
 }
 
 export interface AssetList {
   items: string[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+// One venue-catalog item with its metadata inlined — what AssetList.items
+// holds when list() is called with { expand: 'metadata' }, sparing the
+// caller a per-id hydration round trip.
+export interface AssetListItem {
+  id: string;
+  metadata: AssetMetadata;
+}
+
+export interface ExpandedAssetList {
+  items: AssetListItem[];
   total: number;
   offset: number;
   limit: number;
