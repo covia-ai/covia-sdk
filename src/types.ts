@@ -145,7 +145,6 @@ export interface StatusData {
   /** Venue platform version (e.g. "0.3.0"). Absent on venues before 0.3. */
   version?:string;
   stats?:StatsData;
-
 }
 export interface StatsData {
   assets?: number;
@@ -667,6 +666,24 @@ export interface SecretExtractInput {
 export interface SecretExtractResult {
   name: string;
   value: string;
+}
+
+// ── DLFS Types (#253) ──
+
+export interface DLFSEntry {
+  name: string;
+  type: "file" | "directory";
+  size?: number;
+  modified?: string;
+}
+
+export interface DLFSDrivesResult {
+  drives: string[];
+}
+
+export interface DLFSListResult {
+  entries: DLFSEntry[];
+  warnings?: string[];
 }
 
 // ── Discovery Types ──

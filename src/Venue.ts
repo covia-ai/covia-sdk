@@ -9,6 +9,7 @@ import { UCANManager } from './UCANManager';
 import { SecretManager } from './SecretManager';
 import { SkillManager } from './SkillManager';
 import { MemoryManager } from './MemoryManager';
+import { DLFSManager } from './DLFSManager';
 import { Asset } from './Asset';
 import { fetchWithError } from './Utils';
 import { Auth, NoAuth } from './Credentials';
@@ -139,6 +140,7 @@ export class Venue implements VenueInterface {
   private _secrets?: SecretManager;
   private _skills?: SkillManager;
   private _memory?: MemoryManager;
+  private _dlfs?: DLFSManager;
 
   get adapters(): AdapterManager { return this._adapters ??= new AdapterManager(this); }
   get agents(): AgentManager { return this._agents ??= new AgentManager(this); }
@@ -150,6 +152,7 @@ export class Venue implements VenueInterface {
   get secrets(): SecretManager { return this._secrets ??= new SecretManager(this); }
   get skills(): SkillManager { return this._skills ??= new SkillManager(this); }
   get memory(): MemoryManager { return this._memory ??= new MemoryManager(this); }
+  get dlfs(): DLFSManager { return this._dlfs ??= new DLFSManager(this); }
 
   constructor(options: VenueOptions = {}) {
     this.baseUrl = options.baseUrl || '';
