@@ -4,6 +4,18 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.12.0
+
+### Added
+
+- `DLFSManager` (`Venue.dlfs`) — job-free `listDrives()` and `list(drive,
+  path?)`, wrapping the venue's `GET /api/v1/dlfs/drives` and `GET
+  /api/v1/dlfs/list`, plus `getContent(drive, path)` for streamed file
+  content over the existing `GET /api/v1/content/dlfs/<drive>/<path>`
+  route. Throws `UnsupportedVenueFeatureError` on venues that don't serve
+  these routes yet. New types: `DLFSEntry`, `DLFSDrivesResult`,
+  `DLFSListResult`.
+
 ## 1.11.0
 
 ### Added
