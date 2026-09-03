@@ -26,6 +26,7 @@ export { SecretManager } from './SecretManager';
 export { SkillManager } from './SkillManager';
 export type { Skill, SkillFacet, SkillMetadata } from './SkillManager';
 export { MemoryManager } from './MemoryManager';
+export { DLFSManager } from './DLFSManager';
 
 // Crypto utilities
 export { generateKeyPair, privateKeyToHex, hexToPrivateKey } from './crypto/keys';
