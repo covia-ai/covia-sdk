@@ -145,6 +145,9 @@ export interface StatusData {
   /** Venue platform version (e.g. "0.3.0"). Absent on venues before 0.3. */
   version?:string;
   stats?:StatsData;
+  /** Curated admission-policy fields (#255) — safe to state to any caller.
+   *  Absent on venues before this shipped; treat as unknown, not false. */
+  access?: { public: boolean; userAutoCreate: boolean };
 }
 export interface StatsData {
   assets?: number;
@@ -684,6 +687,59 @@ export interface DLFSDrivesResult {
 export interface DLFSListResult {
   entries: DLFSEntry[];
   warnings?: string[];
+}
+
+// ── User Types (#255) ──
+
+export interface UserSummary {
+  did: string;
+  registered: boolean;
+  /** True for a venue-managed named account (a did:web identity minted from
+   *  a username); false/absent for a plain registered DID. */
+  managed?: boolean;
+  meta?: Record<string, unknown>;
+}
+
+export interface UserListResult {
+  users: UserSummary[];
+  total: number;
+}
+
+export interface UserInfo {
+  did: string;
+  registered: boolean;
+  managed?: boolean;
+  meta?: Record<string, unknown>;
+}
+
+/** One authenticator's lifecycle record. Revocation is a status transition
+ *  in place — a revoked entry is retained forever, never deleted, so the
+ *  key's full add/revoke history stays visible as an audit tombstone. */
+export interface AuthenticationKeyEntry {
+  status: "active" | "revoked";
+  /** Epoch millis. */
+  addedAt: number;
+  /** Actor DID that added this key. */
+  addedBy: string;
+  label?: string;
+  /** Epoch millis, present only once status is "revoked". */
+  revokedAt?: number;
+  /** Actor DID that revoked this key, present only once status is "revoked". */
+  revokedBy?: string;
+}
+
+/** Keyed by the authenticator's own `did:key:...` string. */
+export type AuthenticationKeysMap = Record<string, AuthenticationKeyEntry>;
+
+export interface AuthenticationKeysResult {
+  did: string;
+  authenticationKeys: AuthenticationKeysMap;
+}
+
+export interface AuthenticatorRevokeResult {
+  did: string;
+  key: string;
+  revoked: boolean;
 }
 
 // ── Discovery Types ──
