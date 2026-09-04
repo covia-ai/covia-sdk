@@ -4,6 +4,21 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.13.0
+
+### Added
+
+- `UserManager` (`Venue.users`) — job-free `list()`, `info(did)`, and
+  `listAuthenticators(did)`, wrapping the venue's `GET /api/v1/users`, `GET
+  /api/v1/users/{did}`, and `GET /api/v1/users/{did}/authentications`.
+  `revokeAuthenticator(key, did?, ucans?)` wraps the corresponding write
+  route; a revoked authenticator is kept as a status-transitioned tombstone,
+  never deleted. `Venue.status()`'s result now surfaces
+  `access.userAutoCreate` / `access.public` so callers can state the venue's
+  admission policy truthfully. New types: `UserSummary`, `UserListResult`,
+  `UserInfo`, `AuthenticationKeyEntry`, `AuthenticationKeysResult`,
+  `AuthenticatorRevokeResult`.
+
 ## 1.12.0
 
 ### Added
