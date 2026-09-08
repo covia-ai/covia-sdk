@@ -48,7 +48,10 @@ export function createEdDSAJWT(privateKey: Uint8Array, lifetimeSeconds: number =
     sub: did,
     iss: did,
     iat: nowSecs,
-    exp: nowSecs + lifetimeSeconds,
+    // Floored defensively — lifetimeSeconds has no integer enforcement at
+    // the type level, and a float exp claim can fail JWT validation on
+    // servers that require a bare integer Unix timestamp (covia-sdk#46).
+    exp: Math.floor(nowSecs + lifetimeSeconds),
   };
   if (audience) claims.aud = audience;
   const payload = JSON.stringify(claims);

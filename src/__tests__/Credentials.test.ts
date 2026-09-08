@@ -208,6 +208,15 @@ describe('Ed25519Auth', () => {
     expect(() => auth.identityToken()).toThrow(/audience/);
   });
 
+  it('exp is always a bare integer, even given a fractional lifetimeSeconds (covia-sdk#46)', () => {
+    const auth = Ed25519Auth.generate();
+    const token = auth.identityToken('did:web:venue.example.com', 300.5);
+    const claims = JSON.parse(
+      Buffer.from(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(),
+    );
+    expect(Number.isInteger(claims.exp)).toBe(true);
+  });
+
   it('refuses to mint a token when no audience is available', () => {
     // An unbound JWT is replayable at any venue that accepts the caller's
     // DID — minting one must fail rather than silently weaken the token.
