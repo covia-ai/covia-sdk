@@ -4,6 +4,31 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.14.0
+
+### Added
+
+- `AgentManager.events(agentId, options)` / `Agent.events(options)` —
+  job-free streaming of an agent's run-loop events (run/cycle boundaries,
+  inferences, tool calls, status changes) from the venue's live tap
+  (`GET /api/v1/agents/{id}/sse`, covia#394, venue ≥ 0.9.7). Narrow to one
+  session with `sessionId`, omit owner-only tool input/result and
+  appended-turn detail with `detail: false`, and abort with `signal`. Throws
+  `UnsupportedVenueFeatureError` on venues without the route. New discriminated
+  union `AgentEvent` (`AgentRunStartEvent`, `AgentRunEndEvent`,
+  `AgentCycleStartEvent`, `AgentCycleEndEvent`, `AgentInferenceStartEvent`,
+  `AgentInferenceEndEvent`, `AgentToolStartEvent`, `AgentToolResultEvent`,
+  `AgentStatusEvent`) plus the shared `AgentEventEnvelope`.
+
+### Fixed
+
+- `JobManager.stream(jobId, options)` / `Job.stream(options)` now accept an
+  `options.signal: AbortSignal` and, together with `parseSSEStream`, actually
+  cancel the underlying stream reader — not just release its lock — both
+  when `signal` fires and when a consumer exits a `for await` loop early.
+  Previously the HTTP connection was left open until the runtime reclaimed
+  it on its own schedule.
+
 ## 1.13.0
 
 ### Added

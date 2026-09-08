@@ -238,9 +238,14 @@ export function createSSEEvent(fields: { event?: string; data?: string; id?: str
 
 /**
  * Parse an SSE stream from a fetch Response body.
- * Yields SSEEvent objects as they arrive.
+ * Yields SSEEvent objects as they arrive. On `signal` abort, iteration ends
+ * as if the stream closed (no exception thrown); callers that must
+ * distinguish should check `signal.aborted` after the loop.
  */
-export async function* parseSSEStream(response: Response): AsyncGenerator<SSEEvent> {
+export async function* parseSSEStream(
+  response: Response,
+  options?: { signal?: AbortSignal },
+): AsyncGenerator<SSEEvent> {
   const reader = response.body?.getReader();
   if (!reader) return;
 
@@ -251,9 +256,29 @@ export async function* parseSSEStream(response: Response): AsyncGenerator<SSEEve
   let id: string | undefined;
   let retry: number | undefined;
 
+  const signal = options?.signal;
+  const onAbort = () => { void reader.cancel(signal!.reason).catch(() => {}); };
+  if (signal) {
+    if (signal.aborted) void reader.cancel(signal.reason).catch(() => {});
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      let result: ReadableStreamReadResult<Uint8Array>;
+      try {
+        result = await reader.read();
+      } catch (err) {
+        // A real fetch() ties body reads to the same signal passed to the
+        // request, so aborting rejects a pending read (with the abort
+        // reason, not always a DOMException) rather than resolving it with
+        // {done: true} as a bare ReadableStream's cancel() would — confirmed
+        // against Node's undici, not just the spec text. Either shape ends
+        // iteration the same way: gracefully, no throw to the consumer.
+        if (signal?.aborted) break;
+        throw err;
+      }
+      const { done, value } = result;
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -311,7 +336,8 @@ export async function* parseSSEStream(response: Response): AsyncGenerator<SSEEve
       yield createSSEEvent({ event, data: data.join('\n'), id, retry });
     }
   } finally {
-    reader.releaseLock();
+    signal?.removeEventListener('abort', onAbort);
+    await reader.cancel().catch(() => {});
   }
 }
 

@@ -141,10 +141,11 @@ export class JobManager {
     }
   }
 
-  async *stream(jobId: string): AsyncGenerator<SSEEvent> {
+  async *stream(jobId: string, options?: { signal?: AbortSignal }): AsyncGenerator<SSEEvent> {
     const response = await venueStream(this.venue, `/api/v1/jobs/${jobId}/sse`, {
       headers: { 'Accept': 'text/event-stream' },
+      signal: options?.signal,
     });
-    yield* parseSSEStream(response);
+    yield* parseSSEStream(response, { signal: options?.signal });
   }
 }

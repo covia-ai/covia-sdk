@@ -2,6 +2,7 @@ import {
   AgentRequestResult,
   AgentMessageResult,
   AgentChatResult,
+  AgentEvent,
   AgentTriggerResult,
   AgentSuspendResult,
   AgentUpdateInput,
@@ -31,6 +32,7 @@ interface AgentOps {
   delete(agentId: string, remove?: boolean): Promise<AgentDeleteResult>;
   listSessions(agentId: string, options?: AgentSessionListOptions): Promise<AgentSessionPage>;
   getSession(agentId: string, sessionId: string): Promise<AgentSession>;
+  events(agentId: string, options?: { sessionId?: string; detail?: boolean; signal?: AbortSignal }): AsyncGenerator<AgentEvent>;
 }
 
 export class Agent {
@@ -96,6 +98,11 @@ export class Agent {
   /** Read one session through the job-free workspace Values API. */
   async getSession(sessionId: string): Promise<AgentSession> {
     return this._agents.getSession(this.id, sessionId);
+  }
+
+  /** Stream this agent's run-loop events. See `AgentManager.events`. */
+  async *events(options?: { sessionId?: string; detail?: boolean; signal?: AbortSignal }): AsyncGenerator<AgentEvent> {
+    yield* this._agents.events(this.id, options);
   }
 
   /**
