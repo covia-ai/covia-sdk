@@ -34,6 +34,14 @@ describe('UCAN minting', () => {
     expect(claims.prf).toEqual([]);                       // root grant — present and empty per the profile
   });
 
+  it('exp is always a bare integer, even given a fractional lifetimeSeconds (covia-sdk#46)', () => {
+    // Convex's JSON reader only decodes a bare integer as CVMLong; anything
+    // with a decimal point becomes a CVMDouble the venue's UcanJwtValidator
+    // rejects outright with an opaque 401.
+    const { claims } = decode(createUCANJWT(privateKey, venueDID, [], 300.75));
+    expect(Number.isInteger(claims.exp)).toBe(true);
+  });
+
   it('non-expiring tokens carry an explicit exp: null', () => {
     const { claims } = decode(createUCANJWT(privateKey, 'did:key:z6MkBob',
       [{ with: 'did:key:zMe/w/', can: 'crud/read' }], null));
