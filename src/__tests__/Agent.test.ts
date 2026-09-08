@@ -14,6 +14,7 @@ function createMockAgents() {
     fork: jest.fn().mockResolvedValue({ agentId: 'a2', status: 'SLEEPING', created: true, forkedFrom: 'a1' }),
     context: jest.fn().mockResolvedValue('context string'),
     delete: jest.fn().mockResolvedValue({ agentId: 'a1', status: 'TERMINATED' }),
+    events: jest.fn(),
   };
 }
 
@@ -119,6 +120,22 @@ describe('Agent', () => {
   it('chatSession accepts an existing sessionId for resuming', () => {
     const session = agent.chatSession('existing-sid');
     expect(session.sessionId).toBe('existing-sid');
+  });
+
+  it('events delegates to agents.events and streams events through unchanged', async () => {
+    async function* fakeGenerator() {
+      yield { type: 'status', status: 'RUNNING' };
+    }
+    mockAgents.events.mockReturnValue(fakeGenerator());
+    const options = { sessionId: 'sess-1', detail: false };
+
+    const collected = [];
+    for await (const evt of agent.events(options)) {
+      collected.push(evt);
+    }
+
+    expect(mockAgents.events).toHaveBeenCalledWith('a1', options);
+    expect(collected).toEqual([{ type: 'status', status: 'RUNNING' }]);
   });
 });
 

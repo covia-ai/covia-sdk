@@ -460,6 +460,110 @@ export interface AgentFailTaskResult {
   status: string;
 }
 
+/** Fields present on every agent run-loop event frame (covia#394). */
+export interface AgentEventEnvelope {
+  seq: number;
+  ts: number;
+  agentId: string;
+  address: string;
+}
+
+export interface AgentRunStartEvent extends AgentEventEnvelope {
+  type: 'run:start';
+  run: number;
+}
+
+export interface AgentRunEndEvent extends AgentEventEnvelope {
+  type: 'run:end';
+  run: number;
+  status: AgentStatus;
+  cycles: number;
+}
+
+export interface AgentCycleStartEvent extends AgentEventEnvelope {
+  type: 'cycle:start';
+  run: number;
+  cycle: number;
+  op?: string;
+  sessionId?: string;
+  jobId?: string;
+  jobs?: string[];
+  tasks: unknown;
+  messages: unknown;
+  pending: unknown;
+}
+
+export interface AgentCycleEndEvent extends AgentEventEnvelope {
+  type: 'cycle:end';
+  run: number;
+  cycle: number;
+  ms: number;
+  response?: unknown;
+  error?: string;
+  tokens?: unknown;
+  timeline?: unknown;
+  detail?: { turns: unknown };
+}
+
+export interface AgentInferenceStartEvent extends AgentEventEnvelope {
+  type: 'inference:start';
+  op: string;
+  model?: string;
+  messages: unknown;
+  tools: unknown;
+  bytes: number;
+  budget: unknown;
+  depth?: number;
+}
+
+export interface AgentInferenceEndEvent extends AgentEventEnvelope {
+  type: 'inference:end';
+  ms: number;
+  model?: string;
+  content?: unknown;
+  toolCalls?: { id: string; name: string }[];
+  tokens?: unknown;
+  error?: string;
+  depth?: number;
+}
+
+export interface AgentToolStartEvent extends AgentEventEnvelope {
+  type: 'tool:start';
+  id: string;
+  name: string;
+  depth?: number;
+  detail: { input: unknown };
+}
+
+export interface AgentToolResultEvent extends AgentEventEnvelope {
+  type: 'tool:result';
+  id: string;
+  name: string;
+  ms: number;
+  isError?: boolean;
+  depth?: number;
+  detail: { result: unknown };
+}
+
+export interface AgentStatusEvent extends AgentEventEnvelope {
+  type: 'status';
+  status: AgentStatus;
+  error?: string;
+}
+
+/** One frame from the venue's agent run-loop event stream (`GET
+ *  /agents/{id}/sse`, covia#394), discriminated on `type`. */
+export type AgentEvent =
+  | AgentRunStartEvent
+  | AgentRunEndEvent
+  | AgentCycleStartEvent
+  | AgentCycleEndEvent
+  | AgentInferenceStartEvent
+  | AgentInferenceEndEvent
+  | AgentToolStartEvent
+  | AgentToolResultEvent
+  | AgentStatusEvent;
+
 export interface AssetPinResult {
   path: string;
   hash: string;

@@ -300,4 +300,95 @@ describe('AgentManager', () => {
     await agents.failTask('something went wrong');
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/fail-task', { error: 'something went wrong' });
   });
+
+  describe('events', () => {
+    function drain<T>(gen: AsyncGenerator<T>): Promise<T[]> {
+      return (async () => {
+        const out: T[] = [];
+        for await (const v of gen) out.push(v);
+        return out;
+      })();
+    }
+
+    it('GETs /api/v1/agents/{id}/sse (no job) and yields typed events', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: mockSSEBody([
+          'event: status\ndata: {"seq":1,"ts":1,"agentId":"a1","address":"did:x/g/a1","type":"status","status":"RUNNING"}\n\n',
+          'event: run:start\ndata: {"seq":2,"ts":2,"agentId":"a1","address":"did:x/g/a1","type":"run:start","run":1}\n\n',
+        ]),
+      });
+
+      const events = await drain(agents.events('a1'));
+
+      expect(venue.operations.run).not.toHaveBeenCalled();
+      expect(events).toEqual([
+        { seq: 1, ts: 1, agentId: 'a1', address: 'did:x/g/a1', type: 'status', status: 'RUNNING' },
+        { seq: 2, ts: 2, agentId: 'a1', address: 'did:x/g/a1', type: 'run:start', run: 1 },
+      ]);
+      const u = new URL(String(mockFetch.mock.calls[0][0]));
+      expect(u.pathname).toBe('/api/v1/agents/a1/sse');
+      expect(u.searchParams.toString()).toBe('');
+      expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
+    });
+
+    it('passes sessionId and detail as query params', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, body: mockSSEBody([]) });
+      await drain(agents.events('a1', { sessionId: 'deadbeef', detail: false }));
+      const u = new URL(String(mockFetch.mock.calls[0][0]));
+      expect(u.searchParams.get('sessionId')).toBe('deadbeef');
+      expect(u.searchParams.get('detail')).toBe('false');
+    });
+
+    it('forwards signal to fetch', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, body: mockSSEBody([]) });
+      const controller = new AbortController();
+      await drain(agents.events('a1', { signal: controller.signal }));
+      expect(mockFetch.mock.calls[0][1].signal).toBe(controller.signal);
+    });
+
+    it('rejects without invoking on a route-missing 404, and latches', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404,
+        json: () => Promise.resolve({ error: 'Endpoint GET /api/v1/agents/a1/sse not found' }),
+        text: () => Promise.resolve('Endpoint GET /api/v1/agents/a1/sse not found') });
+
+      await expect(agents.events('a1').next()).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
+      expect(venue.operations.run).not.toHaveBeenCalled();
+
+      // Latched — a second call skips the network entirely.
+      await expect(agents.events('a1').next()).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('propagates a per-resource "Agent not found" 404 without latching', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404,
+        json: () => Promise.resolve({ error: 'Agent not found: ghost' }),
+        text: () => Promise.resolve('Agent not found: ghost') });
+
+      await expect(agents.events('ghost').next()).rejects.toThrow('Agent not found: ghost');
+      expect(venue.operations.run).not.toHaveBeenCalled();
+
+      // Not latched — a later call still hits the network.
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, body: mockSSEBody([]) });
+      await drain(agents.events('a1'));
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
 });
+
+/** Body for a mocked streaming Response built from raw SSE text chunks. */
+function mockSSEBody(chunks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let index = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index < chunks.length) {
+        controller.enqueue(encoder.encode(chunks[index]));
+        index++;
+      } else {
+        controller.close();
+      }
+    },
+  });
+}

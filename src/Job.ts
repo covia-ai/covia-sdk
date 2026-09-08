@@ -13,7 +13,7 @@ interface JobOps {
   pause(jobId: string): Promise<JobMetadata>;
   resume(jobId: string): Promise<JobMetadata>;
   sendMessage(jobId: string, message: unknown): Promise<unknown>;
-  stream(jobId: string): AsyncGenerator<SSEEvent>;
+  stream(jobId: string, options?: { signal?: AbortSignal }): AsyncGenerator<SSEEvent>;
 }
 
 export class Job {
@@ -110,8 +110,8 @@ export class Job {
    * Stream server-sent events for this job.
    * @returns AsyncGenerator yielding SSEEvent objects
    */
-  async *stream(): AsyncGenerator<SSEEvent> {
-    yield* this._jobs.stream(this.id);
+  async *stream(options?: { signal?: AbortSignal }): AsyncGenerator<SSEEvent> {
+    yield* this._jobs.stream(this.id, options);
   }
 
   /**

@@ -59,3 +59,48 @@ describe('JobManager.list', () => {
     await expect(jobs.list()).rejects.toThrow('invalid jobs page');
   });
 });
+
+/** Body for a mocked streaming Response — one text/event-stream chunk. */
+function mockSSEBody(chunks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let index = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index < chunks.length) {
+        controller.enqueue(encoder.encode(chunks[index]));
+        index++;
+      } else {
+        controller.close();
+      }
+    },
+  });
+}
+
+describe('JobManager.stream', () => {
+  let jobs: JobManager;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    jobs = new JobManager(createMockVenue() as any);
+  });
+
+  it('forwards the signal and parses SSE events (covia-sdk#30)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: mockSSEBody(['event: status\ndata: {"s":"A"}\n\n']),
+    });
+    const controller = new AbortController();
+
+    const events: unknown[] = [];
+    for await (const evt of jobs.stream('j1', { signal: controller.signal })) {
+      events.push(evt.json());
+    }
+
+    expect(events).toEqual([{ s: 'A' }]);
+    const u = new URL(String(mockFetch.mock.calls[0][0]));
+    expect(u.pathname).toBe('/api/v1/jobs/j1/sse');
+    expect(mockFetch.mock.calls[0][1].signal).toBe(controller.signal);
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
+  });
+});

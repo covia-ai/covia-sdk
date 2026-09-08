@@ -130,3 +130,60 @@ describe('parseSSEStream', () => {
     expect(events).toHaveLength(0);
   });
 });
+
+describe('parseSSEStream cancellation (covia-sdk#30)', () => {
+  /** A stream that yields one event then never closes and never enqueues
+   *  more — a second `read()` hangs until something cancels the reader. */
+  function mockHangingSSEResponse(onCancel: (reason?: unknown) => void): Response {
+    const encoder = new TextEncoder();
+    let delivered = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!delivered) {
+          delivered = true;
+          controller.enqueue(encoder.encode('event: status\ndata: {"s":"A"}\n\n'));
+        }
+        // else: leave the pull request pending forever — no enqueue, no close.
+      },
+      cancel(reason) {
+        onCancel(reason);
+      },
+    });
+    return { body: stream } as unknown as Response;
+  }
+
+  it('cancels the reader (not just releases the lock) when the consumer breaks early', async () => {
+    const onCancel = jest.fn();
+    const response = mockHangingSSEResponse(onCancel);
+    for await (const evt of parseSSEStream(response)) {
+      expect(evt.json()).toEqual({ s: 'A' });
+      break;
+    }
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the reader and ends iteration without throwing when signal aborts mid-stream', async () => {
+    const onCancel = jest.fn();
+    const response = mockHangingSSEResponse(onCancel);
+    const controller = new AbortController();
+    const gen = parseSSEStream(response, { signal: controller.signal });
+
+    const first = await gen.next();
+    expect(first.done).toBe(false);
+    expect(first.value.json()).toEqual({ s: 'A' });
+
+    const pending = gen.next(); // resumes the generator into a second, hanging reader.read()
+    controller.abort('test-reason');
+    const second = await pending;
+
+    expect(second.done).toBe(true);
+    expect(onCancel).toHaveBeenCalledWith('test-reason');
+  });
+
+  it('no-signal callers are unaffected', async () => {
+    const response = mockSSEResponse(['event: status\ndata: {"s":"A"}\n\n']);
+    const events = await collectEvents(parseSSEStream(response));
+    expect(events).toHaveLength(1);
+    expect(events[0].json()).toEqual({ s: 'A' });
+  });
+});
