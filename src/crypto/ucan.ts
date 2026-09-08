@@ -59,7 +59,12 @@ export function createUCANJWT(
     ucv: UCV_VERSION,
     att,
     prf: proofs,
-    exp: lifetimeSeconds === null ? null : nowSecs + lifetimeSeconds,
+    // Floored even though nowSecs already is: lifetimeSeconds is a public
+    // number param with no integer enforcement, and Convex's JSON reader
+    // only decodes a bare integer as CVMLong — a float exp (e.g. a caller
+    // passing Date.now()/1000 + n instead of an integer offset) becomes a
+    // CVMDouble the venue's UcanJwtValidator rejects outright (covia-sdk#46).
+    exp: lifetimeSeconds === null ? null : Math.floor(nowSecs + lifetimeSeconds),
   };
   const signingInput =
     `${base64UrlEncode(encoder.encode(header))}.${base64UrlEncode(encoder.encode(JSON.stringify(claims)))}`;

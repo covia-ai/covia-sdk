@@ -643,11 +643,11 @@ describe('venue.assets.putContent and getContent', () => {
     expect(headers['Content-Type']).toBeUndefined();
   });
 
-  it('getContent sends GET for content', async () => {
+  it('getContent sends GET for content via the canonical any-ref route', async () => {
     mockFetchStreamSuccess(200);
 
     await venue.assets.getContent('asset-1');
-    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/assets/asset-1/content');
+    expect(mockFetch.mock.calls[0][0]).toBe('https://test.com/api/v1/content/asset-1');
   });
 
   it('putContent throws AssetNotFoundError on 404', async () => {
