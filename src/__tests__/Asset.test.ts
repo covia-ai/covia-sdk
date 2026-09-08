@@ -72,7 +72,7 @@ describe('Asset (via Operation subclass)', () => {
       const venue = createMockVenue();
       const asset = new DataAsset('asset-abc', venue);
       expect(asset.getContentURL()).toBe(
-        'https://venue.example.com/api/v1/assets/asset-abc/content'
+        'https://venue.example.com/api/v1/content/asset-abc'
       );
     });
   });
