@@ -4,6 +4,20 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.16.0
+
+### Fixed
+
+- **`AssetManager.getContent()` / `Asset.getContentURL()`** now use the
+  venue's canonical any-ref content route (`GET /api/v1/content/{ref}`,
+  covia#368) instead of the hash-only legacy `GET /api/v1/assets/{id}/content`
+  — an asset resolved by a mutable path (`w/…`, `o/…`) or a DID-qualified URL
+  can now have its content read, not just its metadata. `putContent()`
+  is unchanged: CAS upload stays on the hash-form route. Note the venue's
+  actual route is `/api/v1/content/{ref}` (top-level, not nested under
+  `/assets/`) — `assets/content/{ref}` was deliberately avoided venue-side to
+  keep `content/...` addressable as its own asset path (covia-sdk#29).
+
 ## 1.15.0
 
 ### Added

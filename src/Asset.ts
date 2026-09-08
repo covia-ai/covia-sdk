@@ -59,11 +59,13 @@ export abstract class Asset {
   }
 
   /**
-   * Get the URL for downloading asset content
+   * Get the URL for downloading asset content. Resolves any reference form
+   * this asset was addressed by, via the venue's canonical any-ref content
+   * route (covia#368).
    * @returns {string} The URL for downloading the asset content
    */
   getContentURL(): string {
-    return `${this.venue.baseUrl}/api/v1/assets/${this.id}/content`;
+    return `${this.venue.baseUrl}/api/v1/content/${this.id}`;
   }
 
   /**

@@ -197,6 +197,42 @@ describe('AssetManager.listMine', () => {
   });
 });
 
+// The canonical any-ref content endpoint (covia#368, covia-sdk#29) — not the
+// hash-only legacy assets/{id}/content route, which 404s for a mutable path.
+describe('AssetManager.getContent', () => {
+  let am: AssetManager;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    am = new AssetManager(makeVenue());
+  });
+
+  function streamOnce() {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, body: new ReadableStream<Uint8Array>() });
+  }
+
+  it('resolves content via a workspace path', async () => {
+    streamOnce();
+    await am.getContent('w/skills/reviewer');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://v/api/v1/content/w/skills/reviewer');
+  });
+
+  it('resolves content via a bare hash', async () => {
+    streamOnce();
+    await am.getContent('abcdef0123');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://v/api/v1/content/abcdef0123');
+  });
+
+  it('resolves a ref whose final segment is literally "content"', async () => {
+    streamOnce();
+    await am.getContent('w/skills/content');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://v/api/v1/content/w/skills/content');
+  });
+});
+
 describe('AssetManager read authentication', () => {
   beforeEach(() => {
     mockFetch.mockReset();

@@ -169,14 +169,17 @@ export class AssetManager {
   }
 
   /**
-   * Get asset content
-   * @param assetId - Asset identifier
+   * Get asset content. Resolves any reference form the metadata endpoint
+   * does — a bare hash, `a/<hash>`, a workspace/operation path, or a
+   * DID-qualified URL — via the venue's canonical `GET /api/v1/content/{ref}`
+   * (covia#368), not the hash-only legacy `assets/{id}/content` route.
+   * @param assetId - Asset reference (any form)
    */
   async getContent(assetId: string): Promise<ReadableStream<Uint8Array> | null> {
     try {
       const response = await venueStream(
         this.venue,
-        `/api/v1/assets/${assetId}/content`,
+        `/api/v1/content/${assetId}`,
         { contentType: null },
       );
       return response.body;
