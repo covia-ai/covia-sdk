@@ -1,5 +1,6 @@
-import { AgentCreateInput, AgentCreateResult, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, OperationRunner, NotFoundError, StatusData, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult } from './types';
-import { venueJson, VenueRequestContext } from './VenueTransport';
+import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, OperationRunner, NotFoundError, StatusData, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult } from './types';
+import { parseSSEStream } from './Utils';
+import { venueJson, venueStream, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404, versionAtLeast } from './venue-features';
 import { record, sliceAll } from './values-util';
 
@@ -28,6 +29,12 @@ export class AgentManager {
   // Whether this venue serves GET /api/v1/agents — flipped on the first 404 so
   // pre-0.4 venues pay the probe once, not one failed GET per read (covia#180).
   private agentsGetSupported = true;
+
+  // Whether this venue serves GET /api/v1/agents/{id}/sse — flipped on a
+  // route-missing 404 (covia#394 landed in venue 0.9.7). No version fast-path:
+  // versionAtLeast() only resolves major.minor, not the patch precision this
+  // needs, so rely purely on the lazy 404 latch (matches UserManager.usersGet).
+  private agentSseSupported = true;
 
   constructor(private venue: AgentManagerVenue) {}
 
@@ -158,6 +165,50 @@ export class AgentManager {
    *  covia#180); older venues require an explicit compatibility opt-in. */
   async info(agentId: string): Promise<AgentInfoResult> {
     return this.agentsGet<AgentInfoResult>(`/${encodeURIComponent(agentId)}`, {});
+  }
+
+  /**
+   * Stream this agent's run-loop events (run/cycle boundaries, inferences,
+   * tool calls, status changes) from the venue's live tap (covia#394,
+   * venue ≥ 0.9.7). Narrow to one session with `sessionId`; omit owner-only
+   * tool input/result and appended-turn detail with `detail: false`. Pass
+   * `signal` to abort — reader cancellation on abort or early exit is
+   * handled by `parseSSEStream` (covia-sdk#30).
+   * @throws {UnsupportedVenueFeatureError} on venues before 0.9.7.
+   */
+  async *events(
+    agentId: string,
+    options: { sessionId?: string; detail?: boolean; signal?: AbortSignal } = {},
+  ): AsyncGenerator<AgentEvent> {
+    if (!this.agentSseSupported) throw new UnsupportedVenueFeatureError('agent event stream');
+
+    const qs = new URLSearchParams();
+    if (options.sessionId !== undefined) qs.set('sessionId', options.sessionId);
+    if (options.detail !== undefined) qs.set('detail', String(options.detail));
+    const q = qs.toString();
+
+    let response: Response;
+    try {
+      response = await venueStream(
+        this.venue,
+        `/api/v1/agents/${encodeURIComponent(agentId)}/sse${q ? `?${q}` : ''}`,
+        { headers: { 'Accept': 'text/event-stream' }, signal: options.signal },
+      );
+    } catch (e) {
+      if (!(e instanceof NotFoundError)) throw e;
+      // Every call here targets one specific agent id — there is no bare
+      // "list" route, so any 404 that isn't the distinctive unmapped-route
+      // body is a genuine "Agent not found" and must propagate untouched,
+      // never latch (see agentsGet / covia#180 for why a per-resource 404
+      // must not be mistaken for a missing route).
+      if (!ROUTE_MISSING_404.test(e.message)) throw e;
+      this.agentSseSupported = false;
+      throw new UnsupportedVenueFeatureError('agent event stream');
+    }
+
+    for await (const evt of parseSSEStream(response, { signal: options.signal })) {
+      yield evt.json() as AgentEvent;
+    }
   }
 
   /**

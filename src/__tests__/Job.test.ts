@@ -302,9 +302,28 @@ describe('Job.stream', () => {
       collected.push(evt);
     }
 
-    expect(jobs.stream).toHaveBeenCalledWith('j1');
+    expect(jobs.stream).toHaveBeenCalledWith('j1', undefined);
     expect(collected).toHaveLength(2);
     expect(collected[0].json()).toEqual({ status: 'STARTED' });
     expect(collected[1].json()).toEqual({ status: 'COMPLETE' });
+  });
+
+  it('forwards options (e.g. signal) to jobs.stream (covia-sdk#30)', async () => {
+    async function* fakeGenerator(): AsyncGenerator<SSEEvent> {
+      yield createSSEEvent({ event: 'status', data: '{"status":"STARTED"}' });
+    }
+    const jobs = createMockJobs();
+    jobs.stream.mockReturnValue(fakeGenerator());
+    const venue = createMockVenue({ jobs } as any);
+    const job = new Job('j1', venue, { status: RunStatus.STARTED });
+    const controller = new AbortController();
+
+    const collected: SSEEvent[] = [];
+    for await (const evt of job.stream({ signal: controller.signal })) {
+      collected.push(evt);
+    }
+
+    expect(jobs.stream).toHaveBeenCalledWith('j1', { signal: controller.signal });
+    expect(collected).toHaveLength(1);
   });
 });
