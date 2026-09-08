@@ -1055,3 +1055,71 @@ export class AgentSessionNotFoundError extends CoviaError {
     this.name = 'AgentSessionNotFoundError';
   }
 }
+
+// ── A2A (Agent-to-Agent, covia-sdk#43) ─────────────────────────────────────
+// Bring-your-own-agent: import a remote A2A endpoint or another Covia agent
+// as an immutable agent Asset with a mutable `w/a2a/agents/<name>` binding,
+// then task it. The local Job mirrors the remote Task's lifecycle — pause
+// states (INPUT_REQUIRED, AUTH_REQUIRED) surface as a paused Job a caller
+// can inspect and continue via `job.sendMessage()`, same as any other job.
+
+/** Stored authentication binding for an imported A2A agent — a reference to
+ *  a secret, never a literal credential. */
+export interface A2AAuthRef {
+  /** Agent Card-declared API key or Bearer scheme name. */
+  scheme?: string;
+  /** Bearer auth needed to discover a private card. */
+  kind?: 'bearer';
+  /** `s/<name>` — the stored secret this binds to. */
+  secret: string;
+}
+
+export interface A2AImportAgentInput {
+  /** Local alias matching `[a-z0-9-]{1,64}`; creates `w/a2a/agents/<name>`. */
+  name: string;
+  /** Base URL of a standard external A2A agent. Exactly one of `url`/`coviaAgent`. */
+  url?: string;
+  /** Covia grid agent address: local `g/<agentId>` or full `<ownerDID>/g/<agentId>`. */
+  coviaAgent?: string;
+  /** Base URL of the venue hosting `coviaAgent` — required for a full address. */
+  venue?: string;
+  auth?: A2AAuthRef;
+}
+
+/** The immutable asset DID URL, mutable workspace binding, and exact agent
+ *  asset hash from importing an agent. */
+export interface A2AImportAgentResult {
+  /** Mutable workspace binding, e.g. `w/a2a/agents/venue-b-bot`. */
+  path?: string;
+  /** Immutable agent-asset hash. */
+  a2aAgentAsset?: string;
+  /** Whether the binding was written. */
+  stored?: boolean;
+  /** Full immutable DID URL of the agent asset. */
+  id?: string;
+}
+
+/** One part of an A2A message/artifact (v1 wire format). */
+export interface A2APart {
+  type?: string;
+  kind?: string;
+  text?: string;
+  data?: unknown;
+}
+
+export interface A2AMessage {
+  role: string;
+  parts: A2APart[];
+  messageId?: string;
+}
+
+/** The remote A2A Task snapshot a send mirrors onto the local Job's output —
+ *  final when the Job reaches a terminal state, a live snapshot while paused. */
+export interface A2ATask {
+  id?: string;
+  contextId?: string;
+  status?: { state?: string; timestamp?: string };
+  artifacts?: { artifactId?: string; parts?: A2APart[] }[];
+  history?: A2AMessage[];
+  [key: string]: unknown;
+}
