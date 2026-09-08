@@ -188,27 +188,36 @@ describe('WorkspaceManager', () => {
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
-  it('a status without a version marks the venue pre-0.3 — no GET probe at all', async () => {
-    (venue as any).lastKnownStatus = { name: 'Old Stable', did: 'did:key:zVenue' }; // no version field
-    await expect(ws.read('w/mydata')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
-    expect(mockFetch).not.toHaveBeenCalled();
-    expect(venue.operations.run).not.toHaveBeenCalled();
-  });
+  // ── no version fast-path (#36): the route's own answer decides, never the
+  // venue's self-reported version — an embedded venue can report its host
+  // application's version instead of its own, and trusting that would
+  // permanently refuse a route that actually works fine. ─────────────────
 
-  it('a status reporting ≥0.3 keeps reads on the job-free GET path', async () => {
-    (venue as any).lastKnownStatus = { version: '0.3.0-SNAPSHOT' };
+  it('a status without a version does not block the probe', async () => {
+    (venue as any).lastKnownStatus = { name: 'Old Stable', did: 'did:key:zVenue' }; // no version field
     okJson({ exists: true, value: 1 });
     await ws.read('w/mydata');
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
-  it('a status arriving after the manager exists still downgrades pre-0.3 venues', async () => {
+  it('a status reporting a low/wrong version does not block the probe either', async () => {
+    // e.g. an embedded venue's Engine.jarVersion() reading the host
+    // application's Implementation-Version out of a shaded jar manifest.
+    (venue as any).lastKnownStatus = { version: '0.1.0-SNAPSHOT' };
     okJson({ exists: true, value: 1 });
-    await ws.read('w/first');                                       // GET while nothing is known
-    (venue as any).lastKnownStatus = { version: '0.2.5' };          // e.g. venue.status() resolved
-    await expect(ws.read('w/second')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
-    expect(mockFetch).toHaveBeenCalledTimes(1);                     // no second GET
+    await ws.read('w/mydata');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(venue.operations.run).not.toHaveBeenCalled();
+  });
+
+  it('a version arriving after a working first read does not retroactively downgrade it', async () => {
+    okJson({ exists: true, value: 1 });
+    await ws.read('w/first');
+    (venue as any).lastKnownStatus = { version: '0.1.0' };          // e.g. venue.status() resolved
+    okJson({ exists: true, value: 2 });
+    await ws.read('w/second');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 

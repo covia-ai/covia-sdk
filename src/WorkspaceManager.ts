@@ -1,15 +1,14 @@
 import {
   WorkspaceReadResult, WorkspaceWriteResult, WorkspaceDeleteResult, WorkspaceAppendResult,
   WorkspaceListResult, WorkspaceSliceResult, WorkspaceCopyResult, WorkspaceInspectResult,
-  WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner, NotFoundError, StatusData,
+  WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner, NotFoundError,
   UnsupportedVenueFeatureError,
 } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
-import { ROUTE_MISSING_404, versionAtLeast } from './venue-features';
+import { ROUTE_MISSING_404 } from './venue-features';
 
 interface WorkspaceManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
-  lastKnownStatus?: StatusData;
 }
 
 /**
@@ -46,16 +45,12 @@ export class WorkspaceManager {
 
   /**
    * Whether the venue serves `GET /api/v1/values/*`: no if a probe already
-   * 404'd, or if the venue's last known status identifies it as pre-0.3
-   * (venues that old don't report a `version` at all). Checked per read —
-   * connect/`status()` may populate the status after this manager exists.
+   * 404'd. No version fast-path — a venue's self-reported version is weaker
+   * evidence than its answer to the request (an embedded venue can report
+   * its host application's version instead of its own; see covia-sdk#36).
+   * Rely purely on the lazy 404 latch, same as UserManager.usersGet.
    */
   private supportsValues(): boolean {
-    if (!this.valuesSupported) return false;
-    const status = this.venue.lastKnownStatus;
-    if (status && (!status.version || !versionAtLeast(status.version, 0, 3))) {
-      this.valuesSupported = false;
-    }
     return this.valuesSupported;
   }
 

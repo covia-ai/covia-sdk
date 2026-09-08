@@ -1,7 +1,7 @@
-import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, OperationRunner, NotFoundError, StatusData, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult } from './types';
 import { parseSSEStream } from './Utils';
 import { venueJson, venueStream, VenueRequestContext } from './VenueTransport';
-import { ROUTE_MISSING_404, versionAtLeast } from './venue-features';
+import { ROUTE_MISSING_404 } from './venue-features';
 import { record, sliceAll } from './values-util';
 
 interface AgentManagerVenue extends VenueRequestContext {
@@ -10,7 +10,6 @@ interface AgentManagerVenue extends VenueRequestContext {
     read(path: string, maxSize?: number): Promise<WorkspaceReadResult>;
     slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult>;
   };
-  lastKnownStatus?: StatusData;
 }
 
 function sessionRecord(sessionId: string, value: unknown): AgentSession {
@@ -39,13 +38,11 @@ export class AgentManager {
   constructor(private venue: AgentManagerVenue) {}
 
   /** Whether the venue serves `GET /api/v1/agents`: no if a probe already
-   *  404'd, or if the venue's last known status identifies it as pre-0.4. */
+   *  404'd. No version fast-path — a venue's self-reported version is weaker
+   *  evidence than its answer to the request (an embedded venue can report
+   *  its host application's version instead of its own; see covia-sdk#36).
+   *  Rely purely on the lazy 404 latch, same as UserManager.usersGet. */
   private supportsAgentsGet(): boolean {
-    if (!this.agentsGetSupported) return false;
-    const status = this.venue.lastKnownStatus;
-    if (status && (!status.version || !versionAtLeast(status.version, 0, 4))) {
-      this.agentsGetSupported = false;
-    }
     return this.agentsGetSupported;
   }
 

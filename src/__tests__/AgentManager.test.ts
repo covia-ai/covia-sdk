@@ -188,10 +188,14 @@ describe('AgentManager', () => {
     expect(r.agentId).toBe('a1');
   });
 
-  it('info rejects without invoking on known pre-0.4 venues', async () => {
+  it('a low/wrong self-reported version does not block the GET probe (covia-sdk#36)', async () => {
+    // An embedded venue can report its host application's version instead
+    // of its own — trusting that would permanently refuse a route that
+    // actually works fine. The route's own answer decides, not the version.
     (venue as any).lastKnownStatus = { version: '0.3.0' };
-    await expect(agents.info('a1')).rejects.toBeInstanceOf(UnsupportedVenueFeatureError);
-    expect(mockFetch).not.toHaveBeenCalled();
+    okJson({ agentId: 'a1', status: 'SLEEPING' });
+    await agents.info('a1');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 

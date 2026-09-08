@@ -4,6 +4,19 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.15.0
+
+### Added
+
+- **`A2AManager`** (`venue.a2a`) — typed manager for the A2A "bring your own
+  agent" ops (covia-sdk#43): `importAgent(input)` registers a remote A2A
+  endpoint or another Covia agent as an immutable agent Asset with a mutable
+  `w/a2a/agents/<name>` binding, waiting for the result; `send(agent,
+  message, options?)` tasks it, returning the raw `Job` (not auto-resolved —
+  the local Job mirrors the remote Task's lifecycle, including pause states
+  a caller continues via `job.sendMessage()`). New types `A2AImportAgentInput`,
+  `A2AImportAgentResult`, `A2AMessage`, `A2APart`, `A2ATask`, `A2AAuthRef`.
+
 ## 1.14.0
 
 ### Added
