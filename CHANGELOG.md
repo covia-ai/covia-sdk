@@ -4,6 +4,34 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.17.0
+
+### Changed
+
+- **`JobMetadata` job-record fields.** `op` is now typed: it is the operation
+  reference that was actually invoked, verbatim — a venue path
+  (`v/ops/json/merge`), a caller-namespace path (`o/my-tool`), a DID URL, or a
+  bare hash when the caller pinned a definition explicitly (covia#499, ships in
+  venue 0.9.9). An inline definition falls back to its own metadata hash, and
+  records written before 0.9.9 always carry the resolved hash, so readers must
+  accept both forms. A path is a mutable binding: re-invoking `op` runs the
+  definition at that path now, not necessarily the one that ran — invoke by
+  hash when the record must pin what executed.
+- **Removed `JobMetadata.operation`.** The venue has never emitted a field with
+  that name, so the property was `undefined` on every job (covia-sdk#54, which
+  covia-ai/frontend#322 tripped over). Read `op` instead.
+
+### Added
+
+- **`JobMetadata.parent`** — the id of the nearest *recorded* job inside whose
+  execution this job was dispatched; absent on top-level jobs (covia#500).
+  Transient wrappers never appear in a record, so a recorded grandchild
+  dispatched through a transient layer links straight to its recorded ancestor.
+  Only the up-link is stored: no `root`, no children list, no children query.
+  Reconstruct a tree by tracing `parent` across the jobs you hold. Links are
+  venue- and user-local — a job run on another venue through the grid adapter
+  carries none.
+
 ## 1.16.0
 
 ### Fixed

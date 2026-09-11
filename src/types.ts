@@ -108,7 +108,31 @@ export interface JobMetadata {
   updated?: string;
   input?: unknown;
   output?: unknown;
-  operation?:string;
+  /** The operation reference that was invoked, verbatim: a venue path
+   *  (`v/ops/json/merge`), a caller-namespace path (`o/my-tool`), a DID URL, or
+   *  a bare hash when the caller pinned a definition explicitly. An inline
+   *  definition has no reference, so its own metadata hash stands in. Records
+   *  written by venues before 0.9.9 always carry the resolved hash, so readers
+   *  must accept both forms (covia#499).
+   *
+   *  A path is a mutable binding: re-invoking this reference runs whatever
+   *  definition sits at that path now, which is not necessarily the one that
+   *  ran for this job. Invoke by hash when the record must pin the exact
+   *  definition.
+   *
+   *  Replaces the never-populated `operation` field — the venue has always
+   *  emitted this as `op`. */
+  op?: string;
+  /** Id (hex) of the nearest *recorded* job inside whose execution this job was
+   *  dispatched; absent on top-level jobs (covia#500). Transient wrappers never
+   *  appear in a record, so a recorded grandchild dispatched through a
+   *  transient layer links straight to its recorded ancestor.
+   *
+   *  Only the up-link is stored: there is no `root`, no children list and no
+   *  children query. Reconstruct a tree by tracing `parent` across the jobs you
+   *  hold. Links are venue- and user-local — a job run on another venue through
+   *  the grid adapter carries none. */
+  parent?: string;
   caller?: string;
   error?: string;
   [key: string]: unknown;

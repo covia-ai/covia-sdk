@@ -104,3 +104,37 @@ describe('JobManager.stream', () => {
     expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
   });
 });
+
+// Job records carry `op` (the reference that was invoked) and `parent` (the
+// nearest recorded ancestor job). The venue has always emitted the former as
+// `op`; the SDK previously declared a never-populated `operation` instead
+// (covia#499, covia#500, covia-sdk#54).
+describe('JobManager.get — op and parent (covia-sdk#54)', () => {
+  let jobs: JobManager;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    jobs = new JobManager(createMockVenue() as any);
+  });
+
+  it('exposes op as the invoked reference and parent as the ancestor id', async () => {
+    okJson({ id: 'j2', status: 'COMPLETE', op: 'v/ops/json/merge', parent: '0a1b' });
+
+    const job = await jobs.get('j2');
+
+    const op: string | undefined = job.metadata.op;
+    const parent: string | undefined = job.metadata.parent;
+    expect(op).toBe('v/ops/json/merge');
+    expect(parent).toBe('0a1b');
+  });
+
+  it('accepts a hash in op — pinned invocations and pre-0.9.9 records', async () => {
+    const hash = '0f'.repeat(32);
+    okJson({ id: 'j3', status: 'COMPLETE', op: hash });
+
+    const job = await jobs.get('j3');
+
+    expect(job.metadata.op).toBe(hash);
+    expect(job.metadata.parent).toBeUndefined();
+  });
+});
