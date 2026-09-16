@@ -65,7 +65,9 @@ dist/                   # Build output (CJS + ESM + .d.ts) — gitignored; `prep
 
 **Managers:** `AdapterManager`, `AgentManager`, `AssetManager`, `JobManager`, `OperationManager`, `WorkspaceManager`, `UCANManager`, `SecretManager`
 
-**Types:** `VenueOptions`, `AssetMetadata`, `OperationDetails`, `JobMetadata`, `RunStatus`, `CoviaError`, `AgentCard`, `MCPDiscovery`, `DIDDocument`
+**Scoped reads:** `venue.workspace.scoped({agent, task?, session?})` → `ScopedWorkspace`, a reader bound to an execution scope so the `t/`, `n/` and `c/` scratch shorthands resolve job-free (covia#230, with a client-side fallback for older venues)
+
+**Types:** `VenueOptions`, `AssetMetadata`, `OperationDetails`, `JobMetadata`, `JobHistoryPage`, `RunStatus`, `CoviaError`, `AgentCard`, `AgentSession`, `AgentSessionMessage`, `ExecutionScope`, `MCPDiscovery`, `DIDDocument`
 
 **Utilities:** `fetchWithError()`, `fetchStreamWithError()`, `isJobComplete()`, `isJobFinished()`, `isJobPaused()`, `getParsedAssetId()`, `getAssetIdFromPath()`
 
@@ -80,6 +82,14 @@ dist/                   # Build output (CJS + ESM + .d.ts) — gitignored; `prep
 3. Retrieve assets via `venue.assets.get(id)` → returns `Operation` or `DataAsset`
 4. Invoke operations (resolved via `v/ops/<adapter>/<op>` paths) and poll jobs
 5. Discover venue metadata via `venue.status()`, `venue.didDocument()`, `venue.mcpDiscovery()`, `venue.agentCard()`
+
+## Paged History
+
+`venue.jobs.history({offset, limit, order})` returns a `JobHistoryPage` of
+`JobMetadata`, newest-first by default, with an authoritative total. It reads
+the job index through the job-free Values surface, so each row arrives with its
+metadata attached rather than costing a `jobs.get()` per row. `agent.listSessions()`
+pages the same way and takes the same `order` (default `asc`, unchanged).
 
 ## Agent Chat Sessions
 

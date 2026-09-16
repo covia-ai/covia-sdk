@@ -13,6 +13,7 @@ import {
   AgentSessionListOptions,
   AgentSessionPage,
   AgentSession,
+  AgentSessionMessage,
   VenueInterface,
 } from './types';
 
@@ -98,6 +99,16 @@ export class Agent {
   /** Read one session through the job-free workspace Values API. */
   async getSession(sessionId: string): Promise<AgentSession> {
     return this._agents.getSession(this.id, sessionId);
+  }
+
+  /**
+   * One session's transcript — its turns in order, with compacted segments
+   * expanded back into the turns they archived.
+   *
+   * Shorthand for `getSession(sessionId)` when only the conversation is wanted.
+   */
+  async transcript(sessionId: string): Promise<AgentSessionMessage[]> {
+    return (await this._agents.getSession(this.id, sessionId)).conversation;
   }
 
   /** Stream this agent's run-loop events. See `AgentManager.events`. */

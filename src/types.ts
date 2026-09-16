@@ -450,18 +450,82 @@ export interface AgentSessionMetadata {
   [key: string]: unknown;
 }
 
+/** The four roles a stored conversation turn may carry. */
+export type AgentSessionRole = 'system' | 'user' | 'assistant' | 'tool';
+
+/**
+ * One persisted conversation turn (AGENT_CONTEXT.md §1.1 `Turn`).
+ *
+ * Most turns carry text in `content`; a tool result may instead carry its typed
+ * map or vector in `structuredContent`. Provider-specific continuation state
+ * (`providerState`) is deliberately absent — it is opaque, is omitted from
+ * retrospective session projections, and is not part of a readable transcript.
+ */
+export interface AgentSessionMessage {
+  role: AgentSessionRole;
+  content?: unknown;
+  /** A typed tool result, in place of textual `content`. */
+  structuredContent?: unknown;
+  /** Present on an assistant turn that called tools. */
+  toolCalls?: unknown[];
+  /** A `tool` turn's matching call id. */
+  id?: string;
+  name?: string;
+  isError?: boolean;
+  ts?: number;
+  source?: string;
+  caller?: string;
+  /** The job that delivered this turn — links it back to the calling job. */
+  jobId?: string;
+  tokens?: number;
+}
+
+/**
+ * An archived run of turns that compaction replaced with a summary
+ * (AGENT_CONTEXT.md §1.1 `CompactedSegment`). `items` is the exact recursively
+ * archived vector, so no history is lost — {@link AgentSession.conversation}
+ * expands it back into the transcript.
+ */
+export interface AgentCompactedSegment {
+  summary: string;
+  /** How many turns the summary stands in for. */
+  turns?: number;
+  items: unknown[];
+}
+
 /** A session record read directly from `g/<agentId>/sessions`. */
 export interface AgentSession {
   id: string;
   metadata: AgentSessionMetadata;
   pending: unknown[];
+  /**
+   * Raw goal-tree frames, newest last. `frames[0]` is the root frame and a flat
+   * `llmagent` session has only that one. Kept verbatim for callers that need
+   * frame-level state; for the readable transcript use {@link conversation}.
+   */
   frames: unknown[];
+  /**
+   * The session transcript: every frame's turns, in order, with compacted
+   * segments expanded back into the turns they archived.
+   *
+   * This is the field a chat UI renders. Assembling it from `frames` means
+   * knowing that turns live at `frames[].conversation`, that an entry there may
+   * be an archived segment rather than a turn, and that segments nest — layout
+   * knowledge that belongs here rather than in every consumer.
+   */
+  conversation: AgentSessionMessage[];
   wakeTime?: number;
 }
 
 export interface AgentSessionListOptions {
   offset?: number;
   limit?: number;
+  /**
+   * `desc` is newest-first. Session ids are timestamp-prefixed, so the index is
+   * already chronological and the window is taken from its end — the order
+   * holds across pages, unlike sorting one page after the fact.
+   */
+  order?: 'asc' | 'desc';
 }
 
 export interface AgentSessionPage {

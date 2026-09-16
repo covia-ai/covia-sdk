@@ -183,3 +183,22 @@ describe('ChatSession', () => {
     expect(result).toEqual({ agentId: 'a1', sessionId: 'sess-1', response: 'hello' });
   });
 });
+
+describe('Agent.transcript', () => {
+  it('returns the bound session conversation', async () => {
+    const conversation = [
+      { role: 'user' as const, content: 'hi' },
+      { role: 'assistant' as const, content: 'hello' },
+    ];
+    const agents = {
+      ...createMockAgents(),
+      getSession: jest.fn().mockResolvedValue({
+        id: 'sess-1', metadata: {}, pending: [], frames: [], conversation,
+      }),
+    };
+    const agent = new Agent('a1', createMockVenue(agents));
+
+    await expect(agent.transcript('sess-1')).resolves.toEqual(conversation);
+    expect(agents.getSession).toHaveBeenCalledWith('a1', 'sess-1');
+  });
+});
