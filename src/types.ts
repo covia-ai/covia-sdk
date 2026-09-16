@@ -666,6 +666,34 @@ export interface WorkspaceAppendResult {
   pathCreated?: boolean;
 }
 
+/**
+ * The execution context a `t/`, `n/` or `c/` scratch read resolves against.
+ *
+ * A GET carries no execution context of its own, so the venue cannot know which
+ * job, agent or session a bare shorthand means. These selectors supply it
+ * explicitly (covia#230) and are the only way to read scoped scratch job-free.
+ *
+ * Each namespace consumes a different part of the scope, and the venue rejects
+ * a selector its namespace does not use:
+ *
+ * | Path | Needs            | Resolves to                                  |
+ * |------|------------------|----------------------------------------------|
+ * | `n/` | `agent`          | `g/<agent>/n/...`                            |
+ * | `c/` | `agent`+`session`| `g/<agent>/sessions/<session>/c/...`         |
+ * | `t/` | `agent`+`task`   | `j/<task>/temp/...`                          |
+ *
+ * A bound scope may therefore carry all three; each read sends only what its
+ * own namespace needs.
+ */
+export interface ExecutionScope {
+  /** Agent id (`alice`) or a full agent DID. Required for every scoped read. */
+  agent: string;
+  /** Task id — the `agent:request` Job whose record holds `t/` scratch. */
+  task?: string;
+  /** Session id, for `c/` session scratch. */
+  session?: string;
+}
+
 export interface WorkspaceListInput {
   path?: string;
   limit?: number;
