@@ -20,7 +20,7 @@ export { AgentManager } from './AgentManager';
 export { AssetManager } from './AssetManager';
 export { JobManager } from './JobManager';
 export { OperationManager } from './OperationManager';
-export { WorkspaceManager } from './WorkspaceManager';
+export { WorkspaceManager, ScopedWorkspace } from './WorkspaceManager';
 export { UCANManager } from './UCANManager';
 export { SecretManager } from './SecretManager';
 export { SkillManager } from './SkillManager';

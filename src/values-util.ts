@@ -48,3 +48,17 @@ export async function sliceAll(workspace: SliceReader, path: string, pageSize = 
   }
   return items;
 }
+
+/**
+ * The ascending index range backing a newest-first window.
+ *
+ * Job and session ids are both timestamp-prefixed, so their indexes are already
+ * in chronological order and "newest first" is a window taken from the end:
+ * descending `[offset, offset+limit)` is ascending `[total-offset-limit,
+ * total-offset)`, clamped at the start. Ordering this way holds across pages,
+ * which sorting a single page after the fact does not.
+ */
+export function descWindow(total: number, offset: number, limit: number): [number, number] {
+  const end = Math.max(0, total - offset);
+  return [Math.max(0, end - limit), end];
+}

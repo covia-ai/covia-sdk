@@ -16,6 +16,7 @@ function createMockVenue() {
     workspace: {
       read: jest.fn().mockResolvedValue({ exists: false }),
       slice: jest.fn().mockResolvedValue({ exists: true, values: [], count: 0, offset: 0 }),
+      count: jest.fn().mockResolvedValue({ exists: true, count: 0 }),
     },
   };
 }
@@ -396,3 +397,181 @@ function mockSSEBody(chunks: string[]): ReadableStream<Uint8Array> {
     },
   });
 }
+
+// ── typed session transcript + ordering (covia-sdk#22) ──────────────────────
+//
+// Session discovery already existed; what consumers still had to know was the
+// storage layout of the transcript — that turns live at frames[].conversation,
+// that an entry there may be an archived segment rather than a turn, and that
+// segments nest. These cover that assembly and the paging order around it.
+
+describe('AgentManager session transcripts', () => {
+  let venue: ReturnType<typeof createMockVenue>;
+  let agents: AgentManager;
+
+  const turn = (role: string, content: string, extra: any = {}) => ({ role, content, ...extra });
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    venue = createMockVenue();
+    agents = new AgentManager(venue);
+  });
+
+  function sessionValue(frames: unknown[], meta: any = { title: 'S' }) {
+    return { meta, pending: [], frames };
+  }
+
+  function readsSession(value: unknown) {
+    venue.workspace.read = jest.fn().mockResolvedValue({ exists: true, value }) as any;
+  }
+
+  it('flattens turns across frames in order', async () => {
+    readsSession(sessionValue([
+      { conversation: [turn('system', 'be nice'), turn('user', 'hi')] },
+      { conversation: [turn('assistant', 'hello')] },
+    ]));
+    const s = await agents.getSession('a1', 'sess-1');
+    expect(s.conversation.map((m) => [m.role, m.content])).toEqual([
+      ['system', 'be nice'], ['user', 'hi'], ['assistant', 'hello'],
+    ]);
+  });
+
+  it('preserves the audit fields on a turn', async () => {
+    readsSession(sessionValue([{
+      conversation: [turn('user', 'hi', { ts: 17, jobId: '0xabc', source: 'chat', tokens: 3 })],
+    }]));
+    const [m] = (await agents.getSession('a1', 'sess-1')).conversation;
+    expect(m).toMatchObject({ ts: 17, jobId: '0xabc', source: 'chat', tokens: 3 });
+  });
+
+  it('keeps a tool turn with structuredContent and no text content', async () => {
+    readsSession(sessionValue([{
+      conversation: [{ role: 'tool', id: 'call-1', structuredContent: { rows: 2 }, isError: false }],
+    }]));
+    const [m] = (await agents.getSession('a1', 'sess-1')).conversation;
+    expect(m).toMatchObject({ role: 'tool', id: 'call-1', structuredContent: { rows: 2 } });
+    expect(m.content).toBeUndefined();
+  });
+
+  it('expands a compacted segment back into the turns it archived', async () => {
+    readsSession(sessionValue([{
+      conversation: [
+        { summary: 'talked about cats', turns: 2, items: [turn('user', 'cats?'), turn('assistant', 'yes')] },
+        turn('user', 'and dogs?'),
+      ],
+    }]));
+    const s = await agents.getSession('a1', 'sess-1');
+    // The summary stands in for the provider; the transcript keeps the history.
+    expect(s.conversation.map((m) => m.content)).toEqual(['cats?', 'yes', 'and dogs?']);
+  });
+
+  it('expands nested compacted segments', async () => {
+    readsSession(sessionValue([{
+      conversation: [{
+        summary: 'outer', items: [
+          { summary: 'inner', items: [turn('user', 'deep')] },
+          turn('assistant', 'shallow'),
+        ],
+      }],
+    }]));
+    const s = await agents.getSession('a1', 'sess-1');
+    expect(s.conversation.map((m) => m.content)).toEqual(['deep', 'shallow']);
+  });
+
+  it('skips entries that are neither a turn nor a segment', async () => {
+    readsSession(sessionValue([{
+      conversation: [turn('user', 'hi'), { role: 'narrator', content: 'x' }, null, 'junk', { note: 1 }],
+    }]));
+    const s = await agents.getSession('a1', 'sess-1');
+    // An unknown role would otherwise render as a blank message.
+    expect(s.conversation.map((m) => m.content)).toEqual(['hi']);
+  });
+
+  it('gives an empty transcript for a session with no frames', async () => {
+    readsSession(sessionValue([]));
+    expect((await agents.getSession('a1', 'sess-1')).conversation).toEqual([]);
+  });
+
+  it('tolerates a frame with no conversation vector', async () => {
+    readsSession(sessionValue([{ description: 'root' }, { conversation: [turn('user', 'hi')] }]));
+    expect((await agents.getSession('a1', 'sess-1')).conversation).toHaveLength(1);
+  });
+
+  it('keeps frames verbatim alongside the transcript', async () => {
+    const frames = [{ conversation: [turn('user', 'hi')], description: 'root' }];
+    readsSession(sessionValue(frames));
+    const s = await agents.getSession('a1', 'sess-1');
+    expect(s.frames).toEqual(frames);
+  });
+
+  it('builds the transcript for listed sessions too', async () => {
+    venue.workspace.slice = jest.fn().mockResolvedValue({
+      exists: true, count: 1, offset: 0,
+      values: [{ key: 'sess-1', value: sessionValue([{ conversation: [turn('user', 'hi')] }]) }],
+    }) as any;
+    const page = await agents.listSessions('a1');
+    expect(page.items[0].conversation.map((m) => m.content)).toEqual(['hi']);
+  });
+});
+
+describe('AgentManager.listSessions ordering', () => {
+  let venue: ReturnType<typeof createMockVenue>;
+  let agents: AgentManager;
+
+  function sessions(n: number) {
+    return Array.from({ length: n }, (_, i) => ({
+      key: `s${i}`, value: { meta: { created: i }, pending: [], frames: [] },
+    }));
+  }
+
+  function indexOf(entries: any[]) {
+    venue.workspace.slice = jest.fn(async (_p: string, offset = 0, limit = 100) => ({
+      exists: true, values: entries.slice(offset, offset + limit), count: entries.length, offset,
+    })) as any;
+    venue.workspace.count = jest.fn(async () => ({ exists: true, count: entries.length })) as any;
+  }
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    venue = createMockVenue();
+    agents = new AgentManager(venue);
+  });
+
+  it('defaults to the index order, unchanged from before', async () => {
+    indexOf(sessions(5));
+    const page = await agents.listSessions('a1', { offset: 1, limit: 2 });
+    expect(page.items.map((s) => s.id)).toEqual(['s1', 's2']);
+    expect(venue.workspace.count).not.toHaveBeenCalled();
+  });
+
+  it('takes a desc window from the end of the index', async () => {
+    indexOf(sessions(10));
+    const page = await agents.listSessions('a1', { offset: 2, limit: 3, order: 'desc' });
+    expect(venue.workspace.slice).toHaveBeenCalledWith('g/a1/sessions', 5, 3);
+    expect(page.items.map((s) => s.id)).toEqual(['s7', 's6', 's5']);
+    expect(page).toMatchObject({ total: 10, offset: 2, limit: 3 });
+  });
+
+  it('re-places a desc window when sessions were minted mid-read', async () => {
+    indexOf(sessions(10));
+    venue.workspace.count = jest.fn(async () => ({ exists: true, count: 8 })) as any;
+    const page = await agents.listSessions('a1', { limit: 2, order: 'desc' });
+    expect(venue.workspace.slice).toHaveBeenNthCalledWith(1, 'g/a1/sessions', 6, 2);
+    expect(venue.workspace.slice).toHaveBeenNthCalledWith(2, 'g/a1/sessions', 8, 2);
+    expect(page.items.map((s) => s.id)).toEqual(['s9', 's8']);
+  });
+
+  it('clamps a desc window that runs past the start', async () => {
+    indexOf(sessions(3));
+    const page = await agents.listSessions('a1', { offset: 1, limit: 10, order: 'desc' });
+    expect(page.items.map((s) => s.id)).toEqual(['s1', 's0']);
+  });
+
+  it('returns an empty desc page past the end without reading', async () => {
+    indexOf(sessions(3));
+    const page = await agents.listSessions('a1', { offset: 99, limit: 5, order: 'desc' });
+    expect(page.items).toEqual([]);
+    expect(page.total).toBe(3);
+    expect(venue.workspace.slice).not.toHaveBeenCalled();
+  });
+});

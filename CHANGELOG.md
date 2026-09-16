@@ -4,6 +4,63 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.18.0
+
+### Added
+
+- **`JobManager.history()`** — a paginated job history returning `JobMetadata`
+  (covia-sdk#21). `list()` answers "which jobs exist" as an unpaginated array of
+  ids; a history view needs a bounded window of *records*, newest-first, and an
+  authoritative total to page against. `history({offset, limit, order})` returns
+  a `JobHistoryPage`, reading the job index through the job-free Values surface
+  so each row arrives with its metadata attached — listing ids and then fetching
+  each one is an N+1 fan-out per page, and paging history must not write a job
+  record per page (covia#177). Job ids are timestamp-prefixed, so newest-first
+  is a window taken from the end of the index and the ordering holds across
+  pages. The total is read before a `desc` window can be placed, so the page
+  self-corrects once against the count the slice itself reports. An oversize
+  response is met by halving the chunk and finally skipping a single fat record,
+  degrading a window by a row instead of failing the read.
+- **`WorkspaceManager.scoped()`** — job-free reads of the `t/`, `n/` and `c/`
+  scratch shorthands (covia-sdk#17). `workspace.read('t/snapshot')` could never
+  work: a GET carries no execution context, so the venue cannot know which job
+  the shorthand means, and routing the read through an operation would mint a
+  Job for a read. `workspace.scoped({agent, task?, session?})` binds the missing
+  context and returns a `ScopedWorkspace` covering every job-free verb. The
+  selectors go to the venue (covia#230), which expands them *before* the
+  capability check, so authorisation applies to the same canonical resource that
+  is read and a caller cannot substitute a sibling or foreign agent's scratch.
+  Each namespace consumes different selectors and the venue rejects the ones it
+  does not use, so a handle carrying all three sends only what the path needs.
+  A venue predating covia#230 rejects the shorthand distinctively, which latches
+  client-side expansion; any other error propagates, so a capability failure
+  never silently downgrades a connection.
+- **`AgentSession.conversation`** and **`Agent.transcript()`** — the typed
+  session transcript (covia-sdk#22). Session discovery already shipped, but
+  `AgentSession.frames` was `unknown[]`, so every consumer had to know the
+  storage layout to render a conversation. `conversation` carries the assembled
+  transcript as `AgentSessionMessage[]`, moving three pieces of layout knowledge
+  into the SDK: turns live under each frame's `conversation`, flattened in frame
+  order; an entry there may be a compacted segment rather than a turn, which
+  archives the exact turns it replaced — those are expanded back in, so
+  compaction stays invisible to a history view and no history is lost; and
+  segments nest, so the expansion recurses. Entries that are neither are
+  skipped rather than surfaced as a turn with no role, so a newer venue shape
+  cannot render as a blank message. `providerState` is deliberately not typed:
+  it is opaque and is omitted from retrospective session projections.
+- **`AgentSessionListOptions.order`** — `listSessions()` can now page
+  newest-first, windowed from the end of the index the same way job history is
+  (session ids are timestamp-prefixed too). It stays `asc` by default: the
+  method already shipped, and silently re-ordering an existing caller's pages
+  would be a worse surprise than an explicit opt-in.
+
+### Note for implementors
+
+`AgentSession` gained `conversation` as a non-optional field. This is additive
+for anyone *reading* a session — the SDK populates it — and only matters if you
+construct an `AgentSession` literal yourself, which the type was never intended
+for.
+
 ## 1.17.0
 
 ### Changed

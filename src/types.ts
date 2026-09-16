@@ -100,6 +100,25 @@ export interface ContentHashResult {
   hash: string;
 }
 
+/** Paging/ordering for {@link JobManager.history}. */
+export interface JobHistoryOptions {
+  /** Rows to skip from the ordered start (default 0). */
+  offset?: number;
+  /** Maximum rows to return (default 50). */
+  limit?: number;
+  /** `desc` (default) is newest-first, the order a history view wants. */
+  order?: 'asc' | 'desc';
+}
+
+/** One page of job history: the rows plus the window they were drawn from. */
+export interface JobHistoryPage {
+  items: JobMetadata[];
+  /** Authoritative total at the moment the page was read. */
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 export interface JobMetadata {
   id?: string;
   name?:string;
@@ -431,18 +450,82 @@ export interface AgentSessionMetadata {
   [key: string]: unknown;
 }
 
+/** The four roles a stored conversation turn may carry. */
+export type AgentSessionRole = 'system' | 'user' | 'assistant' | 'tool';
+
+/**
+ * One persisted conversation turn (AGENT_CONTEXT.md §1.1 `Turn`).
+ *
+ * Most turns carry text in `content`; a tool result may instead carry its typed
+ * map or vector in `structuredContent`. Provider-specific continuation state
+ * (`providerState`) is deliberately absent — it is opaque, is omitted from
+ * retrospective session projections, and is not part of a readable transcript.
+ */
+export interface AgentSessionMessage {
+  role: AgentSessionRole;
+  content?: unknown;
+  /** A typed tool result, in place of textual `content`. */
+  structuredContent?: unknown;
+  /** Present on an assistant turn that called tools. */
+  toolCalls?: unknown[];
+  /** A `tool` turn's matching call id. */
+  id?: string;
+  name?: string;
+  isError?: boolean;
+  ts?: number;
+  source?: string;
+  caller?: string;
+  /** The job that delivered this turn — links it back to the calling job. */
+  jobId?: string;
+  tokens?: number;
+}
+
+/**
+ * An archived run of turns that compaction replaced with a summary
+ * (AGENT_CONTEXT.md §1.1 `CompactedSegment`). `items` is the exact recursively
+ * archived vector, so no history is lost — {@link AgentSession.conversation}
+ * expands it back into the transcript.
+ */
+export interface AgentCompactedSegment {
+  summary: string;
+  /** How many turns the summary stands in for. */
+  turns?: number;
+  items: unknown[];
+}
+
 /** A session record read directly from `g/<agentId>/sessions`. */
 export interface AgentSession {
   id: string;
   metadata: AgentSessionMetadata;
   pending: unknown[];
+  /**
+   * Raw goal-tree frames, newest last. `frames[0]` is the root frame and a flat
+   * `llmagent` session has only that one. Kept verbatim for callers that need
+   * frame-level state; for the readable transcript use {@link conversation}.
+   */
   frames: unknown[];
+  /**
+   * The session transcript: every frame's turns, in order, with compacted
+   * segments expanded back into the turns they archived.
+   *
+   * This is the field a chat UI renders. Assembling it from `frames` means
+   * knowing that turns live at `frames[].conversation`, that an entry there may
+   * be an archived segment rather than a turn, and that segments nest — layout
+   * knowledge that belongs here rather than in every consumer.
+   */
+  conversation: AgentSessionMessage[];
   wakeTime?: number;
 }
 
 export interface AgentSessionListOptions {
   offset?: number;
   limit?: number;
+  /**
+   * `desc` is newest-first. Session ids are timestamp-prefixed, so the index is
+   * already chronological and the window is taken from its end — the order
+   * holds across pages, unlike sorting one page after the fact.
+   */
+  order?: 'asc' | 'desc';
 }
 
 export interface AgentSessionPage {
@@ -664,6 +747,34 @@ export interface WorkspaceAppendResult {
   newSize?: number;
   /** 0.3.0: true iff a new parent path was built. */
   pathCreated?: boolean;
+}
+
+/**
+ * The execution context a `t/`, `n/` or `c/` scratch read resolves against.
+ *
+ * A GET carries no execution context of its own, so the venue cannot know which
+ * job, agent or session a bare shorthand means. These selectors supply it
+ * explicitly (covia#230) and are the only way to read scoped scratch job-free.
+ *
+ * Each namespace consumes a different part of the scope, and the venue rejects
+ * a selector its namespace does not use:
+ *
+ * | Path | Needs            | Resolves to                                  |
+ * |------|------------------|----------------------------------------------|
+ * | `n/` | `agent`          | `g/<agent>/n/...`                            |
+ * | `c/` | `agent`+`session`| `g/<agent>/sessions/<session>/c/...`         |
+ * | `t/` | `agent`+`task`   | `j/<task>/temp/...`                          |
+ *
+ * A bound scope may therefore carry all three; each read sends only what its
+ * own namespace needs.
+ */
+export interface ExecutionScope {
+  /** Agent id (`alice`) or a full agent DID. Required for every scoped read. */
+  agent: string;
+  /** Task id — the `agent:request` Job whose record holds `t/` scratch. */
+  task?: string;
+  /** Session id, for `c/` session scratch. */
+  session?: string;
 }
 
 export interface WorkspaceListInput {

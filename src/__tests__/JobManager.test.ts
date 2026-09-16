@@ -138,3 +138,172 @@ describe('JobManager.get — op and parent (covia-sdk#54)', () => {
     expect(job.metadata.parent).toBeUndefined();
   });
 });
+
+// ── jobs.history (covia-sdk#21) ─────────────────────────────────────────────
+//
+// History reads the job index through the job-free Values surface, so each row
+// arrives with its metadata attached rather than costing an extra jobs.get().
+// The workspace reader is mocked directly: what matters here is the windowing,
+// the ordering and the recovery behaviour, not the HTTP shape of a slice.
+
+describe('JobManager.history', () => {
+  /** A job index of `n` records, ascending/chronological like the venue's. */
+  function index(n: number) {
+    return Array.from({ length: n }, (_, i) => ({
+      key: `k${i}`,
+      value: { status: 'COMPLETE', created: `2026-01-${String(i + 1).padStart(2, '0')}` },
+    }));
+  }
+
+  function createWorkspaceVenue(entries: any[], overrides: any = {}) {
+    const slice = jest.fn(async (path: string, offset = 0, limit = 100) => ({
+      exists: true,
+      values: entries.slice(offset, offset + limit),
+      count: entries.length,
+      offset,
+    }));
+    const count = jest.fn(async () => ({ exists: true, count: entries.length }));
+    return {
+      baseUrl: 'https://venue.example',
+      auth: { apply: jest.fn() },
+      workspace: { slice, count, ...overrides },
+    };
+  }
+
+  beforeEach(() => mockFetch.mockReset());
+
+  it('returns newest-first by default, with the authoritative total', async () => {
+    const venue = createWorkspaceVenue(index(5));
+    const page = await new JobManager(venue as any).history();
+
+    expect(page.total).toBe(5);
+    expect(page.offset).toBe(0);
+    expect(page.items.map((j) => j.created)).toEqual([
+      '2026-01-05', '2026-01-04', '2026-01-03', '2026-01-02', '2026-01-01',
+    ]);
+    expect(venue.workspace.slice).toHaveBeenCalledWith('j', 0, 5);
+    expect(mockFetch).not.toHaveBeenCalled();                    // job-free: no /api/v1/jobs
+  });
+
+  it('places a desc window by counting back from the newest record', async () => {
+    const venue = createWorkspaceVenue(index(10));
+    const page = await new JobManager(venue as any).history({ offset: 2, limit: 3 });
+
+    // desc [2,5) over 10 records is ascending [5,8), reversed.
+    expect(venue.workspace.slice).toHaveBeenCalledWith('j', 5, 3);
+    expect(page.items.map((j) => j.created)).toEqual(['2026-01-08', '2026-01-07', '2026-01-06']);
+    expect(page.total).toBe(10);
+  });
+
+  it('reads asc as the index order, with no preliminary count', async () => {
+    const venue = createWorkspaceVenue(index(10));
+    const page = await new JobManager(venue as any).history({ offset: 2, limit: 3, order: 'asc' });
+
+    expect(venue.workspace.count).not.toHaveBeenCalled();         // one read, not two
+    expect(venue.workspace.slice).toHaveBeenCalledWith('j', 2, 3);
+    expect(page.items.map((j) => j.created)).toEqual(['2026-01-03', '2026-01-04', '2026-01-05']);
+    expect(page.total).toBe(10);
+  });
+
+  it('clamps a desc window that runs off the start of the index', async () => {
+    const venue = createWorkspaceVenue(index(3));
+    const page = await new JobManager(venue as any).history({ offset: 1, limit: 10 });
+
+    expect(venue.workspace.slice).toHaveBeenCalledWith('j', 0, 2);
+    expect(page.items).toHaveLength(2);
+  });
+
+  it('returns an empty page when the offset is past the end', async () => {
+    const venue = createWorkspaceVenue(index(3));
+    const page = await new JobManager(venue as any).history({ offset: 99, limit: 10 });
+
+    expect(page.items).toEqual([]);
+    expect(page.total).toBe(3);
+    expect(venue.workspace.slice).not.toHaveBeenCalled();         // nothing to read
+  });
+
+  it('re-places the window once when the index grew between count and slice', async () => {
+    const entries = index(10);
+    const venue = createWorkspaceVenue(entries);
+    // The tally is a snapshot; two jobs land before the slice is served.
+    venue.workspace.count = jest.fn(async () => ({ exists: true, count: 8 })) as any;
+
+    const page = await new JobManager(venue as any).history({ limit: 2 });
+
+    // Stale total 8 → ascending [6,8); the slice reports 10, so re-read [8,10).
+    expect(venue.workspace.slice).toHaveBeenNthCalledWith(1, 'j', 6, 2);
+    expect(venue.workspace.slice).toHaveBeenNthCalledWith(2, 'j', 8, 2);
+    expect(page.total).toBe(10);
+    expect(page.items.map((j) => j.created)).toEqual(['2026-01-10', '2026-01-09']);
+  });
+
+  it('identifies a record with no id in its body from the index key', async () => {
+    const venue = createWorkspaceVenue([{ key: 'deadbeef', value: { status: 'COMPLETE' } }]);
+    const page = await new JobManager(venue as any).history();
+    expect(page.items[0].id).toBe('0xdeadbeef');                  // hex key → API id form
+  });
+
+  it('prefers an id carried in the record body', async () => {
+    const venue = createWorkspaceVenue([{ key: 'deadbeef', value: { id: '0xfeed', status: 'COMPLETE' } }]);
+    const page = await new JobManager(venue as any).history();
+    expect(page.items[0].id).toBe('0xfeed');
+  });
+
+  it('skips a malformed entry rather than emitting a blank row', async () => {
+    const venue = createWorkspaceVenue([
+      { key: 'a', value: { status: 'COMPLETE' } },
+      { key: 'b' },                                               // no value
+      'nonsense',
+    ]);
+    const page = await new JobManager(venue as any).history({ order: 'asc' });
+    expect(page.items).toHaveLength(1);
+  });
+
+  it('halves the chunk when a window of fat jobs trips the response cap', async () => {
+    const entries = index(120);
+    const venue = createWorkspaceVenue(entries);
+    const real = venue.workspace.slice;
+    venue.workspace.slice = jest.fn(async (path: string, offset = 0, limit = 100) => {
+      if (limit > 50) throw new Error('Value exceeds maxSize of 1000000 bytes');
+      return real(path, offset, limit);
+    }) as any;
+
+    const page = await new JobManager(venue as any).history({ offset: 0, limit: 100 });
+
+    expect(page.items).toHaveLength(100);
+    expect(page.items[0].created).toBe('2026-01-120');            // still newest-first
+    const limits = (venue.workspace.slice as jest.Mock).mock.calls.map((c) => c[2]);
+    expect(limits).toContain(100);                                // tried the full window
+    expect(limits).toContain(50);                                 // then halved
+  });
+
+  it('skips a single record that is oversize on its own', async () => {
+    const entries = index(5);
+    const venue = createWorkspaceVenue(entries);
+    const real = venue.workspace.slice;
+    venue.workspace.slice = jest.fn(async (path: string, offset = 0, limit = 100) => {
+      if (offset <= 2 && offset + limit > 2) throw new Error('Value exceeds maxSize');
+      return real(path, offset, limit);
+    }) as any;
+
+    const page = await new JobManager(venue as any).history({ order: 'asc', limit: 5 });
+
+    // Four rows, not a failed read: the one fat job degrades the window by a row.
+    expect(page.items.map((j) => j.created)).toEqual([
+      '2026-01-01', '2026-01-02', '2026-01-04', '2026-01-05',
+    ]);
+  });
+
+  it('propagates a non-cap slice error', async () => {
+    const venue = createWorkspaceVenue(index(5));
+    venue.workspace.slice = jest.fn(async () => { throw new Error('No read capability for j'); }) as any;
+    await expect(new JobManager(venue as any).history()).rejects.toThrow(/No read capability/);
+  });
+
+  it('answers a zero limit with the total alone', async () => {
+    const venue = createWorkspaceVenue(index(7));
+    const page = await new JobManager(venue as any).history({ limit: 0 });
+    expect(page).toEqual({ items: [], total: 7, offset: 0, limit: 0 });
+    expect(venue.workspace.slice).not.toHaveBeenCalled();
+  });
+});

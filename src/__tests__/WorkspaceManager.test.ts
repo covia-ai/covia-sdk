@@ -255,3 +255,155 @@ describe('WorkspaceManager', () => {
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 });
+
+// ── execution-scoped scratch reads (covia-sdk#17 / covia#230) ────────────────
+
+describe('WorkspaceManager scoped scratch', () => {
+  let venue: ReturnType<typeof createMockVenue>;
+  let ws: WorkspaceManager;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    venue = createMockVenue();
+    ws = new WorkspaceManager(venue);
+  });
+
+  /** A venue that rejects the shorthand — how a pre-#230 venue answers. */
+  function unexpandedShorthand() {
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 400,
+      text: () => Promise.resolve("Cannot use 't/' prefix outside job or task scope"),
+    });
+  }
+
+  it('sends agent+task selectors for a t/ read, and no session', async () => {
+    okJson({ exists: true, value: 'snap' });
+    const scratch = ws.scoped({ agent: 'alice', task: '0x019f', session: 'abcd' });
+    const r = await scratch.read('t/snapshot');
+
+    const u = new URL(fetchUrl());
+    expect(u.pathname).toBe('/api/v1/values/read');
+    expect(u.searchParams.get('path')).toBe('t/snapshot');
+    expect(u.searchParams.get('agent')).toBe('alice');
+    expect(u.searchParams.get('task')).toBe('0x019f');
+    // The venue 400s a selector its namespace does not consume, so a handle
+    // carrying all three must still send only the two t/ uses.
+    expect(u.searchParams.get('session')).toBeNull();
+    expect(venue.operations.run).not.toHaveBeenCalled();             // still job-free
+    expect(r.value).toBe('snap');
+  });
+
+  it('sends agent+session for c/ and agent alone for n/', async () => {
+    okJson({ exists: true, type: 'Map', count: 0, keys: [] });
+    await ws.scoped({ agent: 'alice', session: 'sid1', task: 't1' }).list('c/');
+    let u = new URL(fetchUrl(0));
+    expect(u.searchParams.get('session')).toBe('sid1');
+    expect(u.searchParams.get('task')).toBeNull();
+
+    okJson({ exists: true, value: 1 });
+    await ws.scoped({ agent: 'alice', session: 'sid1', task: 't1' }).read('n/persona');
+    u = new URL(fetchUrl(1));
+    expect(u.searchParams.get('agent')).toBe('alice');
+    expect(u.searchParams.get('session')).toBeNull();
+    expect(u.searchParams.get('task')).toBeNull();
+  });
+
+  it('rejects a c/ read with no session in scope, before any request', async () => {
+    await expect(ws.scoped({ agent: 'alice' }).read('c/notes')).rejects.toThrow(/needs a session/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a t/ read with no task in scope, before any request', async () => {
+    await expect(ws.scoped({ agent: 'alice' }).read('t/x')).rejects.toThrow(/needs a task/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('passes an ordinary path through unscoped — selectors would 400', async () => {
+    okJson({ exists: true, value: 7 });
+    await ws.scoped({ agent: 'alice', task: 't1' }).read('w/mydata');
+    const u = new URL(fetchUrl());
+    expect(u.searchParams.get('path')).toBe('w/mydata');
+    expect(u.searchParams.get('agent')).toBeNull();
+  });
+
+  it('falls back to client-side expansion on a venue without #230, and latches', async () => {
+    unexpandedShorthand();
+    okJson({ exists: true, value: 'snap' });
+    const scratch = ws.scoped({ agent: 'alice', task: '019f' });
+    const r = await scratch.read('t/snapshot');
+    expect(r.value).toBe('snap');
+
+    // Retry targets the physical Job record, per TempNamespaceResolver.
+    const retry = new URL(fetchUrl(1));
+    expect(retry.searchParams.get('path')).toBe('j/019f/temp/snapshot');
+    expect(retry.searchParams.get('agent')).toBeNull();
+
+    // Latched: the next scoped read expands directly, no second probe.
+    okJson({ exists: true, value: 2 });
+    await scratch.read('t/other');
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(new URL(fetchUrl(2)).searchParams.get('path')).toBe('j/019f/temp/other');
+  });
+
+  it('expands c/ and n/ to their documented physical paths on fallback', async () => {
+    unexpandedShorthand();
+    okJson({ exists: true, value: 1 });
+    await ws.scoped({ agent: 'alice', session: 'sid1' }).read('c/draft/notes');
+    expect(new URL(fetchUrl(1)).searchParams.get('path'))
+      .toBe('g/alice/sessions/sid1/c/draft/notes');
+
+    okJson({ exists: true, value: 1 });
+    await ws.scoped({ agent: 'alice' }).read('n/persona');
+    expect(new URL(fetchUrl(2)).searchParams.get('path')).toBe('g/alice/n/persona');
+  });
+
+  it('expands a bare prefix with no suffix', async () => {
+    unexpandedShorthand();
+    okJson({ exists: true, type: 'Map', count: 0, keys: [] });
+    await ws.scoped({ agent: 'alice', task: '019f' }).list('t/');
+    expect(new URL(fetchUrl(1)).searchParams.get('path')).toBe('j/019f/temp/');
+  });
+
+  it('propagates an unrelated error instead of latching the fallback on', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 403, text: () => Promise.resolve('No read capability for g/alice'),
+    });
+    const scratch = ws.scoped({ agent: 'alice', task: '019f' });
+    await expect(scratch.read('t/snapshot')).rejects.toThrow(/No read capability/);
+    expect(mockFetch).toHaveBeenCalledTimes(1);                      // no silent retry
+
+    // Not latched — the venue is still trusted to expand.
+    okJson({ exists: true, value: 1 });
+    await scratch.read('t/snapshot');
+    expect(new URL(fetchUrl(1)).searchParams.get('agent')).toBe('alice');
+  });
+
+  it('refuses to expand a DID-qualified agent client-side', async () => {
+    unexpandedShorthand();
+    await expect(
+      ws.scoped({ agent: 'did:key:zAlice', task: '019f' }).read('t/x'),
+    ).rejects.toThrow(/cannot do it for a DID-qualified agent/);
+  });
+
+  it('scopes every job-free read verb', async () => {
+    const scope = { agent: 'alice', task: '019f', session: 'sid1' };
+    okJson({ exists: true, count: 3 });
+    await ws.scoped(scope).count('t/results');
+    expect(new URL(fetchUrl(0)).pathname).toBe('/api/v1/values/count');
+
+    okJson({ exists: true, values: [], count: 0 });
+    await ws.scoped(scope).slice('t/results', 0, 10);
+    expect(new URL(fetchUrl(1)).pathname).toBe('/api/v1/values/slice');
+
+    okJson({ exists: true, groups: {} });
+    await ws.scoped(scope).aggregate('c/topics', { groupBy: 'kind' });
+    const agg = new URL(fetchUrl(2));
+    expect(agg.pathname).toBe('/api/v1/values/aggregate');
+    expect(agg.searchParams.get('groupBy')).toBe('kind');
+    expect(agg.searchParams.get('session')).toBe('sid1');
+
+    okJson({ exists: true });
+    await ws.scoped(scope).inspect('n/memory');
+    expect(new URL(fetchUrl(3)).pathname).toBe('/api/v1/values/inspect');
+  });
+});
