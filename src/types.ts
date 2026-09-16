@@ -100,6 +100,25 @@ export interface ContentHashResult {
   hash: string;
 }
 
+/** Paging/ordering for {@link JobManager.history}. */
+export interface JobHistoryOptions {
+  /** Rows to skip from the ordered start (default 0). */
+  offset?: number;
+  /** Maximum rows to return (default 50). */
+  limit?: number;
+  /** `desc` (default) is newest-first, the order a history view wants. */
+  order?: 'asc' | 'desc';
+}
+
+/** One page of job history: the rows plus the window they were drawn from. */
+export interface JobHistoryPage {
+  items: JobMetadata[];
+  /** Authoritative total at the moment the page was read. */
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 export interface JobMetadata {
   id?: string;
   name?:string;
