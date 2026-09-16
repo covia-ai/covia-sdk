@@ -2,13 +2,69 @@ import {
   WorkspaceReadResult, WorkspaceWriteResult, WorkspaceDeleteResult, WorkspaceAppendResult,
   WorkspaceListResult, WorkspaceSliceResult, WorkspaceCopyResult, WorkspaceInspectResult,
   WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner, NotFoundError,
-  UnsupportedVenueFeatureError,
+  UnsupportedVenueFeatureError, ExecutionScope, CoviaError,
 } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
 
 interface WorkspaceManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
+}
+
+/** The execution-scoped shorthands the venue expands from explicit selectors. */
+const SCOPED_NAMESPACES = ['t', 'n', 'c'] as const;
+
+type ScopedNamespace = (typeof SCOPED_NAMESPACES)[number];
+
+/**
+ * A pre-covia#230 venue has no selector expansion, so it passes the shorthand
+ * straight to the lattice, where the namespace resolver rejects it for want of
+ * execution context. That exact complaint is how the SDK learns to expand
+ * client-side; any other error is a real one and propagates.
+ */
+const SCOPE_UNEXPANDED = /Cannot use '[tnc]\/' prefix outside/;
+
+/** The scoped namespace a path opens with, or undefined for an ordinary path. */
+function scopedNamespaceOf(path: string): ScopedNamespace | undefined {
+  const head = path.split('/', 1)[0];
+  return (SCOPED_NAMESPACES as readonly string[]).includes(head)
+    ? head as ScopedNamespace
+    : undefined;
+}
+
+/** The selectors this namespace consumes — the venue 400s on any other. */
+function scopeParamsFor(ns: ScopedNamespace, scope: ExecutionScope): Record<string, string> {
+  const { agent, task, session } = scope;
+  switch (ns) {
+    case 'n': return { agent };
+    case 'c':
+      if (!session) throw new CoviaError("A 'c/' scratch read needs a session in its scope");
+      return { agent, session };
+    case 't':
+      if (!task) throw new CoviaError("A 't/' scratch read needs a task in its scope");
+      return { agent, task };
+  }
+}
+
+/**
+ * The client-side equivalent of the venue's expansion, for venues predating
+ * covia#230. Mirrors TempNamespaceResolver/AgentNamespaceResolver/
+ * SessionNamespaceResolver exactly; the relative result resolves against the
+ * caller's own DID, so it only holds for the caller's own agent.
+ */
+function expandScopedPath(path: string, ns: ScopedNamespace, scope: ExecutionScope): string {
+  if (scope.agent.startsWith('did:')) {
+    throw new CoviaError(
+      'This venue cannot expand scoped scratch paths and the SDK cannot do it for '
+      + 'a DID-qualified agent — pass a bare agent id, or upgrade the venue (covia#230)',
+    );
+  }
+  const suffix = path.slice(ns.length); // keeps the leading '/', or '' for a bare prefix
+  switch (ns) {
+    case 'n': return `g/${scope.agent}/n${suffix}`;
+    case 'c': return `g/${scope.agent}/sessions/${scope.session}/c${suffix}`;
+    case 't': return `j/${scope.task}/temp${suffix}`;
+  }
 }
 
 /**
@@ -33,6 +89,12 @@ export class WorkspaceManager {
   // Whether this venue serves GET /api/v1/values/* — flipped on the first 404
   // so pre-0.3 venues pay the probe once, not one failed GET per read.
   private valuesSupported = true;
+
+  // Whether this venue expands t/, n/ and c/ from explicit agent/task/session
+  // selectors (covia#230) — flipped off the first time a venue answers a
+  // selector-bearing read by complaining the shorthand has no execution scope,
+  // after which scoped reads expand client-side instead.
+  private scopeExpansionSupported = true;
 
   constructor(private venue: WorkspaceManagerVenue) {}
 
@@ -79,6 +141,68 @@ export class WorkspaceManager {
       }
     }
     return this.unsupported(`workspace ${op} reads`);
+  }
+
+  /**
+   * A job-free Values read of an execution-scoped path, preferring the venue's
+   * own selector expansion and falling back to the client-side one.
+   *
+   * The venue is preferred because it expands *before* the capability check, so
+   * authorisation applies to the same canonical resource that is ultimately
+   * read — a caller cannot substitute a sibling or foreign agent's scratch.
+   * The fallback reaches the same resource but re-derives the layout here.
+   */
+  private async scopedRead<T>(
+    op: string,
+    params: Record<string, string | number | boolean | undefined>,
+    scope: ExecutionScope,
+  ): Promise<T> {
+    const path = String(params.path ?? '');
+    const ns = scopedNamespaceOf(path);
+    // An ordinary path through a scoped handle is just an ordinary read: the
+    // venue rejects selectors that no shorthand consumes.
+    if (!ns) return this.valuesRead<T>(op, params);
+
+    if (this.scopeExpansionSupported) {
+      try {
+        return await this.valuesRead<T>(op, { ...params, ...scopeParamsFor(ns, scope) });
+      } catch (e) {
+        if (!(e instanceof Error) || !SCOPE_UNEXPANDED.test(e.message)) throw e;
+        this.scopeExpansionSupported = false;
+      }
+    }
+    // Validate the scope even on the fallback path, so a missing session/task
+    // fails the same way against either venue generation.
+    scopeParamsFor(ns, scope);
+    return this.valuesRead<T>(op, { ...params, path: expandScopedPath(path, ns, scope) });
+  }
+
+  /**
+   * Bind an execution scope, giving job-free reads of the `t/`, `n/` and `c/`
+   * scratch shorthands that a bare GET cannot otherwise resolve (covia#177
+   * forbids minting a Job for a read; the shorthands need context a GET lacks).
+   *
+   * ```ts
+   * const scratch = venue.workspace.scoped({ agent: 'alice', task: taskId });
+   * await scratch.read('t/snapshot');
+   * await scratch.list('t/');
+   * ```
+   *
+   * Ordinary paths still work through the handle, so a caller rendering a task
+   * inspector can use one reader for both scratch and workspace. Capability
+   * behaviour is unchanged: the caller needs read caps on the agent's subtree.
+   */
+  scoped(scope: ExecutionScope): ScopedWorkspace {
+    return new ScopedWorkspace(this, scope);
+  }
+
+  /** @internal — the scoped read used by {@link ScopedWorkspace}. */
+  _scopedRead<T>(
+    op: string,
+    params: Record<string, string | number | boolean | undefined>,
+    scope: ExecutionScope,
+  ): Promise<T> {
+    return this.scopedRead<T>(op, params, scope);
   }
 
   // ── job-free reads (#177) ───────────────────────────────────────────────────
@@ -154,5 +278,47 @@ export class WorkspaceManager {
 
   async copy(from: string, to: string, ucans?: string[]): Promise<WorkspaceCopyResult> {
     return this.venue.operations.run<WorkspaceCopyResult>('v/ops/covia/copy', { from, to }, { ucans });
+  }
+}
+
+/**
+ * A {@link WorkspaceManager} bound to one execution scope, so `t/`, `n/` and
+ * `c/` scratch resolve without the caller hand-building the physical paths
+ * (`g/<agent>/sessions/<sid>/c/...` and friends). Reads only — scoped scratch
+ * is written from inside the execution that owns it, where the shorthands
+ * already resolve from the request's own context.
+ *
+ * Obtained from {@link WorkspaceManager.scoped}; every method mirrors the
+ * job-free read of the same name.
+ */
+export class ScopedWorkspace {
+  constructor(
+    private workspace: WorkspaceManager,
+    /** The scope every read on this handle resolves against. */
+    public readonly scope: ExecutionScope,
+  ) {}
+
+  read(path: string, maxSize?: number): Promise<WorkspaceReadResult> {
+    return this.workspace._scopedRead('read', { path, maxSize }, this.scope);
+  }
+
+  list(path: string, limit?: number, offset?: number): Promise<WorkspaceListResult> {
+    return this.workspace._scopedRead('list', { path, limit, offset }, this.scope);
+  }
+
+  slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult> {
+    return this.workspace._scopedRead('slice', { path, offset, limit }, this.scope);
+  }
+
+  inspect(path: string, budget?: number, compact?: boolean): Promise<WorkspaceInspectResult> {
+    return this.workspace._scopedRead('inspect', { path, budget, compact }, this.scope);
+  }
+
+  count(path: string, opts: { depth?: number } = {}): Promise<WorkspaceCountResult> {
+    return this.workspace._scopedRead('count', { path, depth: opts.depth }, this.scope);
+  }
+
+  aggregate(path: string, opts: { depth?: number; groupBy?: string } = {}): Promise<WorkspaceAggregateResult> {
+    return this.workspace._scopedRead('aggregate', { path, depth: opts.depth, groupBy: opts.groupBy }, this.scope);
   }
 }

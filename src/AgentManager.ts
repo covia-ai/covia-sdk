@@ -1,25 +1,67 @@
-import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMessage, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult, WorkspaceCountResult } from './types';
 import { parseSSEStream } from './Utils';
 import { venueJson, venueStream, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
-import { record, sliceAll } from './values-util';
+import { descWindow, record, sliceAll } from './values-util';
 
 interface AgentManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
   workspace: {
     read(path: string, maxSize?: number): Promise<WorkspaceReadResult>;
     slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult>;
+    count(path: string, opts?: { depth?: number }): Promise<WorkspaceCountResult>;
   };
+}
+
+const SESSION_ROLES: readonly string[] = ['system', 'user', 'assistant', 'tool'];
+
+/** A compacted segment nests its own archived vector; this bounds the walk. */
+const MAX_COMPACTION_DEPTH = 32;
+
+/**
+ * Append one frame's conversation entries to `out`, expanding any compacted
+ * segment into the turns it archived.
+ *
+ * An entry is a turn or an archived segment (AGENT_CONTEXT.md §1.1). Anything
+ * else — a shape from a newer venue, a partially written record — is skipped
+ * rather than surfaced as a turn with no role, so a transcript never renders a
+ * blank message.
+ */
+function collectTurns(entries: unknown[], out: AgentSessionMessage[], depth = 0): void {
+  if (depth > MAX_COMPACTION_DEPTH) return;
+  for (const entry of entries) {
+    const e = record(entry);
+    if (!e) continue;
+    if (Array.isArray(e.items) && typeof e.summary === 'string') {
+      collectTurns(e.items, out, depth + 1);
+      continue;
+    }
+    if (typeof e.role === 'string' && SESSION_ROLES.includes(e.role)) {
+      out.push({ ...e, role: e.role } as AgentSessionMessage);
+    }
+  }
+}
+
+/** The session transcript: every frame's turns in order, compaction expanded. */
+function sessionConversation(frames: unknown[]): AgentSessionMessage[] {
+  const turns: AgentSessionMessage[] = [];
+  for (const frame of frames) {
+    const entries = record(frame)?.conversation;
+    if (Array.isArray(entries)) collectTurns(entries, turns);
+  }
+  return turns;
 }
 
 function sessionRecord(sessionId: string, value: unknown): AgentSession {
   const session = record(value) ?? {};
   const meta: AgentSessionMetadata | undefined = record(session.meta);
+  const frames = Array.isArray(session.frames) ? session.frames : [];
   return {
     id: sessionId,
     metadata: meta ?? {},
     pending: Array.isArray(session.pending) ? session.pending : [],
-    frames: Array.isArray(session.frames) ? session.frames : [],
+    frames,
+    conversation: sessionConversation(frames),
     wakeTime: typeof session.wakeTime === 'number' ? session.wakeTime : undefined,
   };
 }
@@ -214,9 +256,43 @@ export class AgentManager {
    * available on each record's `value` while common runtime fields are typed.
    */
   async listSessions(agentId: string, options: AgentSessionListOptions = {}): Promise<AgentSessionPage> {
-    const result = await this.venue.workspace.slice(
-      `g/${agentId}/sessions`, options.offset, options.limit,
-    );
+    const path = `g/${agentId}/sessions`;
+    // Ascending is the index's own order and stays the default: this method
+    // predates `order`, and silently re-ordering an existing caller's pages
+    // would be a worse surprise than an explicit opt-in.
+    if ((options.order ?? 'asc') === 'asc') {
+      return this._sessionPage(path, await this.venue.workspace.slice(
+        path, options.offset, options.limit,
+      ), options.offset ?? 0, options.limit);
+    }
+
+    // Newest-first counts back from the end, so the window needs the total
+    // first; the slice's own count is authoritative and re-places it once if
+    // sessions were minted in between.
+    const offset = Math.max(0, options.offset ?? 0);
+    const limit = options.limit;
+    const guess = (await this.venue.workspace.count(path)).count ?? 0;
+    if (limit === 0) return { items: [], total: guess, offset, limit: 0 };
+
+    const read = async (total: number) => {
+      const [start, end] = descWindow(total, offset, limit ?? total);
+      return end > start
+        ? this.venue.workspace.slice(path, start, end - start)
+        : { exists: true, values: [], count: total, offset: start } as WorkspaceSliceResult;
+    };
+    let result = await read(guess);
+    const total = result.count ?? guess;
+    if (total !== guess) result = await read(total);
+
+    const page = this._sessionPage(path, result, offset, limit);
+    page.items.reverse();
+    return page;
+  }
+
+  /** Shape a `{key, value}` session slice into a page. */
+  private _sessionPage(
+    _path: string, result: WorkspaceSliceResult, offset: number, limit?: number,
+  ): AgentSessionPage {
     const sessions = (result.values ?? []).flatMap((entry) => {
       const pair = record(entry);
       if (!pair || typeof pair.key !== 'string') return [];
@@ -225,8 +301,8 @@ export class AgentManager {
     return {
       items: sessions,
       total: result.count ?? sessions.length,
-      offset: result.offset ?? options.offset ?? 0,
-      limit: options.limit ?? sessions.length,
+      offset,
+      limit: limit ?? sessions.length,
     };
   }
 
