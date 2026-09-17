@@ -9,6 +9,12 @@ on:
   schedule:
     - cron: '0 3 * * *'
   workflow_call:
+  workflow_dispatch:
+    inputs:
+      venue_tag:
+        description: 'Venue image tag for the integration job (blank = pinned release)'
+        required: false
+        default: ''
 
 jobs:
   build-and-test:
@@ -39,7 +45,7 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     env:
-      VENUE_IMAGE: ghcr.io/covia-ai/covia:${{ github.event_name == 'schedule' && 'latest' || '0.9.8' }}
+      VENUE_IMAGE: ghcr.io/covia-ai/covia:${{ inputs.venue_tag || (github.event_name == 'schedule' && 'latest') || '0.9.8' }}
     steps:
       - uses: actions/checkout@v4
 
