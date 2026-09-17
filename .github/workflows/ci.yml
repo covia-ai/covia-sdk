@@ -4,7 +4,17 @@ on:
   pull_request:
   push:
     branches: [ main ]
+  # Nightly run against the venue's develop image (:latest) catches API drift
+  # before it reaches a release; PRs use the pinned release image.
+  schedule:
+    - cron: '0 3 * * *'
   workflow_call:
+  workflow_dispatch:
+    inputs:
+      venue_tag:
+        description: 'Venue image tag for the integration job (blank = pinned release)'
+        required: false
+        default: ''
 
 jobs:
   build-and-test:
@@ -32,5 +42,31 @@ jobs:
       - name: Unit tests
         run: pnpm run test:unit
 
-      # Integration tests (venue.test.ts) need a live venue and are run
-      # locally for now — see AGENTS.md.
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      VENUE_IMAGE: ghcr.io/covia-ai/covia:${{ inputs.venue_tag || (github.event_name == 'schedule' && 'latest') || '0.9.8' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Throwaway venue (temp store, public unrestricted access) — see
+      # .github/integration/start-venue.sh
+      - name: Start venue
+        run: .github/integration/start-venue.sh
+
+      - name: Integration tests
+        run: pnpm run test:integration
+
+      - name: Venue logs
+        if: failure()
+        run: docker logs covia-sdk-it-venue || true

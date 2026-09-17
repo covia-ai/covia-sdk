@@ -114,7 +114,15 @@ pages the same way and takes the same `order` (default `asc`, unchanged).
 - **Environment:** Node.js
 - **Env vars:** Loaded from `.env` via dotenv in `jest.config.js`
 - **Unit tests:** `src/__tests__/*.test.ts` — one suite per manager, plus SSE, Utils, types, Credentials
-- **Integration tests:** `venue.test.ts` at repo root — hits a live venue
+- **Integration tests:** `venue.test.ts` at repo root — hits a live venue. CI runs it
+  against a throwaway Docker venue (pinned release image on PRs, `:latest` nightly).
+  To run it the same way locally (needs Docker):
+  ```bash
+  .github/integration/start-venue.sh > .it-env    # VENUE_PORT / VENUE_IMAGE to override
+  (while IFS= read -r l; do export "$l"; done < .it-env; pnpm run test:integration)
+  docker stop covia-sdk-it-venue
+  ```
+  Bump the pinned image tag in `.github/workflows/ci.yml` when a venue release is needed.
 
 ## Releasing
 
@@ -131,8 +139,9 @@ resulting `.tgz` directly instead of publishing it under `next`, `beta`, or
 `rc`, because npm dist-tags persist across later stable releases and OIDC
 cannot remove them.
 
-CI (`ci.yml`) runs lint, build, and unit tests on every PR and push to `main`.
-Integration tests (`venue.test.ts`) need a live venue and stay local for now.
+CI (`ci.yml`) runs lint, build, unit tests, and the Docker-venue integration
+suite on every PR and push to `main` (and therefore before every publish), plus a
+nightly integration run against the venue's `:latest` image.
 
 ## Package Details
 

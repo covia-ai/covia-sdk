@@ -99,7 +99,7 @@ test('venueDataAsset', async () => {
   const decoder = new TextDecoder('utf-8');
   const str = decoder.decode(value);
   expect(str).toBe(contentData);
-  expect(asset.getContentURL()).toBe(process.env.VENUE_URL+"/api/v1/assets/"+asset.id+"/content");
+  expect(asset.getContentURL()).toBe(process.env.VENUE_URL+"/api/v1/content/"+asset.id);
 });
 
 test('venueDoesNotHaveAssetId', async () => {

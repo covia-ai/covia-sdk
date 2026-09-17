@@ -1,5 +1,5 @@
 import { Venue } from '../Venue';
-import { CoviaError, JobFailedError } from '../types';
+import { CoviaError, GridError, JobFailedError } from '../types';
 
 // Private-jobs mode (covia #192): connection-level setPrivate(true) switches
 // run() to the invoke wait-window flow (a completed private job is forgotten,
@@ -90,6 +90,48 @@ describe('private-jobs mode', () => {
     expect(job.id).toBe('j1');
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.private).toBeUndefined();
+  });
+});
+
+// A private job still running when the invoke wait window closes: run() falls
+// back to polling while the record lives. Each case is one invoke + one poll
+// (a single 300ms backoff sleep).
+describe('private run outliving the wait window', () => {
+  function venueWithSequence(...responses: any[]) {
+    mockFetch.mockReset();
+    for (const r of responses) mockFetch.mockResolvedValueOnce(r);
+    return new Venue({ baseUrl: 'https://venue.example', venueId: 'did:key:zV', name: 't' });
+  }
+  const ok = (body: any) => ({ ok: true, status: 200, headers: { get: () => null }, json: () => Promise.resolve(body) });
+  const err = (status: number, body: any = {}) => ({ ok: false, status, headers: { get: () => null }, json: () => Promise.resolve(body) });
+  const started = ok({ id: 'j1', status: 'STARTED' });
+
+  it('polls the job and returns its output once it completes', async () => {
+    const v = venueWithSequence(started, ok({ id: 'j1', status: 'COMPLETE', output: { answer: 42 } }));
+    const out = await v.operations.run<any>('v/test/ops/slow', {}, { private: true });
+    expect(out.answer).toBe(42);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[1][0]).toBe('https://venue.example/api/v1/jobs/j1');
+  });
+
+  it('reports a record that vanished mid-poll as completed-while-unobserved', async () => {
+    const v = venueWithSequence(started, err(404, { error: 'Job not found' }));
+    const run = v.operations.run('v/test/ops/slow', {}, { private: true });
+    await expect(run).rejects.toBeInstanceOf(CoviaError);
+    await expect(run).rejects.toThrow(/completed while unobserved/);
+  });
+
+  it('surfaces a job that failed after the wait window as JobFailedError', async () => {
+    const v = venueWithSequence(started, ok({ id: 'j1', status: 'FAILED', error: 'boom' }));
+    await expect(v.operations.run('v/test/ops/slow', {}, { private: true }))
+      .rejects.toBeInstanceOf(JobFailedError);
+  });
+
+  it('propagates a transport error during polling as itself, not as unobserved', async () => {
+    const v = venueWithSequence(started, err(500, { error: 'venue exploded' }));
+    const run = v.operations.run('v/test/ops/slow', {}, { private: true });
+    await expect(run).rejects.toBeInstanceOf(GridError);
+    await expect(run).rejects.not.toThrow(/unobserved/);
   });
 });
 
