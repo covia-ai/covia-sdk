@@ -28,7 +28,7 @@
     "lint:fix": "eslint src --fix",
     "test": "jest",
     "test:unit": "jest src/__tests__/",
-    "test:integration": "jest venue.test.ts",
+    "test:integration": "jest --runTestsByPath venue.test.ts",
     "prepublishOnly": "npm run build && npm run test:unit",
     "prepare": "npm run build"
   },

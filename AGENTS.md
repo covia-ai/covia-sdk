@@ -114,7 +114,15 @@ pages the same way and takes the same `order` (default `asc`, unchanged).
 - **Environment:** Node.js
 - **Env vars:** Loaded from `.env` via dotenv in `jest.config.js`
 - **Unit tests:** `src/__tests__/*.test.ts` — one suite per manager, plus SSE, Utils, types, Credentials
-- **Integration tests:** `venue.test.ts` at repo root — hits a live venue
+- **Integration tests:** `venue.test.ts` at repo root — hits a live venue. CI runs it
+  against a throwaway Docker venue (pinned release image on PRs, `:latest` nightly).
+  To run it the same way locally (needs Docker):
+  ```bash
+  .github/integration/start-venue.sh > .it-env    # VENUE_PORT / VENUE_IMAGE to override
+  (while IFS= read -r l; do export "$l"; done < .it-env; pnpm run test:integration)
+  docker stop covia-sdk-it-venue
+  ```
+  Bump the pinned image tag in `.github/workflows/ci.yml` when a venue release is needed.
 
 ## Releasing
 

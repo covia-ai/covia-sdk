@@ -6,3 +6,4 @@ coverage/
 dist/
 package-lock.json
 npm-shrinkwrap.json
+.it-env
