@@ -139,8 +139,9 @@ resulting `.tgz` directly instead of publishing it under `next`, `beta`, or
 `rc`, because npm dist-tags persist across later stable releases and OIDC
 cannot remove them.
 
-CI (`ci.yml`) runs lint, build, and unit tests on every PR and push to `main`.
-Integration tests (`venue.test.ts`) need a live venue and stay local for now.
+CI (`ci.yml`) runs lint, build, unit tests, and the Docker-venue integration
+suite on every PR and push to `main` (and therefore before every publish), plus a
+nightly integration run against the venue's `:latest` image.
 
 ## Package Details
 
