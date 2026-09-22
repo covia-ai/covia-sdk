@@ -77,6 +77,41 @@ function asCoviaError(error: unknown): CoviaError {
   return new CoviaError(message);
 }
 
+/**
+ * The canonical `did:key` a resolved `did:web` document vouches for, or
+ * undefined if it names none.
+ *
+ * A venue reports its `did:key` at `/api/v1/status` (covia#167 made that the
+ * canonical identity; `did:web` is discovery). So pinning the `did:web` string
+ * itself and comparing it to what the venue reports can never match — it
+ * compares two different kinds of name. The check that carries the intended
+ * meaning is "does the reported key match the one this domain-controlled
+ * document vouches for", and the document says so in two places:
+ *
+ * - `alsoKnownAs`, which names the `did:key` outright
+ * - a `verificationMethod`'s `publicKeyMultibase`, which is that key's
+ *   multibase form (`did:key:<multibase>`)
+ *
+ * `alsoKnownAs` is preferred as the document's own explicit statement of
+ * identity; the verification methods are the fallback for a document that
+ * omits it.
+ */
+function canonicalDidFromDocument(didDoc: DIDDocument): string | undefined {
+  const akas: unknown = didDoc.alsoKnownAs;
+  if (Array.isArray(akas)) {
+    const keyDid = akas.find((a): a is string => typeof a === 'string' && a.startsWith('did:key:'));
+    if (keyDid) return keyDid;
+  }
+  const methods: unknown = didDoc.verificationMethod;
+  if (Array.isArray(methods)) {
+    for (const method of methods) {
+      const multibase: unknown = (method as { publicKeyMultibase?: unknown })?.publicKeyMultibase;
+      if (typeof multibase === 'string' && multibase.length > 0) return `did:key:${multibase}`;
+    }
+  }
+  return undefined;
+}
+
 function assertVenueIdentity(expectedDid: string | undefined, actualDid: string | undefined, baseUrl: string): void {
   if (expectedDid && actualDid && expectedDid !== actualDid) {
     throw new VenueIdentityChangedError(expectedDid, actualDid, baseUrl);
@@ -219,12 +254,22 @@ export class Venue implements VenueInterface {
       // schemeless inputs may produce a fallback list (see venueBaseUrlCandidates).
       let candidates: string[];
       let expectedDid: string | undefined;
+      // The did:web that was asked for, kept for the like-for-like fallback
+      // below when the document vouches for no key.
+      let requestedWebDid: string | undefined;
       if (venueId.startsWith('did:web:')) {
-        expectedDid = venueId;
         const didDoc = await resolver.resolve(venueId);
         if (!didDoc.didDocument) {
           throw new CoviaError('Invalid DID document');
         }
+        // Pin the canonical did:key the document vouches for, never the
+        // did:web string: the venue reports its did:key, so pinning the
+        // did:web could only ever reject it (covia-sdk#62). A document that
+        // names no key leaves nothing to pin — the https-fetched, domain-
+        // controlled document is then the only trust anchor, and it is the
+        // same one that chose the endpoint below.
+        expectedDid = canonicalDidFromDocument(didDoc.didDocument);
+        requestedWebDid = venueId;
         const endpoint = didDoc.didDocument.service?.find(service => service.type === 'Covia.API.v1')?.serviceEndpoint;
         if (typeof endpoint !== 'string') {
           throw new CoviaError('No (string) endpoint found for DID');
@@ -251,7 +296,15 @@ export class Venue implements VenueInterface {
           if (!data.did) {
             throw new CoviaError(`Venue status at ${statusUrl} did not include a DID`);
           }
-          assertVenueIdentity(expectedDid, data.did, baseUrl);
+          // Prefer the key the DID document vouched for. With no key to pin,
+          // a venue that answers with a did:web must still answer with *this*
+          // did:web — a like-for-like comparison that catches an endpoint
+          // claiming another domain. A did:key is not comparable to a did:web,
+          // so it is accepted on the authority of the document that named this
+          // endpoint (covia-sdk#62).
+          const required = expectedDid
+            ?? (data.did.startsWith('did:web:') ? requestedWebDid : undefined);
+          assertVenueIdentity(required, data.did, baseUrl);
           return new Venue({
             baseUrl,
             venueId: data.did,

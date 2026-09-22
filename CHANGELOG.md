@@ -4,6 +4,31 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.19.1
+
+### Fixed
+
+- **`Venue.connect('did:web:…')` could never succeed** (covia-sdk#62). The
+  did:web branch pinned the *did:web string itself* as the expected identity,
+  then compared it to the DID the venue reports at `/api/v1/status` — which
+  covia#167 made the canonical `did:key`. Two different kinds of name, so the
+  comparison never matched: connecting by did:web resolved the right endpoint
+  and then rejected the venue for having exactly the identity it is supposed
+  to have, with a `VenueIdentityChangedError` that reads like a security
+  incident rather than an unsupported input.
+
+  The pin now verifies what it was always meant to: the venue's reported
+  `did:key` against the key its domain-controlled DID document vouches for —
+  `alsoKnownAs` (the document's explicit statement of identity) first, a
+  `verificationMethod`'s `publicKeyMultibase` as fallback. A document naming
+  no key leaves nothing to pin, and connecting proceeds on the authority of
+  the https-fetched document that chose the endpoint in the first place. A
+  venue whose key the document does *not* vouch for is still refused, and the
+  error now names the key that was expected.
+
+  `venue.venueId` after a did:web connect is the canonical `did:key` — the
+  same value a URL connect to the same venue yields.
+
 ## 1.19.0
 
 ### Added
