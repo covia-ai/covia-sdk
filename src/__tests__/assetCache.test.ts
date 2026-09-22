@@ -118,3 +118,44 @@ describe('normaliseHash', () => {
     expect(normaliseHash('abcdef')).toBe('abcdef');
   });
 });
+
+describe('persistentCacheKey (covia-sdk#47)', () => {
+  const DID = 'did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK';
+  const HASH = '0e7f1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071829304a5b6c7d8';
+
+  it('keys a DID-qualified content ref on the fully qualified form', async () => {
+    const { persistentCacheKey } = await loadWith(undefined);
+    expect(persistentCacheKey(`${DID}/a/${HASH}`)).toBe(`${DID}/a/${HASH}`);
+  });
+
+  it('normalises the hash inside the key', async () => {
+    const { persistentCacheKey } = await loadWith(undefined);
+    expect(persistentCacheKey(`${DID}/a/0x${HASH.toUpperCase()}`)).toBe(`${DID}/a/${HASH}`);
+  });
+
+  // The whole point of the issue: these resolve against the *caller's* own a/
+  // namespace, so they must never key a store that outlives the identity.
+  it('refuses a bare hash', async () => {
+    const { persistentCacheKey } = await loadWith(undefined);
+    expect(persistentCacheKey(HASH)).toBeNull();
+    expect(persistentCacheKey(`0x${HASH}`)).toBeNull();
+  });
+
+  it('refuses a caller-relative a/<hash>', async () => {
+    const { persistentCacheKey } = await loadWith(undefined);
+    expect(persistentCacheKey(`a/${HASH}`)).toBeNull();
+  });
+
+  it('refuses mutable lattice paths, qualified or not', async () => {
+    const { persistentCacheKey } = await loadWith(undefined);
+    expect(persistentCacheKey('w/my-assets/foo')).toBeNull();
+    expect(persistentCacheKey('o/my-op')).toBeNull();
+    expect(persistentCacheKey(`${DID}/w/my-assets/foo`)).toBeNull();
+  });
+
+  it('refuses a DID-qualified a/ path that is not a single hash', async () => {
+    const { persistentCacheKey } = await loadWith(undefined);
+    expect(persistentCacheKey(`${DID}/a/${HASH}/extra`)).toBeNull();
+    expect(persistentCacheKey(`${DID}/a/not-hex-at-all`)).toBeNull();
+  });
+});

@@ -7,7 +7,11 @@
  * Which DID belongs in a lattice address:
  * - `w`/`o`/`g`/`j`/`s` are per-user: the `<DID>` is the resource *owner's* DID
  *   (yours is your auth DID, e.g. `Ed25519Auth.getDID()`) — NOT the venue's.
- * - `a` (assets) is venue-global and content-addressed.
+ * - `a` (assets) is content-addressed, and **caller-relative**: a bare hash or
+ *   `a/<hash>` names the asset in the requesting caller's own `a/` namespace,
+ *   not a global one (covia#502). Name another owner's copy explicitly as
+ *   `<ownerDID>/a/<hash>` — the only portable form — and the venue's own
+ *   catalog as `<venueDID>/a/<hash>`.
  * - A namespace-relative path (no `<DID>`) resolves to the authenticated caller.
  */
 

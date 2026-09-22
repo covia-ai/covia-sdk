@@ -88,32 +88,61 @@ describe('AssetManager persistent metadata store', () => {
     am.clearCache();
   });
 
-  it('serves a content-addressed get from the store without fetching', async () => {
+  // covia#502: bare hash / a/<hash> are caller-relative, so only the fully
+  // qualified <ownerDID>/a/<hash> form may key a cross-session store.
+  const DID = 'did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK';
+
+  it('serves a DID-qualified get from the store without fetching', async () => {
     const { store, map } = makeStore();
-    map.set('abcdef0123', { name: 'From store' });
+    map.set(`${DID}/a/abcdef0123`, { name: 'From store' });
     setAssetMetadataStore(store);
 
-    const asset = await am.get('abcdef0123');
+    const asset = await am.get(`${DID}/a/abcdef0123`);
     expect(asset.metadata.name).toBe('From store');
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('populates the store on fetch, keyed by normalised bare hash', async () => {
+  it('populates the store on fetch, keyed by the fully qualified ref', async () => {
     const { store, map } = makeStore();
     setAssetMetadataStore(store);
 
     mockJsonOnce({ name: 'Fetched' });
-    await am.get('0xABCDEF0123'); // 0x-prefixed, uppercase ref
-    expect(map.get('abcdef0123')).toEqual({ name: 'Fetched' });
+    await am.get(`${DID}/a/0xABCDEF0123`); // 0x-prefixed, uppercase hash
+    expect(map.get(`${DID}/a/abcdef0123`)).toEqual({ name: 'Fetched' });
   });
 
-  it('shares one entry across ref forms of the same hash', async () => {
+  it('never persists a bare hash — it resolves against the caller own a/', async () => {
     const { store, map } = makeStore();
-    map.set('abcdef0123', { name: 'Shared' });
     setAssetMetadataStore(store);
 
-    await expect(am.get('0xABCDEF0123')).resolves.toBeInstanceOf(DataAsset);
-    expect(mockFetch).not.toHaveBeenCalled();
+    mockJsonOnce({ name: 'Fetched' });
+    await am.get('abcdef0123');
+    expect(map.size).toBe(0);
+  });
+
+  it('never persists a caller-relative a/<hash>', async () => {
+    const { store, map } = makeStore();
+    setAssetMetadataStore(store);
+
+    mockJsonOnce({ name: 'Fetched' });
+    await am.get('a/abcdef0123');
+    expect(map.size).toBe(0);
+  });
+
+  // The leak the issue describes: an entry written while authenticated as one
+  // identity must not answer a bare-hash read by another.
+  it('does not let a stored DID-qualified entry answer a bare-hash get', async () => {
+    const { store } = makeStore();
+    setAssetMetadataStore(store);
+
+    mockJsonOnce({ name: 'Owned' });
+    await am.get(`${DID}/a/abcdef0123`);
+
+    const fresh = new AssetManager(makeVenue()); // new session, same store
+    mockJsonOnce({ name: 'From venue' });
+    const asset = await fresh.get('abcdef0123');
+    expect(asset.metadata.name).toBe('From venue');
+    expect(mockFetch).toHaveBeenCalledTimes(2); // the bare ref went to the venue
   });
 
   it('never persists mutable lattice paths', async () => {
