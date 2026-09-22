@@ -252,6 +252,40 @@ export interface MCPDiscovery {
   [key: string]: any;
 }
 
+/** One tool as MCP describes it (`tools/list`). */
+export interface MCPTool {
+  name: string;
+  description?: string;
+  inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  [key: string]: any;
+}
+
+/** One page of `tools/list`. `nextCursor` absent = the last page. */
+export interface MCPToolPage {
+  tools: MCPTool[];
+  nextCursor?: string;
+}
+
+/** One content block of a tool result. */
+export interface MCPContent {
+  type: string;
+  text?: string;
+  [key: string]: any;
+}
+
+/**
+ * The result of `tools/call`. `isError` marks a tool that ran and failed —
+ * a successful protocol call reporting a failed tool — as distinct from a
+ * protocol error, which throws `MCPError` instead.
+ */
+export interface MCPToolResult {
+  content?: MCPContent[];
+  structuredContent?: Record<string, unknown>;
+  isError?: boolean;
+  [key: string]: any;
+}
+
 /**
  * A2A agent card from `GET /.well-known/agent-card.json`.
  * Field names mirror the A2A v1.0 wire format the venue serves (via the
@@ -1039,6 +1073,21 @@ export class CoviaError extends Error {
     this.name = 'CoviaError';
     this.code = code;
     this.message = message;
+  }
+}
+
+/**
+ * A JSON-RPC error from an MCP endpoint. `code` is the JSON-RPC code (e.g.
+ * -32602 invalid params), not an HTTP status — a JSON-RPC error arrives in a
+ * 200 response, so it would otherwise read as success.
+ */
+export class MCPError extends CoviaError {
+  public data?: unknown;
+
+  constructor(message: string, code: number, data?: unknown) {
+    super(message, code);
+    this.name = 'MCPError';
+    this.data = data;
   }
 }
 

@@ -314,7 +314,9 @@ export class WorkspaceManager {
         // single-read extras the server-side projection does not emit, so
         // dropping them keeps both paths indistinguishable to the caller.
         const value: WorkspaceFieldValue = { exists: read.exists };
-        if ('value' in read) value.value = read.value;
+        // `WorkspaceReadResult.value` is `any` by design (a lattice value is
+        // whatever was stored); carry it across without re-typing it.
+        if ('value' in read) value.value = read.value as unknown;
         if (read.truncated) value.truncated = true;
         return [field, value];
       }));

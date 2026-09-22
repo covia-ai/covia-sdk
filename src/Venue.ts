@@ -12,6 +12,7 @@ import { MemoryManager } from './MemoryManager';
 import { DLFSManager } from './DLFSManager';
 import { UserManager } from './UserManager';
 import { A2AManager } from './A2AManager';
+import { MCPManager } from './MCPManager';
 import { Asset } from './Asset';
 import { fetchWithError } from './Utils';
 import { Auth, NoAuth } from './Credentials';
@@ -145,6 +146,7 @@ export class Venue implements VenueInterface {
   private _dlfs?: DLFSManager;
   private _users?: UserManager;
   private _a2a?: A2AManager;
+  private _mcp?: MCPManager;
 
   get adapters(): AdapterManager { return this._adapters ??= new AdapterManager(this); }
   get agents(): AgentManager { return this._agents ??= new AgentManager(this); }
@@ -158,6 +160,7 @@ export class Venue implements VenueInterface {
   get memory(): MemoryManager { return this._memory ??= new MemoryManager(this); }
   get dlfs(): DLFSManager { return this._dlfs ??= new DLFSManager(this); }
   get users(): UserManager { return this._users ??= new UserManager(this); }
+  get mcp(): MCPManager { return this._mcp ??= new MCPManager(this); }
   get a2a(): A2AManager { return this._a2a ??= new A2AManager(this); }
 
   constructor(options: VenueOptions = {}) {

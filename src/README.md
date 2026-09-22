@@ -37,6 +37,40 @@ await operation.invoke({ param: 'value' }); // Simplified: just pass input param
 await dataAsset.putContent(content);
 ```
 
+## MCP Tools
+
+`venue.mcp` is an MCP client for the venue's native `/mcp` endpoint. It mints
+and correlates JSON-RPC ids, applies the venue auth provider with the venue DID
+as audience, and accepts either an `application/json` or a `text/event-stream`
+response — the venue chooses, and the SDK handles both.
+
+```typescript
+// Discovery and listing are job-free: no job is persisted per page.
+const { tools, nextCursor } = await venue.mcp.listTools();
+const all = await venue.mcp.listAllTools();   // drains the cursor
+
+// Direct call: the result comes back in the response.
+const result = await venue.mcp.callTool('echo', { text: 'hi' });
+if (result.isError) console.error(result.content);  // the tool failed, not the call
+
+// Tracked call: returns the Job, so the run is inspectable and linkable.
+const job = await venue.mcp.callToolTracked('echo', { text: 'hi' });
+await job.result();
+
+// The same bridge reaches a third-party MCP server through the venue.
+await venue.mcp.callToolTracked('search', { q: 'x' },
+  { server: 'https://mcp.example.com', token: '…' });
+
+// Escape hatch for methods the manager does not wrap.
+await venue.mcp.request('resources/list');
+```
+
+`callTool` vs `callToolTracked`: both run the tool and both leave a venue-side
+record. The difference is what you get back — the MCP result, or the `Job` to
+stream, inspect and link. A protocol failure throws `MCPError` (carrying the
+JSON-RPC `code` and `data`); a tool that ran and failed comes back normally
+with `isError: true`.
+
 ## Key Features
 
 - **Type Safety**: Full TypeScript support with proper interfaces
