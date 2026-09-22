@@ -45,6 +45,7 @@ src/
 ├── JobManager.ts       # Job creation, polling, listing
 ├── OperationManager.ts # Operation invocation (v/ops/<adapter>/<op>)
 ├── WorkspaceManager.ts # Workspace management
+├── MCPManager.ts       # MCP client for the venue's native /mcp endpoint
 ├── SecretManager.ts    # Secret storage per venue
 ├── UCANManager.ts      # UCAN token delegation/auth
 ├── crypto/
@@ -63,11 +64,11 @@ dist/                   # Build output (CJS + ESM + .d.ts) — gitignored; `prep
 
 **Classes:** `Grid`, `Venue`, `Asset`, `Operation`, `DataAsset`, `Job`
 
-**Managers:** `AdapterManager`, `AgentManager`, `AssetManager`, `JobManager`, `OperationManager`, `WorkspaceManager`, `UCANManager`, `SecretManager`
+**Managers:** `AdapterManager`, `AgentManager`, `AssetManager`, `JobManager`, `MCPManager`, `OperationManager`, `WorkspaceManager`, `UCANManager`, `SecretManager`
 
 **Scoped reads:** `venue.workspace.scoped({agent, task?, session?})` → `ScopedWorkspace`, a reader bound to an execution scope so the `t/`, `n/` and `c/` scratch shorthands resolve job-free (covia#230, with a client-side fallback for older venues)
 
-**Types:** `VenueOptions`, `AssetMetadata`, `OperationDetails`, `JobMetadata`, `JobHistoryPage`, `RunStatus`, `CoviaError`, `AgentCard`, `AgentSession`, `AgentSessionMessage`, `ExecutionScope`, `MCPDiscovery`, `DIDDocument`
+**Types:** `VenueOptions`, `AssetMetadata`, `OperationDetails`, `JobMetadata`, `JobHistoryPage`, `RunStatus`, `CoviaError`, `AgentCard`, `AgentSession`, `AgentSessionMessage`, `ExecutionScope`, `MCPDiscovery`, `MCPTool`, `MCPToolPage`, `MCPToolResult`, `DIDDocument`
 
 **Utilities:** `fetchWithError()`, `fetchStreamWithError()`, `isJobComplete()`, `isJobFinished()`, `isJobPaused()`, `getParsedAssetId()`, `getAssetIdFromPath()`
 
@@ -90,6 +91,30 @@ dist/                   # Build output (CJS + ESM + .d.ts) — gitignored; `prep
 the job index through the job-free Values surface, so each row arrives with its
 metadata attached rather than costing a `jobs.get()` per row. `agent.listSessions()`
 pages the same way and takes the same `order` (default `asc`, unchanged).
+
+## MCP Tools
+
+`venue.mcp` wraps the venue's native `/mcp` JSON-RPC endpoint: `listTools()` /
+`listAllTools()` (job-free — never `v/ops/mcp/tools-list`), `callTool()` for
+the direct result, `callToolTracked()` for the `Job`, and `request()` as an
+escape hatch. It handles both `application/json` and `text/event-stream`
+responses, correlates request ids internally, and raises `MCPError` with the
+JSON-RPC `code`/`data` on a protocol error. `callToolTracked` goes through
+`v/ops/mcp/tools-call`, whose `server` defaults to this venue but may name a
+third-party MCP server.
+
+## Field Projection
+
+`venue.workspace.listFields(path, fields, {limit, offset, maxSize})` lists a
+node's children *and* reads named subpaths of each in one job-free GET
+(covia#191) — the cure for the list-then-read-each N+1 that every collection
+view otherwise pays per page. Each field carries `values/read` semantics
+verbatim (`{exists, value?, truncated?}`), projection applies after the key
+page, and the venue caps it at 16 fields (rejected client-side before the round
+trip). A venue predating projection ignores the unknown `fields` param and
+answers a plain list; that — not a version check — is the probe, after which
+the SDK falls back to `list` + bounded per-field reads and returns the
+identical shape.
 
 ## Agent Chat Sessions
 
