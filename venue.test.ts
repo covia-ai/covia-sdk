@@ -1,4 +1,4 @@
-import { Venue,  CoviaError, GridError, NotFoundError,  StatusData, Job, Grid, RunStatus, isJobComplete, isJobFinished, getParsedAssetId, getAssetIdFromPath, getAssetIdFromVenueId } from './src/index';
+import { Venue,  CoviaError, GridError, NotFoundError,  StatusData, Job, Grid, RunStatus, isJobComplete, isJobFinished, getParsedAssetId, getAssetIdFromPath, getAssetIdFromVenueId, MCPError } from './src/index';
 
 // Live-venue integration suite. Required env (via .env or the shell):
 //   VENUE_HOST        - connectable venue id: did:web:<host> or a URL
@@ -163,6 +163,79 @@ test('listJobs', async () => {
   const job = await venue.getJob(jobs[0]);
   expect(job.id).not.toBeNull();
   expect(job.metadata.status).not.toBeNull();
+});
+
+// ── MCP client (covia-sdk#23) ────────────────────────────────────────────────
+// Mocks cannot confirm the venue's own JSON-RPC behaviour, so these assert it
+// directly: the native endpoint, its error codes, and the job-free guarantee.
+
+test('mcp.listTools reads the native endpoint and types the tools', async () => {
+  const page = await venue.mcp.listTools();
+  expect(page.tools.length).toBeGreaterThan(0);
+  const tool = page.tools[0];
+  expect(typeof tool.name).toBe('string');
+  expect(tool.inputSchema).toBeDefined();
+});
+
+test('mcp.listTools is job-free', async () => {
+  const before = (await venue.listJobs()).length;
+  await venue.mcp.listTools();
+  await venue.mcp.listTools();
+  expect((await venue.listJobs()).length).toBe(before);   // no job per page
+});
+
+test('mcp.listAllTools drains to the same set as one page', async () => {
+  const page = await venue.mcp.listTools();
+  const all = await venue.mcp.listAllTools();
+  expect(all.length).toBeGreaterThanOrEqual(page.tools.length);
+});
+
+test('mcp unknown tool raises a typed MCPError with its JSON-RPC code', async () => {
+  expect.assertions(3);
+  try {
+    await venue.mcp.callTool('definitely-not-a-tool-' + Date.now());
+  } catch (e) {
+    expect(e).toBeInstanceOf(MCPError);
+    // -32602 invalid params: the venue's answer for an unknown tool name.
+    expect((e as MCPError).code).toBe(-32602);
+    expect((e as MCPError).message).toMatch(/Unknown tool/i);
+  }
+});
+
+// ── Field projection (covia-sdk#12 / covia#191) ──────────────────────────────
+
+test('workspace.listFields projects fields in one read', async () => {
+  const page = await venue.workspace.listFields('v/test/ops', ['operation/adapter'], { limit: 5 });
+  expect(page.exists).toBe(true);
+  const keys = page.keys ?? [];
+  expect(keys.length).toBeGreaterThan(0);
+  for (const key of keys) {
+    const field = page.values[key]?.['operation/adapter'];
+    expect(field).toBeDefined();
+    expect(field.exists).toBe(true);
+    // Each op under v/test/ops is backed by an adapter, named as a string.
+    expect(typeof field.value).toBe('string');
+  }
+});
+
+test('workspace.listFields projection is job-free', async () => {
+  const before = (await venue.listJobs()).length;
+  await venue.workspace.listFields('v/test/ops', ['operation/adapter'], { limit: 3 });
+  expect((await venue.listJobs()).length).toBe(before);
+});
+
+test('workspace.listFields refuses more than the venue cap before asking', async () => {
+  const fields = Array.from({ length: 17 }, (_, i) => `f${i}`);
+  await expect(venue.workspace.listFields('v/test/ops', fields)).rejects.toThrow(/at most 16/);
+});
+
+// ── Caller-relative asset refs (covia-sdk#47 / covia#502) ────────────────────
+
+test('an asset resolves by bare hash and by its DID-qualified form', async () => {
+  const hash = process.env.VALID_ASSET!;
+  const bare = await venue.assets.get(hash);
+  const qualified = await venue.assets.get(`${venue.venueId}/a/${hash}`);
+  expect(qualified.metadata.name).toBe(bare.metadata.name);
 });
 
 const getSHA256Hash = async (input:Buffer<ArrayBuffer>) => {

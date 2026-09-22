@@ -491,14 +491,17 @@ describe('WorkspaceManager.listFields', () => {
     )).toBe(true);
   });
 
-  it('drops the single-read extras so both paths look identical to the caller', async () => {
+  // A projected field *is* a read of that subpath — the live venue emits the
+  // same envelope down to valueBytes — so the fallback must not narrow it.
+  it('carries the whole read envelope through the fallback, valueBytes and all', async () => {
     okJson({ exists: true, keys: ['j1'], type: 'Index' });
     okJson({ exists: true, keys: ['j1'], type: 'Index' });
-    // A real `read` also carries type/valueBytes; a projected field never does.
-    okJson({ exists: true, value: 'x', type: 'String', valueBytes: 3, truncated: true });
+    okJson({ exists: true, value: null, type: 'String', valueBytes: 3000, truncated: true });
 
     const page = await ws.listFields('j', ['status']);
-    expect(page.values.j1.status).toEqual({ exists: true, value: 'x', truncated: true });
+    expect(page.values.j1.status).toEqual({
+      exists: true, value: null, type: 'String', valueBytes: 3000, truncated: true,
+    });
   });
 
   // An absent or non-keyed node never projects — that is not evidence the

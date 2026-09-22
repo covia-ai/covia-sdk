@@ -309,16 +309,11 @@ export class WorkspaceManager {
     const parent = path.replace(/\/+$/, '');
     const rows = await Promise.all(keys.map(async (key) => {
       const projected = await Promise.all(fields.map(async (field): Promise<[string, WorkspaceFieldValue]> => {
-        const read = await this.read(`${parent}/${key}/${field}`, opts.maxSize);
-        // Narrow the read to the projection's shape: `type`/`valueBytes` are
-        // single-read extras the server-side projection does not emit, so
-        // dropping them keeps both paths indistinguishable to the caller.
-        const value: WorkspaceFieldValue = { exists: read.exists };
-        // `WorkspaceReadResult.value` is `any` by design (a lattice value is
-        // whatever was stored); carry it across without re-typing it.
-        if ('value' in read) value.value = read.value as unknown;
-        if (read.truncated) value.truncated = true;
-        return [field, value];
+        // A projected field *is* a read of that subpath — same envelope, same
+        // size guard, `valueBytes` and all — so the read result is passed
+        // through whole rather than narrowed. Verified against a live 0.9.8
+        // venue: its projection emits the identical shape.
+        return [field, await this.read(`${parent}/${key}/${field}`, opts.maxSize)];
       }));
       return [key, Object.fromEntries(projected)] as const;
     }));
