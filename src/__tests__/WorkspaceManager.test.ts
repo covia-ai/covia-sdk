@@ -407,3 +407,110 @@ describe('WorkspaceManager scoped scratch', () => {
     expect(new URL(fetchUrl(3)).pathname).toBe('/api/v1/values/inspect');
   });
 });
+
+// ── field projection on list (covia#191 / covia-sdk#12) ──────────────────────
+
+describe('WorkspaceManager.listFields', () => {
+  let venue: ReturnType<typeof createMockVenue>;
+  let ws: WorkspaceManager;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    venue = createMockVenue();
+    ws = new WorkspaceManager(venue);
+  });
+
+  it('asks for the projection in one job-free GET and returns its values', async () => {
+    okJson({
+      exists: true, type: 'Index', count: 2, keys: ['j1', 'j2'],
+      values: {
+        j1: { status: { exists: true, value: 'COMPLETE' }, 'meta/updated': { exists: true, value: 7 } },
+        j2: { status: { exists: true, value: 'FAILED' }, 'meta/updated': { exists: false } },
+      },
+    });
+
+    const page = await ws.listFields('j', ['status', 'meta/updated'], { limit: 50 });
+
+    expect(venue.operations.run).not.toHaveBeenCalled();     // job-free
+    expect(mockFetch).toHaveBeenCalledTimes(1);              // no N+1
+    const u = new URL(fetchUrl());
+    expect(u.pathname).toBe('/api/v1/values/list');
+    expect(u.searchParams.get('path')).toBe('j');
+    expect(u.searchParams.get('fields')).toBe('status,meta/updated');
+    expect(u.searchParams.get('limit')).toBe('50');
+    expect(page.values.j1.status).toEqual({ exists: true, value: 'COMPLETE' });
+    expect(page.values.j2['meta/updated']).toEqual({ exists: false });
+  });
+
+  it('refuses more than the venue cap of 16 fields before any request', async () => {
+    const fields = Array.from({ length: 17 }, (_, i) => `f${i}`);
+    await expect(ws.listFields('j', fields)).rejects.toThrow(/at most 16/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses an empty field list', async () => {
+    await expect(ws.listFields('j', [])).rejects.toThrow(/at least one field/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  // A venue predating covia#191 ignores the unknown param and answers a plain
+  // list — the documented probe. Detection must be that, never a version check.
+  it('falls back to list + per-field reads on a venue without projection', async () => {
+    okJson({ exists: true, type: 'Index', count: 2, keys: ['j1', 'j2'] }); // probe: no values
+    okJson({ exists: true, type: 'Index', count: 2, keys: ['j1', 'j2'] }); // fallback list
+    okJson({ exists: true, value: 'COMPLETE' });                            // j1/status
+    okJson({ exists: false });                                             // j2/status
+
+    const page = await ws.listFields('j', ['status']);
+
+    expect(page.values).toEqual({
+      j1: { status: { exists: true, value: 'COMPLETE' } },
+      j2: { status: { exists: false } },
+    });
+    expect(page.keys).toEqual(['j1', 'j2']);
+    const readUrls = mockFetch.mock.calls.slice(2).map((c) => new URL(String(c[0])));
+    expect(readUrls.map((u) => u.pathname)).toEqual(['/api/v1/values/read', '/api/v1/values/read']);
+    expect(readUrls.map((u) => u.searchParams.get('path'))).toEqual(['j/j1/status', 'j/j2/status']);
+  });
+
+  it('latches the fallback, so a second call does not re-probe', async () => {
+    okJson({ exists: true, keys: ['j1'], type: 'Index' }); // probe
+    okJson({ exists: true, keys: ['j1'], type: 'Index' }); // fallback list
+    okJson({ exists: true, value: 'A' });
+    await ws.listFields('j', ['status']);
+    const afterFirst = mockFetch.mock.calls.length;
+
+    okJson({ exists: true, keys: ['j1'], type: 'Index' }); // straight to the fallback list
+    okJson({ exists: true, value: 'B' });
+    await ws.listFields('j', ['status']);
+
+    // 2 calls, not 3 — no projection attempt the second time round.
+    expect(mockFetch.mock.calls.length - afterFirst).toBe(2);
+    expect(mockFetch.mock.calls.slice(afterFirst).every(
+      (c) => !new URL(String(c[0])).searchParams.has('fields'),
+    )).toBe(true);
+  });
+
+  it('drops the single-read extras so both paths look identical to the caller', async () => {
+    okJson({ exists: true, keys: ['j1'], type: 'Index' });
+    okJson({ exists: true, keys: ['j1'], type: 'Index' });
+    // A real `read` also carries type/valueBytes; a projected field never does.
+    okJson({ exists: true, value: 'x', type: 'String', valueBytes: 3, truncated: true });
+
+    const page = await ws.listFields('j', ['status']);
+    expect(page.values.j1.status).toEqual({ exists: true, value: 'x', truncated: true });
+  });
+
+  // An absent or non-keyed node never projects — that is not evidence the
+  // venue lacks the feature, so it must not latch the fallback on.
+  it('returns an empty projection for an absent path without latching', async () => {
+    okJson({ exists: false, type: 'Nil' });
+    const page = await ws.listFields('j/missing', ['status']);
+    expect(page.values).toEqual({});
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    okJson({ exists: true, keys: ['j1'], type: 'Index', values: { j1: { status: { exists: true, value: 'S' } } } });
+    await ws.listFields('j', ['status']);
+    expect(new URL(fetchUrl(1)).searchParams.get('fields')).toBe('status'); // still projecting
+  });
+});

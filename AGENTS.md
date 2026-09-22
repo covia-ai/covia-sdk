@@ -91,6 +91,19 @@ the job index through the job-free Values surface, so each row arrives with its
 metadata attached rather than costing a `jobs.get()` per row. `agent.listSessions()`
 pages the same way and takes the same `order` (default `asc`, unchanged).
 
+## Field Projection
+
+`venue.workspace.listFields(path, fields, {limit, offset, maxSize})` lists a
+node's children *and* reads named subpaths of each in one job-free GET
+(covia#191) — the cure for the list-then-read-each N+1 that every collection
+view otherwise pays per page. Each field carries `values/read` semantics
+verbatim (`{exists, value?, truncated?}`), projection applies after the key
+page, and the venue caps it at 16 fields (rejected client-side before the round
+trip). A venue predating projection ignores the unknown `fields` param and
+answers a plain list; that — not a version check — is the probe, after which
+the SDK falls back to `list` + bounded per-field reads and returns the
+identical shape.
+
 ## Agent Chat Sessions
 
 `AgentManager.chat(agentId, message, sessionId?)` blocks until the agent returns its next response on the session. Omit `sessionId` on the first call; the server mints one and returns it in the result — capture and pass it on subsequent calls. Unknown session ids are rejected (no silent mint). Only one chat may be in flight per session.

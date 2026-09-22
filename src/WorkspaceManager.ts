@@ -3,6 +3,7 @@ import {
   WorkspaceListResult, WorkspaceSliceResult, WorkspaceCopyResult, WorkspaceInspectResult,
   WorkspaceCountResult, WorkspaceAggregateResult, OperationRunner, NotFoundError,
   UnsupportedVenueFeatureError, ExecutionScope, CoviaError,
+  WorkspaceFieldValue, WorkspaceProjectedList,
 } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
@@ -23,6 +24,9 @@ type ScopedNamespace = (typeof SCOPED_NAMESPACES)[number];
  * client-side; any other error is a real one and propagates.
  */
 const SCOPE_UNEXPANDED = /Cannot use '[tnc]\/' prefix outside/;
+
+/** The venue's cap on a `fields` projection (CoviaAdapter.MAX_PROJECT_FIELDS). */
+const MAX_PROJECT_FIELDS = 16;
 
 /** The scoped namespace a path opens with, or undefined for an ordinary path. */
 function scopedNamespaceOf(path: string): ScopedNamespace | undefined {
@@ -95,6 +99,12 @@ export class WorkspaceManager {
   // selector-bearing read by complaining the shorthand has no execution scope,
   // after which scoped reads expand client-side instead.
   private scopeExpansionSupported = true;
+
+  // Whether this venue projects fields on `list` (covia#191). A venue without
+  // it ignores the unknown `fields` param and answers a plain list, so the
+  // probe is "asked for fields, got no values" — never a version check, which
+  // covia-sdk#36 showed an embedded venue can misreport.
+  private fieldsSupported = true;
 
   constructor(private venue: WorkspaceManagerVenue) {}
 
@@ -219,6 +229,98 @@ export class WorkspaceManager {
     path = path || '/';
     if (ucans?.length) return this.unsupported('UCAN-authorised workspace listings');
     return this.valuesRead('list', { path, limit, offset });
+  }
+
+  /**
+   * List a node's children *and* read named subpaths of each one, in a single
+   * round trip (covia#191) — the standard partial-response / sparse-fieldset
+   * pattern, and the cure for the collection-view N+1 that list-then-read-each
+   * forces on every page.
+   *
+   * ```ts
+   * const page = await venue.workspace.listFields('j', ['status', 'meta/updated'], { limit: 50 });
+   * page.values['<jobid>']['status']; // → { exists: true, value: 'COMPLETE' }
+   * ```
+   *
+   * Each field is defined as a `read` of `<path>/<key>/<field>` and carries
+   * single-read semantics verbatim: stored null is present, absent is
+   * `{exists:false}`, and a value past `maxSize` withholds `value` and sets
+   * `truncated`. Projection applies *after* the `limit`/`offset` key page, so
+   * work is bounded by `limit × fields.length`.
+   *
+   * Output shape only — no filtering, no ordering. Filter the projected
+   * records locally; for a recency subset use key design plus `slice`.
+   *
+   * On a venue that predates projection this falls back to `list()` plus a
+   * bounded `read()` per (key, field), returning the identical shape, and
+   * remembers not to ask that venue again.
+   *
+   * @param path Parent node. Must be a keyed node (map/Index) — a sequence or
+   *   scalar is a venue 400.
+   * @param fields Subpaths to project per key; may be nested (`meta/updated`).
+   *   At most 16, the venue's cap.
+   */
+  async listFields(
+    path: string,
+    fields: string[],
+    opts: { limit?: number; offset?: number; maxSize?: number } = {},
+  ): Promise<WorkspaceProjectedList> {
+    const { limit, offset, maxSize } = opts;
+    if (fields.length === 0) throw new CoviaError('listFields needs at least one field');
+    // The venue caps at 16 and 400s past it. A named error beats a round trip
+    // that comes back as an opaque bad request.
+    if (fields.length > MAX_PROJECT_FIELDS) {
+      throw new CoviaError(
+        `A fields projection may name at most ${MAX_PROJECT_FIELDS} subpaths; got ${fields.length}`,
+      );
+    }
+
+    if (this.fieldsSupported) {
+      const result = await this.valuesRead<WorkspaceListResult & { values?: WorkspaceProjectedList['values'] }>(
+        'list',
+        { path, limit, offset, fields: fields.join(','), maxSize },
+      );
+      // An absent or non-keyed node never projects; pass those through as-is
+      // rather than reading them as evidence the venue lacks the feature.
+      if (result.values) return result as WorkspaceProjectedList;
+      if (!result.exists || result.keys === undefined) return { ...result, values: {} };
+      this.fieldsSupported = false;
+    }
+    return this.projectClientSide(path, fields, { limit, offset, maxSize });
+  }
+
+  /**
+   * The pre-covia#191 fallback: one `list`, then a `read` per (key, field).
+   * Fan-out is bounded by the page the list already returned, so this costs
+   * `keys.length × fields.length` reads for the page — exactly the N+1 the
+   * server-side projection exists to remove, which is why it is the fallback
+   * and not the default.
+   */
+  private async projectClientSide(
+    path: string,
+    fields: string[],
+    opts: { limit?: number; offset?: number; maxSize?: number },
+  ): Promise<WorkspaceProjectedList> {
+    const base = await this.valuesRead<WorkspaceListResult>(
+      'list',
+      { path, limit: opts.limit, offset: opts.offset },
+    );
+    const keys = base.keys ?? [];
+    const parent = path.replace(/\/+$/, '');
+    const rows = await Promise.all(keys.map(async (key) => {
+      const projected = await Promise.all(fields.map(async (field): Promise<[string, WorkspaceFieldValue]> => {
+        const read = await this.read(`${parent}/${key}/${field}`, opts.maxSize);
+        // Narrow the read to the projection's shape: `type`/`valueBytes` are
+        // single-read extras the server-side projection does not emit, so
+        // dropping them keeps both paths indistinguishable to the caller.
+        const value: WorkspaceFieldValue = { exists: read.exists };
+        if ('value' in read) value.value = read.value;
+        if (read.truncated) value.truncated = true;
+        return [field, value];
+      }));
+      return [key, Object.fromEntries(projected)] as const;
+    }));
+    return { ...base, values: Object.fromEntries(rows) };
   }
 
   async slice(path: string, offset?: number, limit?: number, ucans?: string[]): Promise<WorkspaceSliceResult> {

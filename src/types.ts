@@ -796,6 +796,30 @@ export interface WorkspaceListResult {
   offset?: number;
 }
 
+/**
+ * One projected field of one listed record (covia#191). Exactly the shape a
+ * `values/read` of `<parent>/<key>/<field>` returns — projection is pure
+ * composition of reads, not a new semantics: a stored null is present
+ * (`{exists: true, value: null}`), an absent field is `{exists: false}`, and a
+ * value past the per-field byte guard withholds `value` and sets `truncated`.
+ */
+export interface WorkspaceFieldValue {
+  exists: boolean;
+  value?: any;
+  truncated?: boolean;
+}
+
+/**
+ * A `list` carrying a field projection: the ordinary list result plus, per
+ * listed key, the read result of each requested subpath of that key's child.
+ *
+ * `values` is keyed by the same keys `keys` reports, in the same page —
+ * projection applies after `limit`/`offset`.
+ */
+export interface WorkspaceProjectedList extends WorkspaceListResult {
+  values: Record<string, Record<string, WorkspaceFieldValue>>;
+}
+
 export interface WorkspaceSliceInput {
   path: string;
   offset?: number;
