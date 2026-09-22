@@ -4,6 +4,56 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.19.0
+
+### Added
+
+- **`venue.mcp`** — a first-class MCP client for the venue's native `/mcp`
+  endpoint (covia-sdk#23). The SDK stopped at `mcpDiscovery()`, so every
+  consumer hand-rolled JSON-RPC against `/mcp` — untyped, unauthenticated, and
+  assuming a JSON response despite advertising SSE. `listTools()` /
+  `listAllTools()` read the native endpoint and stay **job-free**: tool
+  discovery is display, and display must not persist a job per page
+  (covia#177). `callTool()` returns the MCP result directly;
+  `callToolTracked()` goes through `v/ops/mcp/tools-call` and returns the
+  `Job`, so a run can be streamed, inspected and linked — the same bridge
+  reaches a third-party MCP server when `server` names one. `request()` is the
+  escape hatch for unwrapped methods. Request ids are minted and correlated
+  internally, the venue auth provider is applied with the venue DID as
+  audience, both `application/json` and `text/event-stream` responses are
+  handled through the existing `parseSSEStream`, and a JSON-RPC error becomes a
+  typed `MCPError` carrying its `code` and `data` — it arrives inside a 200,
+  so it would otherwise read as success. A tool that ran and failed still
+  returns normally with `isError: true`: that is a reportable tool failure, not
+  a transport fault.
+- **`WorkspaceManager.listFields()`** — field projection on `values/list`
+  (covia-sdk#12, venue covia#191). Lists a node's children *and* reads named
+  subpaths of each in one round trip, curing the list-then-read-each N+1 that
+  every collection view otherwise pays per page. Each field keeps `values/read`
+  semantics verbatim, because server-side that is exactly what it is: stored
+  null is present, absent is `{exists:false}`, oversize withholds `value` and
+  sets `truncated`. The 16-field cap is enforced client-side, where it can be
+  named, rather than returning as an opaque 400. A venue predating projection
+  ignores the unknown `fields` param and answers a plain list — that, not a
+  version check, is the probe (covia-sdk#36 showed an embedded venue can report
+  its host's version), after which the SDK falls back to `list` plus bounded
+  per-field reads and returns the identical shape.
+
+### Fixed
+
+- **The persistent metadata store is keyed on the portable ref**
+  (covia-sdk#47). `AssetManager.get()` documented a bare hash as "cached once
+  on any venue, valid on every venue", and the cross-session store was keyed on
+  that claim. The venue never behaved that way: covia#502 confirmed that a bare
+  hash and `a/<hash>` are caller-relative — they name the asset in the
+  *requesting caller's* own `a/` namespace, and Covia has no global lookup by
+  hash. Keyed that way, an entry written under one identity could be served to
+  another, from a store designed to outlive the auth that filled it. Only the
+  fully qualified `<ownerDID>/a/<hash>` form is admitted now; caller-relative
+  refs keep the venue-local memory cache. A `<did>/a/<hash>` key cannot collide
+  with the bare hex written before, so pre-existing entries are unreachable and
+  `clearPersistentCache()` still sweeps them.
+
 ## 1.18.0
 
 ### Added

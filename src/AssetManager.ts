@@ -1,6 +1,6 @@
 import { AssetMetadata, AssetID, AssetListOptions, AssetList, ExpandedAssetList, MyAssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
 import { assetHash } from './did';
-import { getAssetMetadataStore, normaliseHash } from './asset-cache';
+import { getAssetMetadataStore, persistentCacheKey } from './asset-cache';
 import { Asset } from './Asset';
 import { Operation } from './Operation';
 import { DataAsset } from './DataAsset';
@@ -24,19 +24,34 @@ export class AssetManager {
    * a mutable lattice path the venue resolves (`w/my-assets/foo`, `o/my-op`,
    * `<DID>/w/...`). Only content-addressed (immutable) refs are cached;
    * mutable paths are always re-fetched, so a changed value is never served stale.
+   *
+   * **Content-addressed refs are caller-relative, not global** (covia#502). A
+   * bare hash or `a/<hash>` names the asset in *your own* `a/` namespace, so it
+   * 404s for a hash someone else registered, and for an anonymous request.
+   * Address another owner's asset explicitly as `<ownerDID>/a/<hash>`, and the
+   * venue's own catalog as `<venueDID>/a/<hash>`. Only the DID-qualified form
+   * is portable, so only it is eligible for the cross-session metadata store;
+   * caller-relative refs are cached in memory on this manager alone.
    * @param assetId - Asset identifier or lattice address
    * @returns Returns either an Operation or DataAsset based on the asset's metadata
    */
   async get(assetId: AssetID): Promise<Asset> {
+    // The memory cache is scoped to this manager, and therefore to one Venue
+    // and the identity it was authenticated as. Reassigning `venue.auth` makes
+    // caller-relative entries here stale in the authorization sense — call
+    // `clearCache()` after an identity change. (There is no general
+    // `Auth.getDID()` to detect it from; only Ed25519Auth exposes one.)
     if (this.cache.has(assetId)) {
       return this._wrap(assetId, this.cache.get(assetId)!);
     }
-    // Content-addressed refs are immutable (id = Convex hash of the metadata),
-    // so they may also be served from the persistent store — cached once on
-    // any venue, valid on every venue, across sessions.
     const hash = assetHash(assetId);
-    if (hash) {
-      const persisted = getAssetMetadataStore()?.get(normaliseHash(hash));
+    // Portable, DID-qualified refs may also be served from the persistent
+    // store — the same record under the same owner on any venue, across
+    // sessions. Caller-relative refs must not go in a store that outlives the
+    // identity that filled it.
+    const storeKey = persistentCacheKey(assetId);
+    if (storeKey) {
+      const persisted = getAssetMetadataStore()?.get(storeKey);
       if (persisted) {
         this.cache.set(assetId, persisted);
         return this._wrap(assetId, persisted);
@@ -52,7 +67,7 @@ export class AssetManager {
       // lattice path (w/…, o/…) would serve stale data after it changes.
       if (hash) {
         this.cache.set(assetId, data);
-        getAssetMetadataStore()?.put(normaliseHash(hash), data);
+        if (storeKey) getAssetMetadataStore()?.put(storeKey, data);
       }
       return this._wrap(assetId, data);
     } catch (error) {
