@@ -62,6 +62,9 @@ test('venueInvokeOp', async () => {
   expect(operation).not.toBeNull();
   expect(operation.id).not.toBeNull();
   const result = await operation.invoke({ length: "10" });
+  // /invoke answers with the record as it stood when serialised, which can
+  // still be PENDING (venue #526) — poll to a terminal status before asserting.
+  await result.wait({ timeout: 10000 });
   if (result.metadata.status === RunStatus.FAILED) {
     // Public read-only ceiling: anonymous invoke is denied — the denial must
     // be diagnosable (names the missing capability, venue 0.5+).
