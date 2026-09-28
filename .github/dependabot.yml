@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    # One PR for the routine minor/patch churn instead of one per package.
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # @types/node's major must match the Node runtime CI tests on
+      # (node-version 24), or the types advertise APIs the runtime lacks.
+      # Bump it together with the runtime.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  # Keeps the SHA-pinned actions in .github/workflows current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]
