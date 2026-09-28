@@ -1,4 +1,4 @@
-import { Venue,  CoviaError, GridError, NotFoundError,  StatusData, Job, Grid, RunStatus, isJobComplete, isJobFinished, getParsedAssetId, getAssetIdFromPath, getAssetIdFromVenueId, MCPError } from './src/index';
+import { Venue,  CoviaError, GridError, NotFoundError,  StatusData, Job, Grid, RunStatus, isJobComplete, isJobFinished, getParsedAssetId, getAssetIdFromPath, getAssetIdFromVenueId, MCPError, Ed25519Auth, Ed25519Signer, webCryptoSigner, generateNonExtractableKeyPair, createUCANJWTWith } from './src/index';
 
 // Live-venue integration suite. Required env (via .env or the shell):
 //   VENUE_HOST        - connectable venue id: did:web:<host> or a URL
@@ -239,6 +239,43 @@ test('an asset resolves by bare hash and by its DID-qualified form', async () =>
   const bare = await venue.assets.get(hash);
   const qualified = await venue.assets.get(`${venue.venueId}/a/${hash}`);
   expect(qualified.metadata.name).toBe(bare.metadata.name);
+});
+
+// Non-extractable WebCrypto device keys (covia-sdk#68): the venue must see the
+// signer's DID, reject a bad signature rather than fall back to anonymous, and
+// accept signer-minted UCANs.
+
+test('a non-extractable WebCrypto key authenticates as its DID', async () => {
+  const auth = Ed25519Auth.fromSigner(await webCryptoSigner(await generateNonExtractableKeyPair()));
+  const v = await Grid.connect(process.env.VENUE_HOST!, auth);
+  const operation = await v.getAsset(process.env.VALID_OP!);
+  const result = await operation.invoke({ length: "10" });
+  await result.wait({ timeout: 10000 });
+  const job = await v.getJob(result.id);
+  expect(job?.metadata.caller).toBe(auth.getDID());
+});
+
+test('a WebCrypto signer with a corrupted signature is rejected, not treated as anonymous', async () => {
+  const good = await webCryptoSigner(await generateNonExtractableKeyPair());
+  const corrupt: Ed25519Signer = {
+    publicKey: good.publicKey,
+    sign: async (data) => { const sig = await good.sign(data); sig[0] ^= 0xff; return sig; },
+  };
+  // Either the connect-time status probe or the first authenticated call must fail.
+  const attempt = (async () => {
+    const v = await Grid.connect(process.env.VENUE_HOST!, Ed25519Auth.fromSigner(corrupt));
+    await v.jobs.list();
+  })();
+  await expect(attempt).rejects.toThrow(/401|nauthori[sz]ed|signature|invalid/i);
+});
+
+test('a UCAN minted through a WebCrypto signer verifies at the venue', async () => {
+  const signer = await webCryptoSigner(await generateNonExtractableKeyPair());
+  const auth = Ed25519Auth.fromSigner(signer);
+  const token = await createUCANJWTWith(signer, venue.venueId, [], 300);
+  const verdict = await venue.ucan.verify(token);
+  expect(verdict.valid).toBe(true);
+  expect(verdict.iss).toBe(auth.getDID());
 });
 
 const getSHA256Hash = async (input:Buffer<ArrayBuffer>) => {

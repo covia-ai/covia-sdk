@@ -10,9 +10,10 @@
  */
 
 import { sign } from '@noble/ed25519';
-import { encodePublicKey } from './multikey';
+import { didFromPublicKey, encodePublicKey } from './multikey';
 import { getPublicKey } from './keys';
 import { base64UrlEncode } from './jwt';
+import type { Ed25519Signer } from './signer';
 
 const encoder = new TextEncoder();
 
@@ -50,7 +51,36 @@ export function createUCANJWT(
   lifetimeSeconds: number | null,
   proofs: string[] = [],
 ): string {
-  const multikey = encodePublicKey(getPublicKey(privateKey));
+  const signingInput = ucanSigningInput(getPublicKey(privateKey), audienceDID, att, lifetimeSeconds, proofs);
+  const signature = sign(encoder.encode(signingInput), privateKey);
+  return `${signingInput}.${base64UrlEncode(signature)}`;
+}
+
+/**
+ * {@link createUCANJWT} through an {@link Ed25519Signer}, for issuers whose
+ * key is not readable bytes (e.g. a non-extractable WebCrypto key). Same token.
+ */
+export async function createUCANJWTWith(
+  signer: Ed25519Signer,
+  audienceDID: string,
+  att: UCANCapability[],
+  lifetimeSeconds: number | null,
+  proofs: string[] = [],
+): Promise<string> {
+  const signingInput = ucanSigningInput(signer.publicKey, audienceDID, att, lifetimeSeconds, proofs);
+  const signature = await signer.sign(encoder.encode(signingInput));
+  return `${signingInput}.${base64UrlEncode(signature)}`;
+}
+
+/** `base64url(header).base64url(claims)` — the bytes a UCAN JWT signs. */
+function ucanSigningInput(
+  publicKey: Uint8Array,
+  audienceDID: string,
+  att: UCANCapability[],
+  lifetimeSeconds: number | null,
+  proofs: string[],
+): string {
+  const multikey = encodePublicKey(publicKey);
   const nowSecs = Math.floor(Date.now() / 1000);
   const header = JSON.stringify({ alg: 'EdDSA', typ: 'JWT', kid: multikey });
   const claims: Record<string, unknown> = {
@@ -66,10 +96,7 @@ export function createUCANJWT(
     // CVMDouble the venue's UcanJwtValidator rejects outright (covia-sdk#46).
     exp: lifetimeSeconds === null ? null : Math.floor(nowSecs + lifetimeSeconds),
   };
-  const signingInput =
-    `${base64UrlEncode(encoder.encode(header))}.${base64UrlEncode(encoder.encode(JSON.stringify(claims)))}`;
-  const signature = sign(encoder.encode(signingInput), privateKey);
-  return `${signingInput}.${base64UrlEncode(signature)}`;
+  return `${base64UrlEncode(encoder.encode(header))}.${base64UrlEncode(encoder.encode(JSON.stringify(claims)))}`;
 }
 
 /**
@@ -100,6 +127,17 @@ export function grant(
   return createUCANJWT(ownerPrivateKey, audienceDID, [{ with: withResource, can }], lifetimeSeconds);
 }
 
+/** {@link grant} through an {@link Ed25519Signer}. */
+export function grantWith(
+  ownerSigner: Ed25519Signer,
+  audienceDID: string,
+  withResource: string,
+  can: string,
+  lifetimeSeconds: number,
+): Promise<string> {
+  return createUCANJWTWith(ownerSigner, audienceDID, [{ with: withResource, can }], lifetimeSeconds);
+}
+
 /**
  * Mint a **relay delegation**: instructs and authorises `venueDID` to make a
  * cross-venue hop authenticated as itself, exercising the caller's authority.
@@ -115,4 +153,15 @@ export function relayDelegation(
 ): string {
   const att: UCANCapability[] = [{ with: didFor(privateKey), can: VENUE_RELAY }, ...caps];
   return createUCANJWT(privateKey, venueDID, att, lifetimeSeconds);
+}
+
+/** {@link relayDelegation} through an {@link Ed25519Signer}. */
+export function relayDelegationWith(
+  signer: Ed25519Signer,
+  venueDID: string,
+  lifetimeSeconds: number,
+  caps: UCANCapability[] = [],
+): Promise<string> {
+  const att: UCANCapability[] = [{ with: didFromPublicKey(signer.publicKey), can: VENUE_RELAY }, ...caps];
+  return createUCANJWTWith(signer, venueDID, att, lifetimeSeconds);
 }

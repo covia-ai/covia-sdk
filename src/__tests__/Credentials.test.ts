@@ -151,10 +151,10 @@ describe('Ed25519Auth', () => {
     expect(auth.getPublicKey().length).toBe(32);
   });
 
-  it('apply() sets Authorization Bearer header with valid JWT', () => {
+  it('apply() sets Authorization Bearer header with valid JWT', async () => {
     const auth = Ed25519Auth.generate();
     const headers: Record<string, string> = {};
-    auth.apply(headers, 'did:web:venue.example.com');
+    await auth.apply(headers, 'did:web:venue.example.com');
 
     expect(headers['Authorization']).toMatch(/^Bearer /);
     const jwt = headers['Authorization'].replace('Bearer ', '');
@@ -189,10 +189,10 @@ describe('Ed25519Auth', () => {
       ).toString(),
     );
 
-  it('binds the JWT aud to the venue DID passed by the transport', () => {
+  it('binds the JWT aud to the venue DID passed by the transport', async () => {
     const auth = Ed25519Auth.generate();
     const headers: Record<string, string> = {};
-    auth.apply(headers, 'did:web:venue.example.com');
+    await auth.apply(headers, 'did:web:venue.example.com');
     expect(decodePayload(headers).aud).toBe('did:web:venue.example.com');
   });
 
@@ -225,18 +225,18 @@ describe('Ed25519Auth', () => {
     expect(() => auth.apply({}, '')).toThrow(/audience/);
   });
 
-  it('an explicitly pinned audience overrides the transport-supplied one', () => {
+  it('an explicitly pinned audience overrides the transport-supplied one', async () => {
     const auth = Ed25519Auth.generate();
     auth.audience = 'did:web:pinned.example';
     const headers: Record<string, string> = {};
-    auth.apply(headers, 'did:web:venue.example.com');
+    await auth.apply(headers, 'did:web:venue.example.com');
     expect(decodePayload(headers).aud).toBe('did:web:pinned.example');
   });
 
-  it('respects custom token lifetime', () => {
+  it('respects custom token lifetime', async () => {
     const auth = Ed25519Auth.generate(600);
     const headers: Record<string, string> = {};
-    auth.apply(headers, 'did:web:venue.example.com');
+    await auth.apply(headers, 'did:web:venue.example.com');
 
     const jwt = headers['Authorization'].replace('Bearer ', '');
     const payload = JSON.parse(
@@ -267,12 +267,12 @@ describe('Ed25519Auth', () => {
     expect(Ed25519Auth.fromHex(`0x${hex}`).getDID()).toBe(new Ed25519Auth(privateKey).getDID());
   });
 
-  it('generates fresh JWT on each apply() call', () => {
+  it('generates fresh JWT on each apply() call', async () => {
     const auth = Ed25519Auth.generate();
     const h1: Record<string, string> = {};
     const h2: Record<string, string> = {};
-    auth.apply(h1, 'did:web:venue.example.com');
-    auth.apply(h2, 'did:web:venue.example.com');
+    await auth.apply(h1, 'did:web:venue.example.com');
+    await auth.apply(h2, 'did:web:venue.example.com');
     // Signature part should differ due to different iat (or at minimum be valid)
     // Both should be valid JWTs with same DID
     expect(h1['Authorization']).toMatch(/^Bearer /);
