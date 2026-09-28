@@ -12,6 +12,9 @@
           "caps": "unrestricted"
         }
       },
+      "users": {
+        "autoCreate": true
+      },
       "mcp": {}
     }
   ]

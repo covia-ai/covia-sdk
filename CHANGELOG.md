@@ -4,6 +4,43 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## Unreleased
+
+### Added
+
+- **Signer-based Ed25519 signing, including WebCrypto non-extractable keys**
+  (covia-sdk#68). Every signing path took the private key as raw bytes, so a
+  browser app had to keep it readable — in practice as hex in `localStorage`,
+  where any script in the page could take it. An `Ed25519Signer` now abstracts
+  the key: `rawKeySigner(privateKey)` wraps today's path, and
+  `webCryptoSigner(keyPair)` wraps a WebCrypto `CryptoKeyPair` whose private
+  key can be **non-extractable** — it signs, but can never be read back as
+  bytes, and persists in IndexedDB as a structured-cloneable `CryptoKey`.
+  - `Ed25519Auth.fromSigner(signer)` authenticates with a signer;
+    `mintIdentityToken()` is the async counterpart of `identityToken()` and
+    works for both kinds of instance.
+  - `createUCANJWTWith`, `grantWith` and `relayDelegationWith` mint UCANs
+    through a signer.
+  - `generateNonExtractableKeyPair()`, `importNonExtractableKey(privateKey)`
+    (one-time migration of an existing key; the DID is unchanged) and
+    `isWebCryptoEd25519Supported()` for the fallback path.
+
+  Ed25519 is deterministic, so a token signed through WebCrypto is
+  byte-for-byte the token the raw-key path produces for the same key and
+  time — verified in the unit tests, and against a live venue in the
+  integration suite (authentication, bad-signature rejection, UCAN verify).
+
+### Changed
+
+- **`Auth.apply()` may return a promise.** Its return type widened from `void`
+  to `void | Promise<void>` so signer-backed auth can sign asynchronously; the
+  SDK transport awaits it before every request. Existing `Auth` subclasses and
+  raw-key `Ed25519Auth` are unaffected — raw-key `apply()` is still
+  synchronous. Code that calls `auth.apply(headers)` **directly** must now
+  `await` it (TypeScript's `no-floating-promises` flags the call sites).
+  `Ed25519Auth.identityToken()` throws on a signer-backed instance, pointing
+  at `mintIdentityToken()`.
+
 ## 1.19.1
 
 ### Fixed

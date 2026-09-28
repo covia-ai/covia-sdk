@@ -6,6 +6,7 @@
 import { sign } from '@noble/ed25519';
 import { encodePublicKey } from './multikey';
 import { getPublicKey } from './keys';
+import type { Ed25519Signer } from './signer';
 
 const encoder = new TextEncoder();
 
@@ -37,7 +38,27 @@ export function base64UrlEncode(data: Uint8Array): string {
  * @returns Signed JWT string
  */
 export function createEdDSAJWT(privateKey: Uint8Array, lifetimeSeconds: number = 300, audience?: string): string {
-  const publicKey = getPublicKey(privateKey);
+  const signingInput = edDSASigningInput(getPublicKey(privateKey), lifetimeSeconds, audience);
+  const signature = sign(encoder.encode(signingInput), privateKey);
+  return `${signingInput}.${base64UrlEncode(signature)}`;
+}
+
+/**
+ * {@link createEdDSAJWT} through an {@link Ed25519Signer}, for keys that are
+ * not readable bytes (e.g. a non-extractable WebCrypto key). Same token.
+ */
+export async function createEdDSAJWTWith(
+  signer: Ed25519Signer,
+  lifetimeSeconds: number = 300,
+  audience?: string,
+): Promise<string> {
+  const signingInput = edDSASigningInput(signer.publicKey, lifetimeSeconds, audience);
+  const signature = await signer.sign(encoder.encode(signingInput));
+  return `${signingInput}.${base64UrlEncode(signature)}`;
+}
+
+/** `base64url(header).base64url(claims)` — the bytes an EdDSA JWT signs. */
+function edDSASigningInput(publicKey: Uint8Array, lifetimeSeconds: number, audience?: string): string {
   const multikey = encodePublicKey(publicKey);
   const did = `did:key:${multikey}`;
 
@@ -58,10 +79,5 @@ export function createEdDSAJWT(privateKey: Uint8Array, lifetimeSeconds: number =
 
   const headerB64 = base64UrlEncode(encoder.encode(header));
   const payloadB64 = base64UrlEncode(encoder.encode(payload));
-  const signingInput = `${headerB64}.${payloadB64}`;
-
-  const signature = sign(encoder.encode(signingInput), privateKey);
-  const signatureB64 = base64UrlEncode(signature);
-
-  return `${signingInput}.${signatureB64}`;
+  return `${headerB64}.${payloadB64}`;
 }

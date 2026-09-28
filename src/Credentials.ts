@@ -1,6 +1,7 @@
-import { getPublicKey, generateKeyPair, hexToPrivateKey } from './crypto/keys';
+import { generateKeyPair, hexToPrivateKey } from './crypto/keys';
 import { didFromPublicKey } from './crypto/multikey';
-import { createEdDSAJWT } from './crypto/jwt';
+import { createEdDSAJWT, createEdDSAJWTWith } from './crypto/jwt';
+import { rawKeySigner, type Ed25519Signer } from './crypto/signer';
 import { CoviaError } from './types';
 
 // UTF-8-safe base64 that exists in both browsers and Node ≥ 16 — the SDK's
@@ -35,8 +36,11 @@ export abstract class Auth {
    * @param audience - The venue's DID, supplied by the transport. Providers
    *   that bind tokens to the venue's identity (e.g. {@link Ed25519Auth}) use it
    *   as the JWT `aud`; others ignore it.
+   * @returns Nothing, or a promise for providers that sign asynchronously
+   *   (e.g. {@link Ed25519Auth.fromSigner} over a WebCrypto key). The transport
+   *   awaits it before sending, so callers of `apply` must await it too.
    */
-  abstract apply(headers: Record<string, string>, audience?: string): void;
+  abstract apply(headers: Record<string, string>, audience?: string): void | Promise<void>;
 }
 
 /** No-op authentication provider. Sends no credentials. */
@@ -95,32 +99,55 @@ export class BasicAuth extends Auth {
  * client's Ed25519 private key.  The server verifies the signature and
  * extracts the caller's DID from the `sub` claim.
  *
+ * Construct it from a raw 32-byte key, or with {@link Ed25519Auth.fromSigner}
+ * from an {@link Ed25519Signer} — e.g. a non-extractable WebCrypto key, which
+ * signs without the key ever being readable by page scripts. Signer-backed
+ * instances sign asynchronously; the SDK transport awaits them.
+ *
  * Example:
  *   const auth = Ed25519Auth.generate();
  *   console.log(auth.getDID()); // did:key:z6Mk...
  *   const venue = await Grid.connect("https://your-venue.example.com", auth);
+ *
+ *   // Non-extractable key (browser):
+ *   const signer = await webCryptoSigner(await generateNonExtractableKeyPair());
+ *   const venue2 = await Grid.connect("https://your-venue.example.com", Ed25519Auth.fromSigner(signer));
  */
 export class Ed25519Auth extends Auth {
-  private _privateKey: Uint8Array;
+  /** Present only for raw-key instances; signer-backed ones never see key bytes. */
+  private _privateKey?: Uint8Array;
+  private _signer: Ed25519Signer;
   private _publicKey: Uint8Array;
   private _did: string;
   private _lifetime: number;
   private _audience?: string;
 
   /**
-   * @param privateKey - 32-byte Ed25519 private key
+   * @param key - 32-byte Ed25519 private key, or an {@link Ed25519Signer}
    * @param tokenLifetimeSeconds - JWT lifetime in seconds (default 300 = 5 min)
    */
-  constructor(privateKey: Uint8Array, tokenLifetimeSeconds: number = 300) {
+  constructor(key: Uint8Array | Ed25519Signer, tokenLifetimeSeconds: number = 300) {
     super();
-    this._privateKey = privateKey;
-    this._publicKey = getPublicKey(privateKey);
+    if (isSigner(key)) {
+      this._signer = key;
+    } else {
+      this._privateKey = key;
+      this._signer = rawKeySigner(key);
+    }
+    this._publicKey = this._signer.publicKey;
     this._did = didFromPublicKey(this._publicKey);
     this._lifetime = tokenLifetimeSeconds;
   }
 
-  apply(headers: Record<string, string>, audience?: string): void {
-    headers['Authorization'] = `Bearer ${this.identityToken(audience)}`;
+  apply(headers: Record<string, string>, audience?: string): void | Promise<void> {
+    // Raw keys stay synchronous so direct callers of apply() keep working.
+    if (this._privateKey) {
+      headers['Authorization'] = `Bearer ${this.identityToken(audience)}`;
+      return;
+    }
+    return this.mintIdentityToken(audience).then((token) => {
+      headers['Authorization'] = `Bearer ${token}`;
+    });
   }
 
   /**
@@ -134,17 +161,39 @@ export class Ed25519Auth extends Auth {
    * at any venue that accepts the caller's DID, so minting one is refused
    * rather than silently weakened.
    *
+   * Raw-key instances only: a signer-backed instance signs asynchronously,
+   * so use {@link mintIdentityToken}, which works for both.
+   *
    * @param audience - The venue DID the token is bound to (`aud` claim).
    * @param lifetimeSeconds - Token lifetime; defaults to this instance's.
    */
   identityToken(audience?: string, lifetimeSeconds?: number): string {
+    const aud = this.resolveAudience(audience);
+    if (!this._privateKey) {
+      throw new CoviaError(
+        'Ed25519Auth.identityToken() needs a raw private key; this instance signs through an ' +
+        'Ed25519Signer, so use the async mintIdentityToken() instead.');
+    }
+    return createEdDSAJWT(this._privateKey, lifetimeSeconds ?? this._lifetime, aud);
+  }
+
+  /**
+   * Async {@link identityToken} that works for raw-key and signer-backed
+   * instances alike. Same token, same audience rules.
+   */
+  async mintIdentityToken(audience?: string, lifetimeSeconds?: number): Promise<string> {
+    const aud = this.resolveAudience(audience);
+    return createEdDSAJWTWith(this._signer, lifetimeSeconds ?? this._lifetime, aud);
+  }
+
+  private resolveAudience(audience?: string): string {
     const aud = this._audience ?? (audience || undefined);
     if (!aud) {
       throw new CoviaError(
         'Ed25519Auth requires a venue audience to bind the token to: connect via ' +
         'Grid.connect()/Venue.connect() so the venue DID is known, or pin auth.audience explicitly.');
     }
-    return createEdDSAJWT(this._privateKey, lifetimeSeconds ?? this._lifetime, aud);
+    return aud;
   }
 
   /** The caller's DID derived from the public key. */
@@ -174,6 +223,18 @@ export class Ed25519Auth extends Auth {
   static fromHex(privateKeyHex: string, tokenLifetimeSeconds: number = 300): Ed25519Auth {
     return new Ed25519Auth(hexToPrivateKey(privateKeyHex), tokenLifetimeSeconds);
   }
+
+  /**
+   * Create from an {@link Ed25519Signer}, e.g. `await webCryptoSigner(keyPair)`
+   * over a non-extractable WebCrypto key. Requests sign asynchronously.
+   */
+  static fromSigner(signer: Ed25519Signer, tokenLifetimeSeconds: number = 300): Ed25519Auth {
+    return new Ed25519Auth(signer, tokenLifetimeSeconds);
+  }
+}
+
+function isSigner(key: Uint8Array | Ed25519Signer): key is Ed25519Signer {
+  return !ArrayBuffer.isView(key) && typeof key.sign === 'function';
 }
 
 /**

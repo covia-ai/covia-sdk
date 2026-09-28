@@ -52,7 +52,9 @@ src/
 │   ├── base58.ts       # Base58 encoding
 │   ├── jwt.ts          # JWT signing/verification
 │   ├── keys.ts         # ed25519 key generation + hex conversion
-│   └── multikey.ts     # DID/multikey encoding
+│   ├── multikey.ts     # DID/multikey encoding
+│   ├── signer.ts       # Ed25519Signer: raw-key and WebCrypto (non-extractable) signers
+│   └── ucan.ts         # Client-side UCAN minting (raw-key and signer-based)
 ├── example.ts          # Usage examples
 └── __tests__/          # Jest unit tests (one per manager + SSE, Utils, types, ...)
 examples/node/          # Node.js usage example
@@ -75,6 +77,8 @@ dist/                   # Build output (CJS + ESM + .d.ts) — gitignored; `prep
 **DID / lattice paths:** `Namespace`, `isDid()`, `didMethod()`, `parseDidUrl()`, `didUrl()`, `assetHash()` (`src/did.ts`) — build/parse `<DID>/<namespace>/<path>` addresses
 
 **Crypto:** `generateKeyPair`, `privateKeyToHex`, `hexToPrivateKey`, `didFromPublicKey`, `encodePublicKey`, `decodePublicKey`
+
+**Signers (WebCrypto non-extractable keys, covia-sdk#68):** `Ed25519Signer`, `rawKeySigner`, `webCryptoSigner`, `generateNonExtractableKeyPair`, `importNonExtractableKey`, `isWebCryptoEd25519Supported`; `Ed25519Auth.fromSigner()` / `mintIdentityToken()`; `createUCANJWTWith`, `grantWith`, `relayDelegationWith`. `Auth.apply()` may return a promise — the transport awaits it.
 
 ## Core Workflow
 
