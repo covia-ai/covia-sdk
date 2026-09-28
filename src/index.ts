@@ -35,4 +35,13 @@ export { A2AManager } from './A2AManager';
 export { generateKeyPair, privateKeyToHex, hexToPrivateKey } from './crypto/keys';
 export { didFromPublicKey, encodePublicKey, decodePublicKey } from './crypto/multikey';
 export { createUCANJWT, identityToken, grant, relayDelegation, didFor, VENUE_RELAY } from './crypto/ucan';
+export { createUCANJWTWith, grantWith, relayDelegationWith } from './crypto/ucan';
+export {
+  rawKeySigner,
+  webCryptoSigner,
+  generateNonExtractableKeyPair,
+  importNonExtractableKey,
+  isWebCryptoEd25519Supported,
+} from './crypto/signer';
+export type { Ed25519Signer } from './crypto/signer';
 export type { UCANCapability } from './crypto/ucan';

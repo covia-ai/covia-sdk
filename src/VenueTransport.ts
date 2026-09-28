@@ -4,7 +4,7 @@ export interface VenueRequestContext {
   baseUrl: string;
   venueId: string;
   auth: {
-    apply(headers: Record<string, string>, audience?: string): void;
+    apply(headers: Record<string, string>, audience?: string): void | Promise<void>;
   };
 }
 
@@ -17,10 +17,10 @@ export type VenueRequestInit = Omit<RequestInit, 'headers'> & {
   contentType?: string | null;
 };
 
-function requestOptions(
+async function requestOptions(
   venue: VenueRequestContext,
   options: VenueRequestInit,
-): RequestInit {
+): Promise<RequestInit> {
   const {
     contentType,
     headers: suppliedHeaders = {},
@@ -33,30 +33,31 @@ function requestOptions(
   if (effectiveContentType && headers['Content-Type'] === undefined) {
     headers['Content-Type'] = effectiveContentType;
   }
-  venue.auth.apply(headers, venue.venueId);
+  // Awaited: signer-backed auth (e.g. a WebCrypto key) signs asynchronously.
+  await venue.auth.apply(headers, venue.venueId);
   return { ...request, headers };
 }
 
 /** Make an authenticated JSON request against a venue API path. */
-export function venueJson<T>(
+export async function venueJson<T>(
   venue: VenueRequestContext,
   path: string,
   options: VenueRequestInit = {},
 ): Promise<T> {
   return fetchWithError<T>(
     `${venue.baseUrl}${path}`,
-    requestOptions(venue, options),
+    await requestOptions(venue, options),
   );
 }
 
 /** Make an authenticated streaming request against a venue API path. */
-export function venueStream(
+export async function venueStream(
   venue: VenueRequestContext,
   path: string,
   options: VenueRequestInit = {},
 ): Promise<Response> {
   return fetchStreamWithError(
     `${venue.baseUrl}${path}`,
-    requestOptions(venue, options),
+    await requestOptions(venue, options),
   );
 }
