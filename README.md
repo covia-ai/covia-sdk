@@ -76,6 +76,14 @@ const venue = await Grid.connect("your-venue.example.com"); // DNS name → http
 const venue = await Venue.connect("https://your-venue.example.com");
 ```
 
+For an address without a scheme, the SDK picks one from the host:
+
+- **Public hosts** use `https://` only. There is no fallback to plain HTTP.
+- **Local hosts** (`localhost`, `*.local`, loopback, and the private ranges `10/8`, `172.16/12`, `192.168/16`, `169.254/16`) try `http://` first, then `https://`, so a venue on your machine or LAN works without TLS.
+- **Explicit `http://` or `https://`** addresses are used exactly as given.
+
+Credentials sent over `http://` travel in cleartext, so use `https://` for any venue reached over a network you don't control. To report a security issue, see [SECURITY.md](SECURITY.md).
+
 ### Authentication
 
 ```typescript

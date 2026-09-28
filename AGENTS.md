@@ -172,6 +172,13 @@ CI (`ci.yml`) runs lint, build, unit tests, and the Docker-venue integration
 suite on every PR and push to `main` (and therefore before every publish), plus a
 nightly integration run against the venue's `:latest` image.
 
+Workflow security: every `uses:` is pinned to a full commit SHA with the
+version in a comment, and each workflow defaults to a read-only token
+(`publish.yml` grants `id-token`/`contents: write` only to the jobs that need
+them). Dependabot (`.github/dependabot.yml`) bumps npm dependencies and the
+pinned actions weekly against `develop`; CodeQL (`codeql.yml`) scans every PR.
+Keep new actions SHA-pinned. Vulnerability reports go through `SECURITY.md`.
+
 ## Package Details
 
 - **npm:** `@covia/covia-sdk`
