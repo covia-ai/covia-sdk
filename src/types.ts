@@ -45,8 +45,8 @@ export interface VenueInterface {
   getJob(jobId:string):Promise<Job>;
   listJobs():Promise<string[]>;
   getAsset(assetId: AssetID): Promise<Asset>;
-  listAssets(options: AssetListOptions & { expand: 'metadata' }): Promise<ExpandedAssetList>;
-  listAssets(options?: AssetListOptions): Promise<AssetList>;
+  listAssets(options: CatalogListOptions & { expand: 'metadata' }): Promise<ExpandedAssetList>;
+  listAssets(options?: CatalogListOptions): Promise<AssetList>;
   didDocument(): Promise<DIDDocument>;
   mcpDiscovery(): Promise<MCPDiscovery>;
   agentCard(): Promise<AgentCard>;
@@ -202,6 +202,17 @@ export interface AssetListOptions {
   offset?: number;
   limit?: number;
   expand?: 'metadata';
+}
+/**
+ * Options for the venue-wide catalog listing (`GET /api/v1/assets`).
+ * `kind` restricts it to assets that carry an operation (`'operation'`) or to
+ * those that do not (`'data'`); the venue filters before paging, so `offset`
+ * counts filtered entries and `total` is the filtered size. Venues older than
+ * covia 0.9.9 ignore `kind` and return the whole catalog, so a caller that
+ * depends on the split should still check each item.
+ */
+export interface CatalogListOptions extends AssetListOptions {
+  kind?: 'operation' | 'data';
 }
 
 export interface AssetList {

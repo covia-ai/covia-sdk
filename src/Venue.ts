@@ -1,4 +1,4 @@
-import { ConnectionAttempt, CoviaConnectionError, CoviaError, CoviaTimeoutError, GridError, VenueIdentityChangedError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, AssetListOptions, AssetList, ExpandedAssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
+import { ConnectionAttempt, CoviaConnectionError, CoviaError, CoviaTimeoutError, GridError, VenueIdentityChangedError, VenueOptions, VenueData, VenueInterface, AssetID, StatusData, CatalogListOptions, AssetList, ExpandedAssetList, DIDDocument, MCPDiscovery, AgentCard } from './types';
 import { AdapterManager } from './AdapterManager';
 import { AgentManager } from './AgentManager';
 import { JobManager } from './JobManager';
@@ -358,13 +358,14 @@ export class Venue implements VenueInterface {
   /**
    * List assets with pagination support (convenience delegate to venue.assets.list)
    * @param options - Pagination options (offset, limit). Pass
-   * `{ expand: 'metadata' }` to get each item's metadata inlined.
+   * `{ expand: 'metadata' }` to get each item's metadata inlined, and
+   * `kind` to filter the catalog on the venue.
    * @returns {Promise<AssetList>} Paginated list of asset ids, or of
    * `{id, metadata}` items when `expand: 'metadata'` is requested
    */
-  async listAssets(options: AssetListOptions & { expand: 'metadata' }): Promise<ExpandedAssetList>;
-  async listAssets(options?: AssetListOptions): Promise<AssetList>;
-  async listAssets(options: AssetListOptions = {}): Promise<AssetList | ExpandedAssetList> {
+  async listAssets(options: CatalogListOptions & { expand: 'metadata' }): Promise<ExpandedAssetList>;
+  async listAssets(options?: CatalogListOptions): Promise<AssetList>;
+  async listAssets(options: CatalogListOptions = {}): Promise<AssetList | ExpandedAssetList> {
     return this.assets.list(options);
   }
 

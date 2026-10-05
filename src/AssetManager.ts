@@ -1,4 +1,4 @@
-import { AssetMetadata, AssetID, AssetListOptions, AssetList, ExpandedAssetList, MyAssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
+import { AssetMetadata, AssetID, AssetListOptions, CatalogListOptions, AssetList, ExpandedAssetList, MyAssetList, ContentHashResult, NotFoundError, AssetNotFoundError, AssetPinResult, OperationRunner, VenueInterface } from './types';
 import { assetHash } from './did';
 import { getAssetMetadataStore, persistentCacheKey } from './asset-cache';
 import { Asset } from './Asset';
@@ -90,10 +90,12 @@ export class AssetManager {
    * @param options - Pagination options (offset, limit). Pass
    * `{ expand: 'metadata' }` to get each item's metadata inlined as
    * `{id, metadata}` instead of a bare id string, sparing a per-id fetch.
+   * Pass `kind: 'data'` or `kind: 'operation'` to have the venue filter the
+   * catalog before paging (see {@link CatalogListOptions}).
    */
-  async list(options: AssetListOptions & { expand: 'metadata' }): Promise<ExpandedAssetList>;
-  async list(options?: AssetListOptions): Promise<AssetList>;
-  async list(options: AssetListOptions = {}): Promise<AssetList | ExpandedAssetList> {
+  async list(options: CatalogListOptions & { expand: 'metadata' }): Promise<ExpandedAssetList>;
+  async list(options?: CatalogListOptions): Promise<AssetList>;
+  async list(options: CatalogListOptions = {}): Promise<AssetList | ExpandedAssetList> {
     const params = new URLSearchParams();
     params.set('offset', String(options.offset ?? 0));
     if (options.limit !== undefined) {
@@ -101,6 +103,9 @@ export class AssetManager {
     }
     if (options.expand !== undefined) {
       params.set('expand', options.expand);
+    }
+    if (options.kind !== undefined) {
+      params.set('kind', options.kind);
     }
     return venueJson<AssetList | ExpandedAssetList>(
       this.venue,
