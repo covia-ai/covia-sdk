@@ -3,6 +3,10 @@
 # "onlyBuiltDependencies" list; it reads this "allowBuilds" boolean map.
 # esbuild and unrs-resolver ship native binaries whose install scripts must run,
 # or a consumer's (and this repo's CI) install fails with ERR_PNPM_IGNORED_BUILDS.
+# @parcel/watcher (via jest-haste-map, dev only) ships per-platform prebuilt
+# binaries as optional dependencies; its install script is only a build-from-
+# source fallback. Declining it explicitly keeps the install strict.
 allowBuilds:
+  '@parcel/watcher': false
   esbuild: true
   unrs-resolver: true

@@ -1,6 +1,6 @@
 {
   "name": "@covia/covia-sdk",
-  "version": "1.21.0",
+  "version": "1.21.1",
   "description": "Typescript library for covia-ai",
   "packageManager": "pnpm@11.9.0",
   "main": "./dist/index.js",
@@ -57,7 +57,7 @@
     "@eslint/js": "^10.0.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.5",
     "eslint": "^10.6.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
@@ -71,7 +71,7 @@
   "dependencies": {
     "@noble/ed25519": "^3.0.0",
     "@noble/hashes": "^2.0.0",
-    "did-resolver": "^4.1.0",
-    "web-did-resolver": "^2.0.32"
+    "did-resolver": "^6.0.0",
+    "web-did-resolver": "^3.1.0"
   }
 }

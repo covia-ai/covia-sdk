@@ -4,6 +4,26 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.21.1
+
+### Changed
+
+- **DID resolution: `did-resolver` 6 and `web-did-resolver` 3** (covia-sdk#82).
+  `web-did-resolver` 3 is stricter: it rejects a DID document whose `id` is
+  not the requested DID. `Grid.connect('did:web:<host>')` therefore fails with
+  `Invalid DID document` against a venue whose `/.well-known/did.json` uses its
+  `did:key` as `id`. That happens when the venue has no public `hostname`
+  configured. Connecting by URL is unaffected, and so are venues with a public
+  `hostname`, which present `did:web:<host>` (all hosted Covia venues do).
+- **Runtime dependency updates** (covia-sdk#81): `@noble/ed25519` 3.2.0 and
+  `@noble/hashes` 2.4.0. Their `package.json` ranges are unchanged.
+
+### Internal
+
+- Dev tooling: jest 30.5, ts-jest, eslint, typescript-eslint, `@types/node`
+  and dotenv 18 (#79, #81). `@parcel/watcher`'s install script is declined in
+  `pnpm-workspace.yaml`. GitHub Actions bumped (#76).
+
 ## 1.21.0
 
 ### Added

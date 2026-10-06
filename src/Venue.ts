@@ -96,7 +96,9 @@ function asCoviaError(error: unknown): CoviaError {
  * identity; the verification methods are the fallback for a document that
  * omits it.
  */
-function canonicalDidFromDocument(didDoc: DIDDocument): string | undefined {
+// Typed by the two fields it reads, not by a DIDDocument type: it takes both
+// did-resolver's document and the SDK's own, which disagree on '@context'.
+function canonicalDidFromDocument(didDoc: { alsoKnownAs?: unknown; verificationMethod?: unknown }): string | undefined {
   const akas: unknown = didDoc.alsoKnownAs;
   if (Array.isArray(akas)) {
     const keyDid = akas.find((a): a is string => typeof a === 'string' && a.startsWith('did:key:'));
