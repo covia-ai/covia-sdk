@@ -4,6 +4,20 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.21.0
+
+### Added
+
+- **`kind` filter on the catalog listing** (covia-sdk#73). `AssetManager.list`
+  and `Venue.listAssets` take `CatalogListOptions`, which adds
+  `kind?: 'operation' | 'data'` and forwards it to `GET /api/v1/assets?kind=`
+  (covia#530). The venue filters before paging, so `offset` counts filtered
+  entries and `total` is the filtered size. A page that only wants artifacts no
+  longer downloads every operation definition first (frontend#420: 1.70 MB to
+  394 KB on venue-3). Venues older than covia#530 ignore `kind` and return the
+  whole catalog, so callers that depend on the split should still check each
+  item. `listMine` is unchanged.
+
 ## 1.20.0
 
 ### Added
