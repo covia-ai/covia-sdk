@@ -197,6 +197,22 @@ describe('AssetManager.list', () => {
     expect(url).toBe('https://v/api/v1/assets?offset=0&expand=metadata');
     expect(result.items).toEqual([{ id: 'a1', metadata: { name: 'Asset One' } }]);
   });
+
+  it('passes kind through so the venue filters the catalog before paging', async () => {
+    mockJsonOnce({ items: [], total: 0, offset: 0, limit: 50 });
+    await am.list({ expand: 'metadata', kind: 'data', limit: 50 });
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://v/api/v1/assets?offset=0&limit=50&expand=metadata&kind=data');
+  });
+
+  it('omits kind when not requested', async () => {
+    mockJsonOnce({ items: [], total: 0, offset: 0, limit: 100 });
+    await am.list({ expand: 'metadata' });
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).not.toContain('kind=');
+  });
 });
 
 describe('AssetManager.listMine', () => {
