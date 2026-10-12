@@ -144,6 +144,11 @@ test('venueStatus', async () => {
   expect(stats?.url).toBe(process.env.VENUE_URL);
   // The status did is the canonical did:key identity (covia#167)
   expect(stats?.did).toBe(venue.venueId);
+  // The anonymous scope class (covia#562); absent on venues before it shipped
+  const publicCaps = stats?.access?.publicCaps;
+  if (publicCaps !== undefined) {
+    expect(['disabled', 'read-only', 'unrestricted', 'custom']).toContain(publicCaps);
+  }
 });
 
 test('isJobCompleteMethod', () => {
