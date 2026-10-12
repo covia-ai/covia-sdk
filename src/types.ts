@@ -190,7 +190,18 @@ export interface StatusData {
   stats?:StatsData;
   /** Curated admission-policy fields (#255) — safe to state to any caller.
    *  Absent on venues before this shipped; treat as unknown, not false. */
-  access?: { public: boolean; userAutoCreate: boolean };
+  access?: StatusAccess;
+}
+/** What signed-out callers may do on a venue (`auth.public.caps`), by class
+ *  only. `custom` names no particular write, so it promises none. */
+export type PublicCaps = 'disabled' | 'read-only' | 'unrestricted' | 'custom';
+export interface StatusAccess {
+  public: boolean;
+  userAutoCreate: boolean;
+  /** Anonymous scope (covia#562). Absent on venues before it shipped. Every
+   *  signed-out caller shares one account (`<venue>:public`), so anything
+   *  written under this scope is visible to other anonymous callers. */
+  publicCaps?: PublicCaps;
 }
 export interface StatsData {
   assets?: number;
