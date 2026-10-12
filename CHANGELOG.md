@@ -4,6 +4,18 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## Unreleased
+
+### Added
+
+- **`access.publicCaps` on `StatusData`** (covia#562, frontend#220). The
+  venue's `/status` now reports what signed-out callers may do:
+  `'disabled' | 'read-only' | 'unrestricted' | 'custom'`. Only the class is
+  reported, so `custom` does not imply any particular write. The `access`
+  shape is now the exported `StatusAccess` interface, and the classes are the
+  `PublicCaps` type. Venues before covia#562 omit the field; treat it as
+  unknown.
+
 ## 1.21.1
 
 ### Changed
