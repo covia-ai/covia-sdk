@@ -4,7 +4,7 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
-## Unreleased
+## 1.22.0
 
 ### Added
 
@@ -15,6 +15,11 @@ its own SemVer track (independent of the venue/platform version).
   shape is now the exported `StatusAccess` interface, and the classes are the
   `PublicCaps` type. Venues before covia#562 omit the field; treat it as
   unknown.
+
+### Internal
+
+- The `venueStatus` integration test checks that `access.publicCaps`, when
+  present, is one of the four classes (covia-sdk#86).
 
 ## 1.21.1
 
