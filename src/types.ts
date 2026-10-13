@@ -432,6 +432,15 @@ export interface AgentListInput {
   includeTerminated?: boolean;
 }
 
+/** Counts of an agent's pending jobs paused on a person (covia#557):
+ *  `input` → `INPUT_REQUIRED`, `auth` → `AUTH_REQUIRED`. Derived on each read
+ *  and independent of the agent's lifecycle `status` (a SLEEPING agent can be
+ *  awaiting input). Does not say the viewer is the intended responder. */
+export interface AgentAwaiting {
+  input: number;
+  auth: number;
+}
+
 export interface AgentListResult {
   /** Always objects. The invoke op returns enriched entries; the job-free GET
    *  returns bare id strings, which the SDK normalises to `{agentId}` — so
@@ -440,6 +449,8 @@ export interface AgentListResult {
     agentId: string;
     status?: string;
     tasks?: number;
+    /** Absent on venues before covia#557, and on bare-id entries. */
+    awaiting?: AgentAwaiting;
   }>;
 }
 
@@ -489,6 +500,8 @@ export interface AgentInfoResult {
   stateConfig?: Record<string, any>;
   timelineLength?: number;
   tasks?: number;
+  /** Absent on venues before covia#557; treat as unknown, not zero. */
+  awaiting?: AgentAwaiting;
   error?: string;
 }
 
