@@ -4,11 +4,11 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
-## Unreleased
+## 1.23.0
 
 ### Added
 
-- **`awaiting` on agent info and list entries** (covia#557, frontend#364).
+- **`awaiting` on agent info and list entries** (covia#557, frontend#364, #90).
   `agents.info()` and `agents.list()` entries now carry
   `awaiting?: AgentAwaiting` (`{input, auth}`): how many of the agent's
   pending jobs are in `INPUT_REQUIRED` / `AUTH_REQUIRED`. The counts are
