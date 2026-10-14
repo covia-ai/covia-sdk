@@ -4,6 +4,17 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.24.0
+
+No changes to the public API.
+
+### Internal
+
+- Dev dependencies (lockfile only): `@types/node` 24.19.2, `dotenv` 18.0.7 and
+  `typescript-eslint` (#93).
+- Pinned actions: `actions/setup-node` v7.1.0 and `github/codeql-action`
+  v4.38.3 (#94).
+
 ## 1.23.0
 
 ### Added
