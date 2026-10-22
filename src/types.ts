@@ -550,9 +550,9 @@ export interface AgentSessionMessage {
 }
 
 /**
- * An archived run of turns that compaction replaced with a summary
+ * A legacy archived run of turns that compaction replaced with a summary
  * (AGENT_CONTEXT.md §1.1 `CompactedSegment`). `items` is the exact recursively
- * archived vector, so no history is lost — {@link AgentSession.conversation}
+ * archived vector (new frame histories use backward historyRange references), so no history is lost — {@link AgentSession.conversation}
  * expands it back into the transcript.
  */
 export interface AgentCompactedSegment {

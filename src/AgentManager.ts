@@ -42,12 +42,53 @@ function collectTurns(entries: unknown[], out: AgentSessionMessage[], depth = 0)
   }
 }
 
+/** Versioned history references always point backward within the same frame.
+ * Walk iteratively so repeated compaction cannot exhaust the stack. A position
+ * is visited once, bounding work even for overlapping references in bad data. */
+function collectHistory(frame: Record<string, unknown>, out: AgentSessionMessage[]): void {
+  const history = frame.history;
+  const start = frame.contextStart;
+  if ((frame.historyVersion !== undefined && frame.historyVersion !== 1)
+      || 'conversation' in frame || !Array.isArray(history)
+      || !Number.isSafeInteger(start) || (start as number) < 0 || (start as number) > history.length) {
+    throw new Error('Invalid or unsupported agent frame history');
+  }
+  const pending: [number, number][] = [[start as number, history.length]];
+  const visited = new Set<number>();
+  while (pending.length) {
+    const [from, end] = pending.pop()!;
+    for (let i = from; i < end; i++) {
+      if (visited.has(i)) continue;
+      visited.add(i);
+      const entry = record(history[i]);
+      if (!entry) continue;
+      if ('historyRange' in entry) {
+        const range = entry.historyRange;
+        if (typeof entry.summary !== 'string' || 'items' in entry
+            || !Number.isSafeInteger(entry.turns) || (entry.turns as number) < 0
+            || !Array.isArray(range) || range.length !== 2
+            || !range.every(Number.isSafeInteger) || range[0] < 0
+            || range[1] < range[0] || range[1] > i) {
+          throw new Error('Invalid agent summary historyRange');
+        }
+        pending.push([i + 1, end], [range[0] as number, range[1] as number]);
+        break;
+      }
+      collectTurns([entry], out);
+    }
+  }
+}
+
 /** The session transcript: every frame's turns in order, compaction expanded. */
 function sessionConversation(frames: unknown[]): AgentSessionMessage[] {
   const turns: AgentSessionMessage[] = [];
   for (const frame of frames) {
-    const entries = record(frame)?.conversation;
-    if (Array.isArray(entries)) collectTurns(entries, turns);
+    const value = record(frame);
+    if (!value) continue;
+    if ('history' in value) collectHistory(value, turns);
+    else if ('historyVersion' in value || 'contextStart' in value) {
+      throw new Error('Invalid or unsupported agent frame history');
+    } else if (Array.isArray(value.conversation)) collectTurns(value.conversation, turns);
   }
   return turns;
 }

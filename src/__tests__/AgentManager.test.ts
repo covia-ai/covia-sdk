@@ -436,6 +436,41 @@ describe('AgentManager session transcripts', () => {
     ]);
   });
 
+  it('reads migrated nested summaries without duplicates and preserves turn metadata', async () => {
+    const first = turn('user', 'first', { ts: 17, jobId: 'job' });
+    const second = turn('assistant', 'second');
+    const third = turn('user', 'third');
+    const frames = [{ historyVersion: 1, contextStart: 4, history: [
+      first, { summary: 'inner', turns: 1, historyRange: [0, 1] }, second,
+      third, { summary: 'outer', turns: 3, historyRange: [1, 4] },
+      turn('assistant', 'fourth'),
+    ] }, { conversation: [turn('user', 'legacy child')] }];
+    readsSession(sessionValue(frames));
+    const session = await agents.getSession('a1', 'sess-1');
+    expect(session.conversation).toEqual([first, second, third,
+      turn('assistant', 'fourth'), turn('user', 'legacy child')]);
+    expect(session.frames).toEqual(frames);
+  });
+
+  it('reads deeply compacted histories without a depth cutoff', async () => {
+    const history: unknown[] = [turn('user', 'original')];
+    for (let i = 1; i <= 100; i++) history.push({ summary: 'summary', turns: 1, historyRange: [i - 1, i] });
+    readsSession(sessionValue([{ historyVersion: 1, contextStart: 100, history }]));
+    expect((await agents.getSession('a1', 'sess-1')).conversation).toEqual([turn('user', 'original')]);
+  });
+
+  it.each([
+    { historyVersion: 2, contextStart: 0, history: [] },
+    { historyVersion: 1, contextStart: -1, history: [] },
+    { historyVersion: 1, contextStart: 0.5, history: [] },
+    { historyVersion: 1, contextStart: 1, history: [] },
+    { historyVersion: 1, contextStart: 0, history: [], conversation: [] },
+    { historyVersion: 1, contextStart: 0, history: [{ summary: 'cycle', turns: 1, historyRange: [0, 1] }] },
+  ])('rejects malformed or unsupported history: %j', async (frame) => {
+    readsSession(sessionValue([frame]));
+    await expect(agents.getSession('a1', 'sess-1')).rejects.toThrow();
+  });
+
   it('preserves the audit fields on a turn', async () => {
     readsSession(sessionValue([{
       conversation: [turn('user', 'hi', { ts: 17, jobId: '0xabc', source: 'chat', tokens: 3 })],
