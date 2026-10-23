@@ -4,6 +4,16 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.24.2
+
+### Fixed
+
+- Align agent create, fork and delete result types with current venue responses.
+  Creation no longer requires legacy flags; physical removal needs no status.
+- Remove unsupported overwrite options from agent creation and forking. Use
+  update to preserve an existing agent and its history.
+- Add live coverage of create, fork, terminate and physical removal.
+
 ## 1.24.0
 
 No changes to the public API.

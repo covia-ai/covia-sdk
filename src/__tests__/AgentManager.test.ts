@@ -35,6 +35,14 @@ describe('AgentManager', () => {
     agents = new AgentManager(venue);
   });
 
+  it('preserves current create/fork responses and advisories', async () => {
+    const created = { agentId: 'a', status: 'SLEEPING', warnings: ['check tools'] };
+    const forked = { agentId: 'b', address: 'g/b', status: 'SLEEPING', forkedFrom: 'a' };
+    venue.operations.run.mockResolvedValueOnce(created).mockResolvedValueOnce(forked);
+    expect(await agents.create({ agentId: 'a' })).toEqual(created);
+    expect(await agents.fork({ sourceId: 'a', agentId: 'b' })).toEqual(forked);
+  });
+
   it('create calls v/ops/agent/create', async () => {
     await agents.create({ agentId: 'a1', config: { op: 'test:echo' } });
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/create', { agentId: 'a1', config: { op: 'test:echo' } });

@@ -408,6 +408,10 @@ await mina.delete();
 const clone = await mina.fork("Mina-v2", { includeTimeline: true });
 ```
 
+Create and fork require unused names. Use update to preserve an existing agent
+and its history. Deletion normally returns `status: "TERMINATED"`; physical
+removal (`remove: true`) returns `removed: true` without a status.
+
 #### Agent Instance
 
 | Method | Returns | Description |
