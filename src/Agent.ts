@@ -122,7 +122,7 @@ export class Agent {
    * @param options - Fork options
    * @returns A new Agent instance for the forked agent
    */
-  async fork(agentId: string, options?: { config?: Record<string, unknown>; includeTimeline?: boolean; overwrite?: boolean }): Promise<Agent> {
+  async fork(agentId: string, options?: { config?: Record<string, unknown>; includeTimeline?: boolean }): Promise<Agent> {
     await this._agents.fork({ sourceId: this.id, agentId, ...options });
     return new Agent(agentId, this.venue);
   }
