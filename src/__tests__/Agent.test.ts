@@ -11,7 +11,7 @@ function createMockAgents() {
     update: jest.fn().mockResolvedValue({}),
     cancelTask: jest.fn().mockResolvedValue({}),
     info: jest.fn().mockResolvedValue({ agentId: 'a1', status: 'SLEEPING' }),
-    fork: jest.fn().mockResolvedValue({ agentId: 'a2', status: 'SLEEPING', created: true, forkedFrom: 'a1' }),
+    fork: jest.fn().mockResolvedValue({ agentId: 'a2', status: 'SLEEPING', forkedFrom: 'a1' }),
     context: jest.fn().mockResolvedValue('context string'),
     delete: jest.fn().mockResolvedValue({ agentId: 'a1', status: 'TERMINATED' }),
     events: jest.fn(),

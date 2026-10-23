@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Venue,  CoviaError, GridError, NotFoundError,  StatusData, Job, Grid, RunStatus, isJobComplete, isJobFinished, getParsedAssetId, getAssetIdFromPath, getAssetIdFromVenueId, MCPError, Ed25519Auth, Ed25519Signer, webCryptoSigner, generateNonExtractableKeyPair, createUCANJWTWith } from './src/index';
 
 // Live-venue integration suite. Required env (via .env or the shell):
@@ -292,3 +293,28 @@ const getSHA256Hash = async (input:Buffer<ArrayBuffer>) => {
         .join("");
       return hash;
 };
+
+
+test('agent lifecycle accepts current venue response shapes', async () => {
+  const auth = Ed25519Auth.fromSigner(await webCryptoSigner(await generateNonExtractableKeyPair()));
+  const v = await Grid.connect(process.env.VENUE_HOST!, auth);
+  const source = `sdk-source-${randomUUID()}`;
+  const target = `sdk-fork-${randomUUID()}`;
+  try {
+    const created = await v.agents.create({ agentId: source, config: { operation: 'v/ops/llmagent/chat', defaultTools: false } });
+    expect(created.agentId).toBe(source);
+    const forked = await v.agents.fork({ sourceId: source, agentId: target });
+    expect(forked.agentId).toBe(target);
+    expect(forked.forkedFrom).toBe(source);
+    expect((await v.agents.info(target)).status).toBe('SLEEPING');
+    expect((await v.agents.delete(target)).status).toBe('TERMINATED');
+    const removed = await v.agents.delete(target, true);
+    expect(removed.removed).toBe(true);
+    expect(removed.status).toBeUndefined();
+  } finally {
+    const present = new Set((await v.agents.list()).agents.map(a => a.agentId));
+    for (const agentId of [target, source]) {
+      if (present.has(agentId)) await v.operations.run('v/ops/agent/delete', { agentId, remove: true });
+    }
+  }
+}, 30000);

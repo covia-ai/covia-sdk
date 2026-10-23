@@ -53,3 +53,28 @@ describe('RunStatus', () => {
     expect(values).toHaveLength(10);
   });
 });
+
+
+describe('exclusive agent lifecycle contracts', () => {
+  it('accepts current result shapes without legacy creation flags', () => {
+    const created: import('../types').AgentCreateResult = { agentId: 'a', status: 'SLEEPING', warnings: ['check tools'] };
+    const forked: import('../types').AgentForkResult = { agentId: 'b', status: 'SLEEPING', forkedFrom: 'a' };
+    expect(created.warnings).toEqual(['check tools']);
+    expect(forked.forkedFrom).toBe('a');
+    // @ts-expect-error overwrite was removed from the venue contract
+    const createInput: import('../types').AgentCreateInput = { agentId: 'a', overwrite: true };
+    // @ts-expect-error overwrite was removed from the venue contract
+    const forkInput: import('../types').AgentForkInput = { agentId: 'b', sourceId: 'a', overwrite: true };
+    expect(createInput.agentId).toBe('a');
+    expect(forkInput.sourceId).toBe('a');
+  });
+});
+
+
+it('accepts both agent deletion result shapes', () => {
+  const terminated: import('../types').AgentDeleteResult = { agentId: 'a', status: 'TERMINATED' };
+  const removed: import('../types').AgentDeleteResult = { agentId: 'a', address: 'g/a', removed: true };
+  expect(terminated.status).toBe('TERMINATED');
+  expect(removed.removed).toBe(true);
+  expect(removed.status).toBeUndefined();
+});

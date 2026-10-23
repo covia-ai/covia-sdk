@@ -362,20 +362,17 @@ export enum AgentStatus {
   TERMINATED = "TERMINATED"
 }
 
+/** Creates a new name only. Use update to preserve an existing agent and its history. */
 export interface AgentCreateInput {
   agentId: string;
   config?: Record<string, any>;
   state?: Record<string, any>;
-  overwrite?: boolean;
 }
 
 export interface AgentCreateResult {
   agentId: string;
   status: string;
-  created: boolean;
-  /** True when an existing SLEEPING/SUSPENDED record was updated in place
-   *  (mutually exclusive with created). Absent on venues before 0.4. */
-  updated?: boolean;
+  address?: string;
   /** Non-fatal advisories (venue 0.5+): present only when the config looks
    *  misconfigured but create still succeeded — e.g. an Ollama model whose
    *  tool-calling can't be confirmed, or declared tools that don't resolve
@@ -461,7 +458,9 @@ export interface AgentDeleteInput {
 
 export interface AgentDeleteResult {
   agentId: string;
-  status: string;
+  address?: string;
+  /** Present on logical termination; absent on physical removal. */
+  status?: string;
   removed?: boolean;
 }
 
@@ -604,18 +603,18 @@ export interface AgentSessionPage {
   limit: number;
 }
 
+/** Forks into an unused name; replacement requires explicit deletion first. */
 export interface AgentForkInput {
   sourceId: string;
   agentId: string;
   config?: Record<string, any>;
   includeTimeline?: boolean;
-  overwrite?: boolean;
 }
 
 export interface AgentForkResult {
   agentId: string;
+  address?: string;
   status: string;
-  created: boolean;
   forkedFrom: string;
 }
 
