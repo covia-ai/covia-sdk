@@ -4,6 +4,22 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.25.0
+
+### Added
+
+- `A2AMessage.contextId` and a `contextId` option on `a2a.send()`, so a follow-up
+  after a finished Task starts a new Task in the same conversation. A finished
+  Task can't be continued with `taskId`: the remote agent rejects it (#108, #109).
+
+### Internal
+
+- Build with `tsup` 9 (#98).
+- Dev dependencies (lockfile only): `dotenv` 18.0.8, `eslint` 10.13.0,
+  `ts-jest` 29.4.15 and `typescript-eslint`; `web-did-resolver` 3.2.0 resolved
+  in the lockfile (#104).
+- Pinned actions: `github/codeql-action` v4.39.1 (#99).
+
 ## 1.24.2
 
 ### Fixed
