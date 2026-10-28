@@ -1351,6 +1351,8 @@ export interface A2AMessage {
   role: string;
   parts: A2APart[];
   messageId?: string;
+  /** The conversation this message belongs to — a remote Task's `contextId`. */
+  contextId?: string;
 }
 
 /** The remote A2A Task snapshot a send mirrors onto the local Job's output —
