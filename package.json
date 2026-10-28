@@ -1,6 +1,6 @@
 {
   "name": "@covia/covia-sdk",
-  "version": "1.24.2",
+  "version": "1.25.0",
   "description": "Typescript library for covia-ai",
   "packageManager": "pnpm@11.9.0",
   "main": "./dist/index.js",
@@ -61,7 +61,7 @@
     "eslint": "^10.6.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
-    "tsup": "^8.0.0",
+    "tsup": "^9.0.0",
     "typescript": "^6.0.0",
     "typescript-eslint": "^8.62.1"
   },

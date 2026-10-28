@@ -41,14 +41,21 @@ export class A2AManager {
    *
    * @param agent Imported agent reference — `w/a2a/agents/<name>` or its
    *   immutable `did:.../a/<hash>` id.
-   * @param message An A2A Message: `{ role, parts, messageId? }`.
+   * @param message An A2A Message: `{ role, parts, messageId?, contextId? }`.
    * @param options.taskId Continue an existing remote Task instead of
-   *   starting a new one.
+   *   starting a new one. Only a non-terminal Task can be continued — a
+   *   finished Task is immutable and the remote agent rejects the message.
+   * @param options.contextId Start a new Task in an existing conversation,
+   *   e.g. to follow up once a Task has finished. Sets `message.contextId`.
    */
-  async send(agent: string, message: A2AMessage, options?: { taskId?: string }): Promise<Job> {
+  async send(
+    agent: string,
+    message: A2AMessage,
+    options?: { taskId?: string; contextId?: string },
+  ): Promise<Job> {
     return this.venue.operations.invoke(SEND_OP, {
       agent,
-      message,
+      message: options?.contextId !== undefined ? { ...message, contextId: options.contextId } : message,
       ...(options?.taskId !== undefined && { taskId: options.taskId }),
     });
   }
