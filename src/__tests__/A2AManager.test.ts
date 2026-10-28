@@ -56,5 +56,22 @@ describe('A2AManager', () => {
         agent: 'w/a2a/agents/bot', message, taskId: 'remote-task-9',
       });
     });
+
+    it('puts contextId on the message to follow up in the same conversation', async () => {
+      const message = { role: 'user', parts: [{ type: 'text', text: 'and then?' }] };
+      await a2a.send('w/a2a/agents/bot', message, { contextId: 'ctx-1' });
+      expect(venue.operations.invoke).toHaveBeenCalledWith('v/ops/a2a/send', {
+        agent: 'w/a2a/agents/bot', message: { ...message, contextId: 'ctx-1' },
+      });
+      expect(message).not.toHaveProperty('contextId');
+    });
+
+    it('passes a contextId already on the message through unchanged', async () => {
+      const message = { role: 'user', parts: [{ type: 'text', text: 'hi' }], contextId: 'ctx-2' };
+      await a2a.send('w/a2a/agents/bot', message);
+      expect(venue.operations.invoke).toHaveBeenCalledWith('v/ops/a2a/send', {
+        agent: 'w/a2a/agents/bot', message,
+      });
+    });
   });
 });
