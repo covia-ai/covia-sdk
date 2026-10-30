@@ -9,8 +9,6 @@ import {
   didFor,
   grant,
   grantWith,
-  relayDelegation,
-  relayDelegationWith,
 } from '../crypto/ucan';
 import {
   generateNonExtractableKeyPair,
@@ -91,8 +89,6 @@ describe('Ed25519 signers', () => {
     expect(await createUCANJWTWith(signer, VENUE, [], null)).toBe(createUCANJWT(privateKey, VENUE, [], null));
     expect(await grantWith(signer, 'did:key:z6MkBob', 'did:key:zAlice/w/', 'crud/read', 600))
       .toBe(grant(privateKey, 'did:key:z6MkBob', 'did:key:zAlice/w/', 'crud/read', 600));
-    expect(await relayDelegationWith(signer, VENUE, 600, caps))
-      .toBe(relayDelegation(privateKey, VENUE, 600, caps));
   });
 });
 

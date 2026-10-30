@@ -4,6 +4,15 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## Unreleased
+
+### Removed
+
+- `relayDelegation`, `relayDelegationWith` and `VENUE_RELAY`. Venues no longer
+  authenticate as themselves on a caller's behalf, so they refuse these tokens.
+  To act at another venue, present your own identity token audienced to it, with
+  `authenticateAs: "caller"` and grants.
+
 ## 1.25.0
 
 ### Added

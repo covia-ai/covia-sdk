@@ -78,7 +78,7 @@ dist/                   # Build output (CJS + ESM + .d.ts) — gitignored; `prep
 
 **Crypto:** `generateKeyPair`, `privateKeyToHex`, `hexToPrivateKey`, `didFromPublicKey`, `encodePublicKey`, `decodePublicKey`
 
-**Signers (WebCrypto non-extractable keys, covia-sdk#68):** `Ed25519Signer`, `rawKeySigner`, `webCryptoSigner`, `generateNonExtractableKeyPair`, `importNonExtractableKey`, `isWebCryptoEd25519Supported`; `Ed25519Auth.fromSigner()` / `mintIdentityToken()`; `createUCANJWTWith`, `grantWith`, `relayDelegationWith`. `Auth.apply()` may return a promise — the transport awaits it.
+**Signers (WebCrypto non-extractable keys, covia-sdk#68):** `Ed25519Signer`, `rawKeySigner`, `webCryptoSigner`, `generateNonExtractableKeyPair`, `importNonExtractableKey`, `isWebCryptoEd25519Supported`; `Ed25519Auth.fromSigner()` / `mintIdentityToken()`; `createUCANJWTWith`, `grantWith`. `Auth.apply()` may return a promise — the transport awaits it.
 
 ## Core Workflow
 

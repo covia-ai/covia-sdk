@@ -10,15 +10,12 @@
  */
 
 import { sign } from '@noble/ed25519';
-import { didFromPublicKey, encodePublicKey } from './multikey';
+import { encodePublicKey } from './multikey';
 import { getPublicKey } from './keys';
 import { base64UrlEncode } from './jwt';
 import type { Ed25519Signer } from './signer';
 
 const encoder = new TextEncoder();
-
-/** The ability that instructs a venue to relay a cross-venue hop as itself. */
-export const VENUE_RELAY = 'venue/relay';
 
 /** The Convex UCAN JWT profile version emitted in the `ucv` claim. */
 export const UCV_VERSION = '0.10.0';
@@ -136,32 +133,4 @@ export function grantWith(
   lifetimeSeconds: number,
 ): Promise<string> {
   return createUCANJWTWith(ownerSigner, audienceDID, [{ with: withResource, can }], lifetimeSeconds);
-}
-
-/**
- * Mint a **relay delegation**: instructs and authorises `venueDID` to make a
- * cross-venue hop authenticated as itself, exercising the caller's authority.
- * Carries the `venue/relay` instruction plus the substantive capabilities the
- * venue may exercise. The venue honours it only when its issuer is the
- * authenticated caller (COG-15).
- */
-export function relayDelegation(
-  privateKey: Uint8Array,
-  venueDID: string,
-  lifetimeSeconds: number,
-  caps: UCANCapability[] = [],
-): string {
-  const att: UCANCapability[] = [{ with: didFor(privateKey), can: VENUE_RELAY }, ...caps];
-  return createUCANJWT(privateKey, venueDID, att, lifetimeSeconds);
-}
-
-/** {@link relayDelegation} through an {@link Ed25519Signer}. */
-export function relayDelegationWith(
-  signer: Ed25519Signer,
-  venueDID: string,
-  lifetimeSeconds: number,
-  caps: UCANCapability[] = [],
-): Promise<string> {
-  const att: UCANCapability[] = [{ with: didFromPublicKey(signer.publicKey), can: VENUE_RELAY }, ...caps];
-  return createUCANJWTWith(signer, venueDID, att, lifetimeSeconds);
 }
