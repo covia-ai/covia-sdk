@@ -608,16 +608,13 @@ Tokens can also be minted locally with your own Ed25519 key — no venue
 round-trip:
 
 ```typescript
-import { grant, identityToken, relayDelegation, didFor } from "@covia/covia-sdk";
+import { grant, identityToken, didFor } from "@covia/covia-sdk";
 
 // Self-sovereign grant over your own namespace — verifies on ANY venue
 const token = grant(privateKey, "did:key:z6MkBob", `${didFor(privateKey)}/w/shared/`, "crud/read", 3600);
 
 // Identity token — proves control of your DID to a venue (empty attenuation)
 const idToken = identityToken(privateKey, venue.venueId);
-
-// Relay delegation — authorises the venue to forward your authority cross-venue
-const relay = relayDelegation(privateKey, venue.venueId, 300, [{ with: `${didFor(privateKey)}/w/`, can: "crud/read" }]);
 ```
 
 ---
