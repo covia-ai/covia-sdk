@@ -574,6 +574,36 @@ describe('AgentManager session transcripts', () => {
     expect(s.conversation.map((m) => m.content)).toEqual(['hi']);
   });
 
+  it('reads a legacy archive nested deeper than 32 levels without dropping turns (#107)', async () => {
+    let conversation: unknown[] = [turn('user', 'oldest')];
+    for (let i = 1; i <= 40; i++) {
+      conversation = [{ summary: `s${i}`, turns: 1, items: conversation }, turn('user', `t${i}`)];
+    }
+    readsSession(sessionValue([{ conversation }]));
+    const s = await agents.getSession('a1', 'sess-1');
+    expect(s.conversation.map((m) => m.content)).toEqual(
+      ['oldest', ...Array.from({ length: 40 }, (_, i) => `t${i + 1}`)]);
+  });
+
+  it('rejects overlapping summary coverage rather than dropping repeated turns (#107)', async () => {
+    readsSession(sessionValue([{ historyVersion: 1, contextStart: 2, history: [
+      turn('user', 'a'), turn('assistant', 'b'),
+      { summary: 'both', turns: 2, historyRange: [0, 2] },
+      { summary: 'again', turns: 1, historyRange: [1, 2] },
+    ] }]));
+    await expect(agents.getSession('a1', 'sess-1')).rejects.toThrow(/overlapping/);
+  });
+
+  it.each([
+    ['a non-map frame', ['junk']],
+    ['a conversation that is not a vector', [{ conversation: 'hi' }]],
+    ['a segment whose items is not a vector', [{ conversation: [{ summary: 's', items: 'x' }] }]],
+    ['historyRange in a legacy frame', [{ conversation: [{ summary: 's', turns: 1, historyRange: [0, 0] }] }]],
+  ])('rejects %s in a legacy session (#107)', async (_label, frames) => {
+    readsSession(sessionValue(frames));
+    await expect(agents.getSession('a1', 'sess-1')).rejects.toThrow();
+  });
+
   it('gives an empty transcript for a session with no frames', async () => {
     readsSession(sessionValue([]));
     expect((await agents.getSession('a1', 'sess-1')).conversation).toEqual([]);

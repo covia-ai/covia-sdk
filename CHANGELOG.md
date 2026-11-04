@@ -20,6 +20,20 @@ its own SemVer track (independent of the venue/platform version).
   an `{id, status}` snapshot of the task Job at once; a number waits up to that
   many ms and returns the result if the task finished, otherwise the snapshot;
   `true` or omitted still blocks for the result (#112).
+- Session transcripts (`AgentSession.conversation`, `agent.transcript()`) now
+  match the venue's own history reader on edge cases (#107):
+  - A legacy session compacted more than 32 times no longer silently loses its
+    oldest turns; the 32-level nesting cap is gone.
+  - Data the venue rejects now throws instead of yielding a different
+    transcript: overlapping summary `historyRange` coverage, a non-map frame,
+    a `conversation` or segment `items` that is not a vector, and
+    `historyRange` in a legacy frame.
+
+  Versioned frame history (`historyVersion: 1`, `history`, `contextStart`) has
+  been read since 1.24.1. Embedders upgrading a venue that migrates sessions to
+  it need at least that version; this release is recommended. Read turns
+  through `conversation` / `transcript()` rather than raw `frames[].conversation`,
+  which migrated frames no longer have.
 
 ## 1.25.0
 
