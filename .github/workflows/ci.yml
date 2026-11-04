@@ -49,7 +49,7 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     env:
-      VENUE_IMAGE: ghcr.io/covia-ai/covia:${{ inputs.venue_tag || (github.event_name == 'schedule' && 'latest') || '0.9.8' }}
+      VENUE_IMAGE: ghcr.io/covia-ai/covia:${{ inputs.venue_tag || (github.event_name == 'schedule' && 'latest') || '0.9.10' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

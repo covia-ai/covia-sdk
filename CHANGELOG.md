@@ -4,6 +4,21 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## Unreleased
+
+### Fixed
+
+- The `users.delete` doc comment said a caller without `user/delete` authority
+  gets an HTTP 403. The venue actually fails the Job, so the refusal surfaces as
+  a `JobFailedError` ("Venue administration denied: requires user/delete …").
+  Self-deletion is refused the same way. The behaviour is unchanged; only the
+  documentation was wrong. Now covered by an integration test against venue
+  0.9.10 (#85).
+
+### Internal
+
+- CI integration tests run against venue 0.9.10 (was 0.9.8).
+
 ## 1.27.0
 
 ### Added

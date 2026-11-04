@@ -1,5 +1,5 @@
 import { UserManager } from '../UserManager';
-import { GridError, UnsupportedVenueFeatureError } from '../types';
+import { GridError, JobFailedError, UnsupportedVenueFeatureError } from '../types';
 
 // list/info/listAuthenticators are job-free GETs to /api/v1/users (covia
 // #255); revokeAuthenticator is a mutation and stays on the invoke/job path.
@@ -135,8 +135,8 @@ describe('UserManager', () => {
       expect(await users.delete('did:key:z1')).toEqual(record);
     });
 
-    it('propagates a 403 for a caller without user/delete authority', async () => {
-      const denied = new GridError(403, 'Requires user/delete on did:key:zVenue/users');
+    it('propagates the failed Job for a caller without user/delete authority', async () => {
+      const denied = new JobFailedError({ id: '0xjob', status: 'FAILED' as any, error: 'Venue administration denied: requires user/delete' });
       venue.operations.run.mockRejectedValueOnce(denied);
       await expect(users.delete('did:key:z1')).rejects.toBe(denied);
     });

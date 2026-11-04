@@ -8,7 +8,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-image="${VENUE_IMAGE:-ghcr.io/covia-ai/covia:0.9.8}"
+image="${VENUE_IMAGE:-ghcr.io/covia-ai/covia:0.9.10}"
 port="${VENUE_PORT:-8080}"
 name="${VENUE_CONTAINER:-covia-sdk-it-venue}"
 base="http://localhost:${port}"
