@@ -1,11 +1,14 @@
-import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMessage, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult, WorkspaceCountResult } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMessage, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, CoviaTimeoutError, InvokeOptions, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult, WorkspaceCountResult } from './types';
 import { parseSSEStream } from './Utils';
 import { venueJson, venueStream, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
 import { descWindow, record, sliceAll } from './values-util';
+import type { Job } from './Job';
 
 interface AgentManagerVenue extends VenueRequestContext {
-  operations: OperationRunner;
+  operations: OperationRunner & {
+    invoke(assetId: string, input?: unknown, options?: InvokeOptions): Promise<Job>;
+  };
   workspace: {
     read(path: string, maxSize?: number): Promise<WorkspaceReadResult>;
     slice(path: string, offset?: number, limit?: number): Promise<WorkspaceSliceResult>;
@@ -164,8 +167,31 @@ export class AgentManager {
     return this.venue.operations.run<AgentCreateResult>('v/ops/agent/create', input);
   }
 
+  /**
+   * Submit a task to an agent.
+   *
+   * The venue's agent:request has no `wait` input, and over REST the request
+   * Job is the task Job, so the wait policy is applied here (#112):
+   * - `true` / omitted: block until the task finishes and return its result.
+   * - `false`: return a `{id, status}` snapshot of the task Job immediately.
+   * - a number: wait up to that many ms; the result if the task finished in
+   *   time, otherwise the snapshot. The task keeps running either way — poll
+   *   it with `venue.getJob(id)`.
+   */
   async request(agentId: string, input?: unknown, wait?: boolean | number): Promise<AgentRequestResult> {
-    return this.venue.operations.run<AgentRequestResult>('v/ops/agent/request', { agentId, input, wait });
+    const op = 'v/ops/agent/request';
+    if (wait === undefined || wait === true) {
+      return this.venue.operations.run<AgentRequestResult>(op, { agentId, input });
+    }
+    const job = await this.venue.operations.invoke(op, { agentId, input });
+    if (typeof wait === 'number' && wait > 0) {
+      try {
+        return (await job.result({ timeout: wait })) as AgentRequestResult;
+      } catch (e) {
+        if (!(e instanceof CoviaTimeoutError)) throw e;
+      }
+    }
+    return { id: job.id, status: String(job.metadata.status ?? '') };
   }
 
   async message(agentId: string, message: unknown): Promise<AgentMessageResult> {
