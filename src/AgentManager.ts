@@ -18,36 +18,48 @@ interface AgentManagerVenue extends VenueRequestContext {
 
 const SESSION_ROLES: readonly string[] = ['system', 'user', 'assistant', 'tool'];
 
-/** A compacted segment nests its own archived vector; this bounds the walk. */
-const MAX_COMPACTION_DEPTH = 32;
+/** Append one entry if it is a transcript turn. Anything else (a shape from a
+ * newer venue, a partially written record) is skipped rather than surfaced as
+ * a turn with no role, so a transcript never renders a blank message. */
+function pushTurn(e: Record<string, unknown>, out: AgentSessionMessage[]): void {
+  if (typeof e.role === 'string' && SESSION_ROLES.includes(e.role)) {
+    out.push({ ...e, role: e.role } as AgentSessionMessage);
+  }
+}
 
 /**
- * Append one frame's conversation entries to `out`, expanding any compacted
- * segment into the turns it archived.
+ * Append a legacy frame's conversation entries to `out`, expanding any
+ * compacted segment into the turns it archived.
  *
- * An entry is a turn or an archived segment (AGENT_CONTEXT.md §1.1). Anything
- * else — a shape from a newer venue, a partially written record — is skipped
- * rather than surfaced as a turn with no role, so a transcript never renders a
- * blank message.
+ * An entry is a turn or an archived `{summary, items}` segment
+ * (AGENT_CONTEXT.md §1.1). Each pre-migration compaction nests one level
+ * deeper, so the walk is iterative with no depth cap, matching the venue's
+ * `archivedConversation` (#107). Entries the venue's migration would refuse
+ * (a segment whose `items` is not a vector, a legacy entry carrying
+ * `historyRange`) throw rather than yield a different transcript.
  */
-function collectTurns(entries: unknown[], out: AgentSessionMessage[], depth = 0): void {
-  if (depth > MAX_COMPACTION_DEPTH) return;
-  for (const entry of entries) {
-    const e = record(entry);
+function collectTurns(entries: unknown[], out: AgentSessionMessage[]): void {
+  const stack: [unknown[], number][] = [[entries, 0]];
+  while (stack.length) {
+    const top = stack[stack.length - 1];
+    if (top[1] >= top[0].length) { stack.pop(); continue; }
+    const e = record(top[0][top[1]++]);
     if (!e) continue;
-    if (Array.isArray(e.items) && typeof e.summary === 'string') {
-      collectTurns(e.items, out, depth + 1);
+    if ('historyRange' in e) throw new Error('Invalid agent frame conversation: historyRange in a legacy frame');
+    if (e.summary != null && e.items != null) {
+      if (!Array.isArray(e.items)) throw new Error('Invalid agent frame conversation: segment items is not a vector');
+      stack.push([e.items, 0]);
       continue;
     }
-    if (typeof e.role === 'string' && SESSION_ROLES.includes(e.role)) {
-      out.push({ ...e, role: e.role } as AgentSessionMessage);
-    }
+    pushTurn(e, out);
   }
 }
 
 /** Versioned history references always point backward within the same frame.
- * Walk iteratively so repeated compaction cannot exhaust the stack. A position
- * is visited once, bounding work even for overlapping references in bad data. */
+ * Walk iteratively so repeated compaction cannot exhaust the stack. Venue
+ * writers never produce overlapping coverage, so reaching a position twice
+ * means invalid data: it throws rather than returning a transcript with turns
+ * dropped or repeated (#107). That also bounds the work. */
 function collectHistory(frame: Record<string, unknown>, out: AgentSessionMessage[]): void {
   const history = frame.history;
   const start = frame.contextStart;
@@ -61,7 +73,7 @@ function collectHistory(frame: Record<string, unknown>, out: AgentSessionMessage
   while (pending.length) {
     const [from, end] = pending.pop()!;
     for (let i = from; i < end; i++) {
-      if (visited.has(i)) continue;
+      if (visited.has(i)) throw new Error('Invalid agent summary historyRange: overlapping coverage');
       visited.add(i);
       const entry = record(history[i]);
       if (!entry) continue;
@@ -77,21 +89,26 @@ function collectHistory(frame: Record<string, unknown>, out: AgentSessionMessage
         pending.push([i + 1, end], [range[0] as number, range[1] as number]);
         break;
       }
-      collectTurns([entry], out);
+      pushTurn(entry, out);
     }
   }
 }
 
-/** The session transcript: every frame's turns in order, compaction expanded. */
+/** The session transcript: every frame's turns in order, compaction expanded.
+ * Child goal-tree frames are appended after the root, as they always have
+ * been; callers that need one frame's dialogue read `frames` (#107). */
 function sessionConversation(frames: unknown[]): AgentSessionMessage[] {
   const turns: AgentSessionMessage[] = [];
   for (const frame of frames) {
     const value = record(frame);
-    if (!value) continue;
+    if (!value) throw new Error('Invalid agent frame: not a map');
     if ('history' in value) collectHistory(value, turns);
     else if ('historyVersion' in value || 'contextStart' in value) {
       throw new Error('Invalid or unsupported agent frame history');
-    } else if (Array.isArray(value.conversation)) collectTurns(value.conversation, turns);
+    } else if (value.conversation !== undefined && value.conversation !== null) {
+      if (!Array.isArray(value.conversation)) throw new Error('Invalid agent frame conversation: not a vector');
+      collectTurns(value.conversation, turns);
+    }
   }
   return turns;
 }
