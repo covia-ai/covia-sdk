@@ -13,6 +13,14 @@ its own SemVer track (independent of the venue/platform version).
   To act at another venue, present your own identity token audienced to it, with
   `authenticateAs: "caller"` and grants.
 
+### Fixed
+
+- `agents.request(id, input, false)` returned only after the agent finished,
+  because `wait` went to the venue, which has no such input. `false` now returns
+  an `{id, status}` snapshot of the task Job at once; a number waits up to that
+  many ms and returns the result if the task finished, otherwise the snapshot;
+  `true` or omitted still blocks for the result (#112).
+
 ## 1.25.0
 
 ### Added

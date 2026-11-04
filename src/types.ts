@@ -383,6 +383,8 @@ export interface AgentCreateResult {
 export interface AgentRequestInput {
   agentId: string;
   input?: any;
+  /** Client-side wait policy for `agents.request`; never sent to the venue,
+   *  whose agent:request has no `wait` input (#112). */
   wait?: boolean | number;
 }
 
