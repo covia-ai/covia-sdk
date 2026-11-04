@@ -1,4 +1,4 @@
-import { identityToken, grant, relayDelegation, createUCANJWT, didFor, VENUE_RELAY } from '../crypto/ucan';
+import { identityToken, grant, createUCANJWT, didFor } from '../crypto/ucan';
 import { generateKeyPair } from '../crypto/keys';
 
 // Deterministic shape tests for client-side UCAN minting (covia-sdk#15).
@@ -47,14 +47,6 @@ describe('UCAN minting', () => {
       [{ with: 'did:key:zMe/w/', can: 'crud/read' }], null));
     expect('exp' in claims).toBe(true);                   // absent exp is malformed
     expect(claims.exp).toBeNull();
-  });
-
-  it('relayDelegation: venue/relay instruction + substantive caps', () => {
-    const { claims } = decode(relayDelegation(privateKey, venueDID, 300,
-      [{ with: 'did:key:zMe/w/', can: 'crud/read' }]));
-    expect(claims.aud).toBe(venueDID);
-    expect(claims.att[0]).toEqual({ with: didFor(privateKey), can: VENUE_RELAY });
-    expect(claims.att[1]).toEqual({ with: 'did:key:zMe/w/', can: 'crud/read' });
   });
 
   it('delegation chains embed parent JWTs in prf', () => {

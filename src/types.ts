@@ -383,6 +383,8 @@ export interface AgentCreateResult {
 export interface AgentRequestInput {
   agentId: string;
   input?: any;
+  /** Client-side wait policy for `agents.request`; never sent to the venue,
+   *  whose agent:request has no `wait` input (#112). */
   wait?: boolean | number;
 }
 
@@ -576,10 +578,18 @@ export interface AgentSession {
    * The session transcript: every frame's turns, in order, with compacted
    * segments expanded back into the turns they archived.
    *
-   * This is the field a chat UI renders. Assembling it from `frames` means
-   * knowing that turns live at `frames[].conversation`, that an entry there may
-   * be an archived segment rather than a turn, and that segments nest — layout
-   * knowledge that belongs here rather than in every consumer.
+   * This is the field a chat UI renders, and the supported replacement for
+   * reading raw `frames[].conversation`. It reads both the legacy nested
+   * `conversation` frames and the versioned `history` / `contextStart` frames
+   * the venue migrates to (SDK 1.24.1 and later), so callers see the same turns
+   * before and after migration. Turns keep their original fields (provenance,
+   * structured content, tool calls and results, provider data) and include
+   * internal tool activity and an unanswered tail; they are a record of the
+   * session, not of what was delivered to a user.
+   *
+   * Child goal-tree frames are appended after the root frame's turns. To read
+   * one frame's dialogue on its own, use {@link frames}. A malformed or
+   * unsupported frame throws instead of yielding a different transcript.
    */
   conversation: AgentSessionMessage[];
   wakeTime?: number;

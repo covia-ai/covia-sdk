@@ -1,5 +1,5 @@
 import { AgentManager } from '../AgentManager';
-import { AgentSessionNotFoundError, UnsupportedVenueFeatureError } from '../types';
+import { AgentSessionNotFoundError, CoviaTimeoutError, JobFailedError, UnsupportedVenueFeatureError } from '../types';
 
 // list/info are job-free GETs to /api/v1/agents (covia #180); everything else
 // stays on the invoke/job path. Fetch is mocked for the GET surface,
@@ -12,7 +12,7 @@ function createMockVenue() {
     baseUrl: 'https://venue.example',
     venueId: 'did:key:zVenue',
     auth: { apply: jest.fn((h: Record<string, string>) => { h['Authorization'] = 'Bearer tok'; }) },
-    operations: { run: jest.fn().mockResolvedValue({}) },
+    operations: { run: jest.fn().mockResolvedValue({}), invoke: jest.fn() },
     workspace: {
       read: jest.fn().mockResolvedValue({ exists: false }),
       slice: jest.fn().mockResolvedValue({ exists: true, values: [], count: 0, offset: 0 }),
@@ -48,9 +48,53 @@ describe('AgentManager', () => {
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/create', { agentId: 'a1', config: { op: 'test:echo' } });
   });
 
-  it('request calls v/ops/agent/request', async () => {
-    await agents.request('a1', { prompt: 'hi' }, true);
-    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { prompt: 'hi' }, wait: true });
+  it('request blocks on v/ops/agent/request by default and with wait=true', async () => {
+    venue.operations.run.mockResolvedValue({ answer: 42 });
+    expect(await agents.request('a1', { prompt: 'hi' })).toEqual({ answer: 42 });
+    expect(await agents.request('a1', { prompt: 'hi' }, true)).toEqual({ answer: 42 });
+    // The venue's agent:request has no `wait` input — it must not be sent.
+    expect(venue.operations.run).toHaveBeenNthCalledWith(1, 'v/ops/agent/request', { agentId: 'a1', input: { prompt: 'hi' } });
+    expect(venue.operations.run).toHaveBeenNthCalledWith(2, 'v/ops/agent/request', { agentId: 'a1', input: { prompt: 'hi' } });
+    expect(venue.operations.invoke).not.toHaveBeenCalled();
+  });
+
+  describe('request without blocking (#112)', () => {
+    function mockJob(result: jest.Mock = jest.fn()) {
+      const job = { id: 'job1', metadata: { id: 'job1', status: 'STARTED' }, result };
+      venue.operations.invoke.mockResolvedValue(job);
+      return job;
+    }
+
+    it('wait=false invokes and returns the task snapshot without waiting', async () => {
+      const job = mockJob();
+      expect(await agents.request('a1', { task: 'go' }, false)).toEqual({ id: 'job1', status: 'STARTED' });
+      expect(venue.operations.invoke).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { task: 'go' } });
+      expect(job.result).not.toHaveBeenCalled();
+      expect(venue.operations.run).not.toHaveBeenCalled();
+    });
+
+    it('wait=0 behaves as wait=false', async () => {
+      const job = mockJob();
+      expect(await agents.request('a1', { task: 'go' }, 0)).toEqual({ id: 'job1', status: 'STARTED' });
+      expect(job.result).not.toHaveBeenCalled();
+    });
+
+    it('wait=<ms> returns the result when the task finishes in time', async () => {
+      const job = mockJob(jest.fn().mockResolvedValue({ answer: 42 }));
+      expect(await agents.request('a1', { task: 'go' }, 2000)).toEqual({ answer: 42 });
+      expect(job.result).toHaveBeenCalledWith({ timeout: 2000 });
+    });
+
+    it('wait=<ms> returns the snapshot when the task outlives the wait', async () => {
+      mockJob(jest.fn().mockRejectedValue(new CoviaTimeoutError('slow')));
+      expect(await agents.request('a1', { task: 'go' }, 2000)).toEqual({ id: 'job1', status: 'STARTED' });
+    });
+
+    it('wait=<ms> propagates a task failure', async () => {
+      const failure = new JobFailedError({ id: 'job1', status: 'FAILED' as any, error: 'boom' });
+      mockJob(jest.fn().mockRejectedValue(failure));
+      await expect(agents.request('a1', { task: 'go' }, 2000)).rejects.toBe(failure);
+    });
   });
 
   it('message calls v/ops/agent/message', async () => {
@@ -528,6 +572,36 @@ describe('AgentManager session transcripts', () => {
     const s = await agents.getSession('a1', 'sess-1');
     // An unknown role would otherwise render as a blank message.
     expect(s.conversation.map((m) => m.content)).toEqual(['hi']);
+  });
+
+  it('reads a legacy archive nested deeper than 32 levels without dropping turns (#107)', async () => {
+    let conversation: unknown[] = [turn('user', 'oldest')];
+    for (let i = 1; i <= 40; i++) {
+      conversation = [{ summary: `s${i}`, turns: 1, items: conversation }, turn('user', `t${i}`)];
+    }
+    readsSession(sessionValue([{ conversation }]));
+    const s = await agents.getSession('a1', 'sess-1');
+    expect(s.conversation.map((m) => m.content)).toEqual(
+      ['oldest', ...Array.from({ length: 40 }, (_, i) => `t${i + 1}`)]);
+  });
+
+  it('rejects overlapping summary coverage rather than dropping repeated turns (#107)', async () => {
+    readsSession(sessionValue([{ historyVersion: 1, contextStart: 2, history: [
+      turn('user', 'a'), turn('assistant', 'b'),
+      { summary: 'both', turns: 2, historyRange: [0, 2] },
+      { summary: 'again', turns: 1, historyRange: [1, 2] },
+    ] }]));
+    await expect(agents.getSession('a1', 'sess-1')).rejects.toThrow(/overlapping/);
+  });
+
+  it.each([
+    ['a non-map frame', ['junk']],
+    ['a conversation that is not a vector', [{ conversation: 'hi' }]],
+    ['a segment whose items is not a vector', [{ conversation: [{ summary: 's', items: 'x' }] }]],
+    ['historyRange in a legacy frame', [{ conversation: [{ summary: 's', turns: 1, historyRange: [0, 0] }] }]],
+  ])('rejects %s in a legacy session (#107)', async (_label, frames) => {
+    readsSession(sessionValue(frames));
+    await expect(agents.getSession('a1', 'sess-1')).rejects.toThrow();
   });
 
   it('gives an empty transcript for a session with no frames', async () => {

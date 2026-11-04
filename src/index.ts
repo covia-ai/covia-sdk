@@ -34,8 +34,8 @@ export { A2AManager } from './A2AManager';
 // Crypto utilities
 export { generateKeyPair, privateKeyToHex, hexToPrivateKey } from './crypto/keys';
 export { didFromPublicKey, encodePublicKey, decodePublicKey } from './crypto/multikey';
-export { createUCANJWT, identityToken, grant, relayDelegation, didFor, VENUE_RELAY } from './crypto/ucan';
-export { createUCANJWTWith, grantWith, relayDelegationWith } from './crypto/ucan';
+export { createUCANJWT, identityToken, grant, didFor } from './crypto/ucan';
+export { createUCANJWTWith, grantWith } from './crypto/ucan';
 export {
   rawKeySigner,
   webCryptoSigner,

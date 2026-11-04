@@ -4,76 +4,59 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-TypeScript SDK for [Covia.ai](https://covia.ai) — The Universal Grid for AI Orchestration & Multi-Agent Workflows.
+TypeScript SDK for the [Covia](https://covia.ai) federated AI orchestration grid.
 
-Covia.ai provides federated execution, cryptographic verification, and shared state management for AI agents across organizations, clouds, and platforms.
+Covia enables AI models, agents, and data to collaborate across organisational boundaries, clouds, and jurisdictions — with built-in governance and without centralising control.
+
+The full guide is on [docs.covia.ai](https://docs.covia.ai/docs/user-guide/sdk/typescript). Every exported class and method carries doc comments, so your editor shows signatures and behaviour inline.
 
 ## Installation
 
 ```bash
 npm install @covia/covia-sdk
+# or: pnpm add @covia/covia-sdk / yarn add @covia/covia-sdk
 ```
 
-```bash
-pnpm add @covia/covia-sdk
-```
+Requires Node.js 18 or later. Type declarations are bundled; no `@types/` package is needed.
 
-```bash
-yarn add @covia/covia-sdk
-```
+The SDK follows its own SemVer track, independent of the venue version. Changes and upgrade notes are recorded in the [changelog](CHANGELOG.md).
 
 ## Quick Start
 
 ```typescript
-import { Grid, Ed25519Auth } from "@covia/covia-sdk";
+import { Grid } from "@covia/covia-sdk";
 
-// Connect to a venue (URL, DNS name, or DID)
-const venue = await Grid.connect("https://your-venue.example.com");
-
-// Or connect with keypair authentication
-const auth = Ed25519Auth.generate();
-const venue = await Grid.connect("did:web:your-venue.example.com", auth);
+// Connect to a venue
+const venue = await Grid.connect("https://venue.covia.ai");
 
 // Run an operation and get the result
 const result = await venue.operations.run("v/ops/schema/infer", {
-  value: { name: "Ada", age: 36, admin: true },
+  value: { name: "Ada", age: 36 },
 });
-
-// Invoke an operation asynchronously and track the job
-const job = await venue.operations.invoke("v/ops/schema/infer", {
-  value: { name: "Ada", age: 36, admin: true },
-});
-console.log(`Job ${job.id} status: ${job.metadata.status}`);
-const output = await job.result({ timeout: 30000 });
-
-// Work with assets
-const assets = await venue.listAssets();
-const operation = await venue.getAsset("my-operation-id");
-await operation.invoke({ param: "value" });
-
-// Upload data
-const dataAsset = await venue.getAsset("my-data-id");
-await dataAsset.putContent(new Blob(["Hello World"], { type: "text/plain" }));
-const stream = await dataAsset.getContent();
-
-// Clean up
-venue.close();
+console.log(result);
 ```
 
-## Connecting to a Venue
+## Usage
 
-The SDK supports three connection methods:
+### Connect to a Venue
 
 ```typescript
-import { Grid, Venue, Ed25519Auth, BearerAuth } from "@covia/covia-sdk";
+import { Grid, Venue } from "@covia/covia-sdk";
 
-// Via Grid (cached — same ID returns the same Venue instance)
-const venue = await Grid.connect("https://your-venue.example.com");
-const venue = await Grid.connect("did:web:your-venue.example.com");
-const venue = await Grid.connect("your-venue.example.com"); // DNS name → https://
+// By URL, DID, or DNS name (cached: the same id returns the same Venue)
+const venue = await Grid.connect("https://venue.covia.ai");
+const byDid = await Grid.connect("did:web:venue.covia.ai");
+const byHost = await Grid.connect("venue.covia.ai");
 
-// Via Venue directly (no caching)
-const venue = await Venue.connect("https://your-venue.example.com");
+// Without the Grid cache
+const fresh = await Venue.connect("https://venue.covia.ai");
+
+// Release resources when done, or let `using` do it (TypeScript 5.2+)
+venue.close();
+{
+  using scoped = await Venue.connect("https://venue.covia.ai");
+  // scoped.close() runs at the end of the block
+}
 ```
 
 For an address without a scheme, the SDK picks one from the host:
@@ -86,677 +69,281 @@ Credentials sent over `http://` travel in cleartext, so use `https://` for any v
 
 ### Authentication
 
+Pass an auth provider as the second argument to `Grid.connect()`:
+
 ```typescript
-// No auth (default)
-const venue = await Grid.connect("https://your-venue.example.com");
-
-// Ed25519 keypair (self-issued JWT per request)
-const auth = Ed25519Auth.generate();
-console.log(auth.getDID()); // did:key:z6Mk...
-const venue = await Grid.connect("https://your-venue.example.com", auth);
-
-// From a saved private key
-const auth = Ed25519Auth.fromHex("abcdef1234...");
+import { Grid, BearerAuth, Ed25519Auth } from "@covia/covia-sdk";
 
 // Bearer token
-const auth = new BearerAuth("my-api-token");
-const venue = await Grid.connect("https://your-venue.example.com", auth);
+const venue = await Grid.connect("https://venue.covia.ai", new BearerAuth("<token>"));
+
+// Self-issued Ed25519 JWT, signed fresh per request
+const auth = Ed25519Auth.generate();
+console.log(auth.getDID()); // did:key:z6Mk...
+const signed = await Grid.connect("https://venue.covia.ai", auth);
+
+// Restore a saved key
+const restored = Ed25519Auth.fromHex("abcdef1234...");
 ```
 
-## API Reference
+Tokens are bound to the venue's DID, which `Grid.connect()` / `Venue.connect()` pin before any credential is sent.
 
-### Venue
-
-The `Venue` is the primary entry point. All domain-specific functionality is accessed through manager objects.
+### Invoke Operations
 
 ```typescript
-venue.baseUrl;    // string — the venue's base URL
-venue.venueId;    // string — the venue's DID
-venue.metadata;   // { name, description }
-```
+// Run: invoke, wait, and return the output
+const result = await venue.operations.run("v/ops/schema/infer", { value: { x: 1 } });
 
-| Method | Description |
-|---|---|
-| `venue.status()` | Get venue status (health, stats) |
-| `venue.getAsset(assetId)` | Get an asset by ID (returns `Operation` or `DataAsset`) |
-| `venue.listAssets(options?)` | List assets with pagination (`{ offset, limit }`) |
-| `venue.agent(agentId)` | Get a lazy `Agent` handle (no round-trip) |
-| `venue.getJob(jobId)` | Get a job by ID |
-| `venue.listJobs()` | List all job IDs |
-| `venue.didDocument()` | Get the venue's DID document |
-| `venue.mcpDiscovery()` | Get MCP (Model Context Protocol) discovery info |
-| `venue.agentCard()` | Get A2A (Agent-to-Agent) agent card |
-| `venue.setPrivate(enabled)` | Deprecated connection-wide private-jobs mode (see below) |
-| `venue.close()` | Release resources and clear caches |
+// Invoke: get a Job handle and wait on it yourself
+const job = await venue.operations.invoke("v/ops/schema/infer", { value: { x: 1 } });
+const output = await job.result({ timeout: 30000 });
+
+// With UCAN capability tokens
+const read = await venue.operations.run("v/ops/covia/read", { path: "did:key:zAlice/w/shared" }, {
+  ucans: [token],
+});
+
+// Discover what the venue offers
+const ops = await venue.operations.list();
+const adapters = await venue.adapters.list();
+```
 
 #### Private jobs
 
-Pass `{ private: true }` to `operations.run()` to execute as a memory-only job:
-it is never persisted to the venue's job index and is gone on venue restart.
-The venue must have `enablePrivateJobs` set. Because a completed private job is
-immediately forgotten by the venue, results are collected through the
-server-side invoke `wait` window rather than polling. Private execution works
-with `run()`; poll-style `operations.invoke()` rejects it.
+Pass `{ private: true }` to `run()` to execute as a memory-only job: it is never
+persisted to the venue's job index and is gone on venue restart (the venue must
+enable `enablePrivateJobs`). Private execution works with `run()`; poll-style
+`invoke()` rejects it.
 
 ```typescript
 const result = await venue.operations.run("v/ops/schema/infer", {
-  value: { name: "Ada", age: 36 },
+  value: { name: "Ada" },
 }, { private: true });
 ```
 
-`venue.setPrivate(true)` remains available for compatibility, but is
-deprecated because it mutates execution behaviour for every user of the same
-cached connection.
-
----
-
-### Operations — `venue.operations`
-
-Execute named operations or asset-based operations.
+### Job Lifecycle
 
 ```typescript
-// List available operations
-const ops = await venue.operations.list();
-ops.forEach((op) => console.log(`${op.name}: ${op.description}`));
+import { RunStatus } from "@covia/covia-sdk";
 
-// Get operation details
-const info = await venue.operations.get("v/ops/schema/infer");
+const job = await venue.operations.invoke("long-operation", { data: "..." });
 
-// Run synchronously (invoke + wait for result)
-const result = await venue.operations.run("v/ops/schema/infer", {
-  value: { name: "Ada", age: 36 },
-});
-
-// Invoke asynchronously (returns a Job)
-const job = await venue.operations.invoke("v/ops/schema/infer", {
-  value: { name: "Ada", age: 36 },
-});
-const output = await job.result({ timeout: 10000 });
-
-// With UCAN capability tokens
-const job = await venue.operations.invoke("sensitive:op", input, {
-  ucans: ["eyJhbGc..."],
-});
-```
-
-| Method | Returns | Description |
-|---|---|---|
-| `operations.list()` | `OperationInfo[]` | List all named operations |
-| `operations.get(name)` | `OperationInfo` | Get operation details |
-| `operations.run(id, input, options?)` | `any` | Execute and wait for result |
-| `operations.invoke(id, input, options?)` | `Job` | Execute and return a Job |
-
----
-
-### Adapters — `venue.adapters`
-
-List the adapters registered on a venue — the true registry, including adapters
-with zero catalogued operations. Backed by the venue's canonical
-`v/info/adapters/<name>` lattice data, read job-free via the values API.
-
-```typescript
-// All registered adapters
-const adapters = await venue.adapters.list();
-adapters.forEach((a) => console.log(`${a.name}: ${a.operations.length} ops`));
-
-// One adapter's summary (null if not registered)
-const covia = await venue.adapters.get("covia");
-console.log(covia?.description, covia?.operations);
-```
-
-### Assets — `venue.assets`
-
-Manage data assets and operations registered on the venue.
-
-```typescript
-// List and retrieve assets
-const list = await venue.assets.list({ offset: 0, limit: 50 });
-const asset = await venue.assets.get("asset-id");
-
-// Register a new asset
-const newAsset = await venue.assets.register({
-  name: "My Dataset",
-  description: "Training data",
-  content: { contentType: "text/csv", sha256: "abc123..." },
-});
-
-// Upload and download content
-await venue.assets.putContent("asset-id", new Blob(["data"]));
-const stream = await venue.assets.getContent("asset-id");
-
-// Get metadata
-const meta = await venue.assets.getMetadata("asset-id");
-```
-
-| Method | Returns | Description |
-|---|---|---|
-| `assets.get(assetId)` | `Asset` | Get asset by ID (`Operation` or `DataAsset`) |
-| `assets.list(options?)` | `AssetList` | List assets with pagination |
-| `assets.register(data)` | `Asset` | Register a new asset |
-| `assets.getMetadata(assetId)` | `AssetMetadata` | Get asset metadata |
-| `assets.putContent(assetId, content)` | `ContentHashResult` | Upload content |
-| `assets.getContent(assetId)` | `ReadableStream \| null` | Download content stream |
-| `assets.clearCache()` | `void` | Clear the asset cache |
-
----
-
-### Jobs — `venue.jobs`
-
-Manage job lifecycle. Jobs are also returned by `operations.invoke()` and `asset.invoke()`.
-
-```typescript
-// List and retrieve jobs
-const jobIds = await venue.jobs.list();
-const job = await venue.jobs.get(jobIds[0]);
-
-// Job lifecycle via manager
-await venue.jobs.pause(jobId);
-await venue.jobs.resume(jobId);
-await venue.jobs.cancel(jobId);
-await venue.jobs.delete(jobId);
-
-// Send a message to a running job
-await venue.jobs.sendMessage(jobId, { text: "user input" });
-
-// Stream server-sent events
-for await (const event of venue.jobs.stream(jobId)) {
-  console.log(event.event, event.json());
-}
-```
-
-| Method | Returns | Description |
-|---|---|---|
-| `jobs.list()` | `string[]` | List all job IDs |
-| `jobs.get(jobId)` | `Job` | Get a job by ID |
-| `jobs.cancel(jobId)` | `JobMetadata` | Cancel a job |
-| `jobs.delete(jobId)` | `void` | Delete a job |
-| `jobs.pause(jobId)` | `JobMetadata` | Pause a job |
-| `jobs.resume(jobId)` | `JobMetadata` | Resume a paused job |
-| `jobs.sendMessage(jobId, msg)` | `any` | Send a message to a job |
-| `jobs.stream(jobId)` | `AsyncGenerator<SSEEvent>` | Stream SSE events |
-
----
-
-### Job Instance
-
-Once you have a `Job` object, you can interact with it directly.
-
-```typescript
-const job = await venue.operations.invoke("long:task", input);
-
-// Status helpers
-job.isFinished;  // true for COMPLETE, FAILED, CANCELLED, REJECTED, TIMEOUT
-job.isComplete;  // true only for COMPLETE
-job.isPaused;    // true for PAUSED, INPUT_REQUIRED, AUTH_REQUIRED
-job.needsInput;  // true for INPUT_REQUIRED
-job.needsAuth;   // true for AUTH_REQUIRED
-
-// Wait for completion
-await job.wait({ timeout: 60000 });
-const output = job.output; // throws JobFailedError if not COMPLETE
-
-// Or wait + get output in one call
-const result = await job.result({ timeout: 60000 });
-
-// Refresh status from server
+// Poll status
+console.log(job.metadata.status); // RunStatus.PENDING
 await job.refresh();
 
-// Lifecycle
-await job.cancel();
-await job.delete();
-await job.pause();
-await job.resume();
+// Wait for completion
+await job.wait({ timeout: 120000 });
+if (job.isComplete) {
+  console.log(job.output);
+}
 
 // Interactive jobs
 if (job.needsInput) {
   await job.sendMessage({ text: "user response" });
 }
 
-// Stream events
+// Pause, resume, cancel, delete
+await job.cancel();
+
+// Stream SSE updates
 for await (const event of job.stream()) {
   console.log(event.event, event.json());
 }
+
+// Look up jobs: a page of job records, newest first
+const page = await venue.jobs.history({ limit: 20 });
+console.log(`${page.total} jobs`, page.items.map((j) => j.status));
+const again = await venue.jobs.get(job.id);
 ```
 
-| Property / Method | Type | Description |
-|---|---|---|
-| `job.id` | `string` | Job identifier |
-| `job.metadata` | `JobMetadata` | Status, input, output, timestamps |
-| `job.isFinished` | `boolean` | Terminal state reached |
-| `job.isComplete` | `boolean` | Completed successfully |
-| `job.isPaused` | `boolean` | Paused / awaiting input or auth |
-| `job.needsInput` | `boolean` | Requires user input |
-| `job.needsAuth` | `boolean` | Requires authentication |
-| `job.output` | `any` | Get output (throws if not complete) |
-| `job.refresh()` | `Promise<void>` | Poll latest status from server |
-| `job.wait(options?)` | `Promise<void>` | Wait until finished (exponential backoff) |
-| `job.result(options?)` | `Promise<any>` | Wait and return output |
-| `job.cancel()` | `Promise<JobMetadata>` | Cancel the job |
-| `job.delete()` | `Promise<void>` | Delete the job |
-| `job.pause()` | `Promise<JobMetadata>` | Pause the job |
-| `job.resume()` | `Promise<JobMetadata>` | Resume the job |
-| `job.sendMessage(msg)` | `Promise<any>` | Send a message to the job |
-| `job.stream()` | `AsyncGenerator<SSEEvent>` | Stream SSE events |
-
----
-
-### Asset Instance
-
-Assets returned by `venue.getAsset()` or `venue.assets.get()` are either an `Operation` or a `DataAsset`.
+### Asset Management
 
 ```typescript
-const asset = await venue.getAsset("my-asset-id");
+// Register an asset
+const asset = await venue.assets.register({
+  name: "Training Data",
+  description: "Model training dataset",
+  content: { contentType: "application/json" },
+});
 
-// Metadata
-const meta = await asset.getMetadata();
-
-// Content (DataAsset)
-await asset.putContent(new Blob(["data"], { type: "text/plain" }));
+// Upload and download content
+await asset.putContent(new Blob(['{"records": []}'], { type: "application/json" }));
 const stream = await asset.getContent();
-const url = asset.getContentURL(); // direct download URL
 
-// Execution (Operation)
-const result = await asset.run({ param: "value" });      // sync
-const job = await asset.invoke({ param: "value" });       // async → Job
+// Retrieve an asset: an Operation or a DataAsset
+const op = await venue.getAsset("abc123...");
+const out = await op.run({ x: 1 });
+
+// List assets
+const assets = await venue.assets.list({ limit: 100 });
+console.log(`${assets.total} assets available`);
 ```
 
-| Method | Returns | Description |
-|---|---|---|
-| `asset.id` | `string` | Asset identifier |
-| `asset.metadata` | `AssetMetadata` | Asset metadata |
-| `asset.getMetadata()` | `Promise<AssetMetadata>` | Fetch metadata (cached) |
-| `asset.putContent(content)` | `Promise<ContentHashResult>` | Upload content |
-| `asset.getContent()` | `Promise<ReadableStream \| null>` | Download content stream |
-| `asset.getContentURL()` | `string` | Direct content download URL |
-| `asset.run(input)` | `Promise<any>` | Execute and wait for result |
-| `asset.invoke(input)` | `Promise<Job>` | Execute and return a Job |
+### Agents
 
----
-
-### Agents — `venue.agent(id)` / `venue.agents`
-
-The preferred way to work with agents is through the `Agent` instance returned by `venue.agent(id)`. This is a lazy handle — no network call is made until you invoke a method.
+`venue.agent(id)` returns a lazy handle; no request is made until you call a method.
 
 ```typescript
-// Get a handle to an agent (no round-trip)
-const mina = venue.agent("Mina");
+// Create (the name must be unused)
+await venue.agents.create({ agentId: "mina", config: { systemPrompt: "You are helpful." } });
+const mina = venue.agent("mina");
 
-// Interact
-const response = await mina.request({ text: "hello" });
-await mina.message({ event: "update" });
-await mina.trigger();
-const info = await mina.info();
+// Send a task and wait for the result
+const answer = await mina.request({ question: "Summarise this" });
+console.log(answer.output);
 
-// Session-scoped chat — ChatSession manages the sessionId for you
+// Session-scoped chat: ChatSession carries the sessionId for you
 const chat = mina.chatSession();
-await chat.send("hi");          // mints a new session
-await chat.send("and now?");    // reuses the session automatically
-chat.sessionId;                 // available for persistence
+await chat.send("hi");
+await chat.send("and now?");
+const resumed = mina.chatSession(chat.sessionId);
 
-// Resume a previous session
-const resumed = mina.chatSession(storedSessionId);
-await resumed.send("I'm back");
-
-// Lifecycle
+// Saved sessions, state and lifecycle
+const sessions = await mina.listSessions();
+const info = await mina.info();
 await mina.suspend();
 await mina.resume();
-await mina.update({ config: { model: "gpt-4" } });
-await mina.cancelTask("task-123");
+const clone = await mina.fork("mina-v2", { includeTimeline: true });
 await mina.delete();
 
-// Fork into a new agent
-const clone = await mina.fork("Mina-v2", { includeTimeline: true });
-```
-
-Create and fork require unused names. Use update to preserve an existing agent
-and its history. Deletion normally returns `status: "TERMINATED"`; physical
-removal (`remove: true`) returns `removed: true` without a status.
-
-#### Agent Instance
-
-| Method | Returns | Description |
-|---|---|---|
-| `agent.request(input?, wait?)` | `AgentRequestResult` | Send request to agent |
-| `agent.message(message)` | `AgentMessageResult` | Send a message |
-| `agent.chat(message, sessionId?)` | `AgentChatResult` | Single chat call (manual sessionId) |
-| `agent.chatSession(sessionId?)` | `ChatSession` | Create a session that manages sessionId |
-| `agent.trigger()` | `AgentTriggerResult` | Trigger agent execution |
-| `agent.info()` | `AgentInfoResult` | Get agent info |
-| `agent.listSessions(options?)` | `AgentSessionPage` | Page sessions (job-free) |
-| `agent.getSession(sessionId)` | `AgentSession` | Get one session (job-free) |
-| `agent.context(task?)` | `string` | Get agent context |
-| `agent.suspend()` | `AgentSuspendResult` | Suspend the agent |
-| `agent.resume(autoWake?)` | `AgentSuspendResult` | Resume the agent |
-| `agent.update(options)` | `any` | Update agent config/state |
-| `agent.cancelTask(taskId)` | `any` | Cancel an agent task |
-| `agent.fork(agentId, options?)` | `Agent` | Fork into a new agent |
-| `agent.delete(remove?)` | `AgentDeleteResult` | Delete the agent |
-
-#### ChatSession
-
-| Property / Method | Type | Description |
-|---|---|---|
-| `chat.sessionId` | `string \| undefined` | Current session ID (undefined until first send) |
-| `chat.send(message)` | `Promise<AgentChatResult>` | Send a message, auto-managing sessionId |
-
-#### AgentManager — `venue.agents`
-
-The `AgentManager` is still available for collection-level operations and flat-style dispatch.
-
-```typescript
-// Create an agent
-await venue.agents.create({ agentId: "my-agent", config: { ... } });
-
-// List agents
+// Collection-level calls
 const agents = await venue.agents.list();
-
-// Flat-style dispatch (all manager methods still work)
-await venue.agents.chat("my-agent", "hi");
 ```
 
-| Method | Returns | Description |
-|---|---|---|
-| `agents.create(input)` | `AgentCreateResult` | Create an agent |
-| `agents.list(includeTerminated?)` | `AgentListResult` | List agents |
-| `agents.request(id, input?, wait?)` | `AgentRequestResult` | Send request to agent |
-| `agents.message(id, message)` | `AgentMessageResult` | Send a message |
-| `agents.chat(id, message, sessionId?)` | `AgentChatResult` | Session-scoped chat |
-| `agents.trigger(id)` | `AgentTriggerResult` | Trigger agent execution |
-| `agents.info(id)` | `AgentInfoResult` | Get agent info |
-| `agents.listSessions(id, options?)` | `AgentSessionPage` | Page sessions (job-free) |
-| `agents.getSession(id, sessionId)` | `AgentSession` | Get one session (job-free) |
-| `agents.suspend(id)` | `AgentSuspendResult` | Suspend an agent |
-| `agents.resume(id, autoWake?)` | `AgentSuspendResult` | Resume an agent |
-| `agents.update(input)` | `any` | Update agent config/state |
-| `agents.cancelTask(agentId, taskId)` | `any` | Cancel an agent task |
-| `agents.fork(input)` | `AgentForkResult` | Fork an agent |
-| `agents.context(id, task?)` | `string` | Get agent context |
-| `agents.delete(id, remove?)` | `AgentDeleteResult` | Delete an agent |
+### Workspace
 
----
-
-### Workspace — `venue.workspace`
-
-Read and write shared state in the venue's workspace.
-
-**Reads are job-free.** `read`/`list`/`slice`/`inspect`/`count`/`aggregate` go through
-`GET /api/v1/values/*` (covia #177) — synchronous, capability-checked, and **no job is
-persisted**. This matters under load: routing reads through the invoke/job path writes a
-durable job record per read, growing the venue's etch without bound. **Writes stay on the
-job path** (they should leave an audit record). Reads that need UCAN proof tokens,
-multi-path inspection, or a venue without the Values surface reject with
-`UnsupportedVenueFeatureError` rather than silently creating a persisted job. Invoke
-the corresponding operation explicitly when a persisted job is intended.
+Reads are job-free; writes run as jobs so they leave an audit record.
 
 ```typescript
-// CRUD (reads are job-free; writes are jobs)
-await venue.workspace.write("w/my-app/config", { theme: "dark" });
-const data = await venue.workspace.read("w/my-app/config");
-await venue.workspace.append("w/my-app/log", "new entry");
-await venue.workspace.delete("w/my-app/config");
+await venue.workspace.write("w/notes/today", { text: "hi" });
+console.log((await venue.workspace.read("w/notes/today")).value);
+await venue.workspace.append("w/notes/log", "new entry");
 
-// List (map keys) and slice (sequence elements)
-const entries = await venue.workspace.list("w/my-app/config", 100, 0);
-const slice = await venue.workspace.slice("w/my-app/log", 0, 10);
+// Keys, elements, and selected fields per key
+const keys = await venue.workspace.list("w/notes", 100, 0);
+const slice = await venue.workspace.slice("w/notes/log", 0, 10);
+const rows = await venue.workspace.listFields("w/vendors", ["name", "meta/updated"]);
 
-// Server-side tallies — count / group-by without reading every record
-const { count } = await venue.workspace.count("w/my-app/log", { depth: 1 });
-const byKind = await venue.workspace.aggregate("w/my-app/events", { depth: 2, groupBy: "kind" });
-// byKind.groups → { click: { count: 12 }, view: { count: 40 } }
-```
+// Server-side tallies
+const { count } = await venue.workspace.count("w/notes/log");
+const byKind = await venue.workspace.aggregate("w/events", { depth: 2, groupBy: "kind" });
 
-| Method | Returns | Description |
-|---|---|---|
-| `workspace.read(path, maxSize?)` | `WorkspaceReadResult` | Read a value (job-free) |
-| `workspace.write(path, value)` | `WorkspaceWriteResult` | Write a value (job) |
-| `workspace.delete(path)` | `WorkspaceDeleteResult` | Delete an entry (job) |
-| `workspace.append(path, value)` | `WorkspaceAppendResult` | Append to an entry (job) |
-| `workspace.list(path?, limit?, offset?)` | `WorkspaceListResult` | List keys/count of a node (job-free) |
-| `workspace.slice(path, offset?, limit?)` | `WorkspaceSliceResult` | Paginated elements/entries (job-free) |
-| `workspace.inspect(paths, budget?, compact?)` | `WorkspaceInspectResult` | JSON5 render of a value (job-free; single path) |
-| `workspace.count(path, {depth?})` | `WorkspaceCountResult` | Count entries at a depth (job-free) |
-| `workspace.aggregate(path, {depth?, groupBy?})` | `WorkspaceAggregateResult` | Count, optionally grouped by a field (job-free) |
-| `workspace.copy(from, to)` | `WorkspaceCopyResult` | Copy a value between paths (job) |
+// An agent's task or session scratch space
+const scratch = venue.workspace.scoped({ agent: "mina", task: taskId });
+await scratch.read("t/snapshot");
 
-### Skills — `venue.skills`
-
-Skills are ordinary assets with optional agent-behaviour metadata. The SDK only
-provides exact location/path access; applications decide how to combine, search
-or prioritise collections.
-
-```typescript
-const skills = await venue.skills.list("w/skills");
-const reviewer = await venue.skills.get("w/skills/reviewer");
-
-reviewer.metadata.name;
-reviewer.metadata.skill?.tools;
-const content = await reviewer.getContent();
-```
-
-`list(path)` follows internal collection pagination and returns the asset objects
-at that location. `get(path)` is the corresponding typed asset lookup.
-
----
-
-### Memory — `venue.memory`
-
-Read the conventional `w/memory` vector as structured entries. Reads are
-job-free; edits use the venue memory operation and therefore leave an audit Job.
-
-```typescript
-const entries = await venue.memory.list();
+// Structured memory (w/memory) and skills
 await venue.memory.remember("Prefers concise answers");
-await venue.memory.update(1, "Prefers concise technical answers");
-await venue.memory.forget(1);
+const memories = await venue.memory.list();
+const skills = await venue.skills.list("w/skills");
 ```
 
-An alternative path can be passed to each method.
-
----
-
-### Secrets — `venue.secrets`
-
-Manage secrets stored on the venue.
+### Secrets & UCANs
 
 ```typescript
-// Store a secret (returns SecretSetResult)
-await venue.secrets.set("API_KEY", "sk-...");
+// Secrets
+await venue.secrets.set("ANTHROPIC_API_KEY", "sk-...");
+console.log(await venue.secrets.list());
 
-// List
-const names = await venue.secrets.list(); // ["API_KEY", "DB_PASS"]
+// Venue-issued UCAN delegation
+const { token } = await venue.ucan.issue(
+  "did:key:z6MkBob",
+  [{ with: "did:key:zAlice/w/shared", can: "crud/read" }],
+  Math.floor(Date.now() / 1000) + 3600,
+);
 
-// Extract (requires UCAN capability)
-const secret = await venue.secrets.extract("API_KEY");
-
-// Delete
-await venue.secrets.delete("API_KEY");
+// Diagnose a token against the venue's trust policy
+const verdict = await venue.ucan.verify(token, { with: "did:key:zAlice/w/shared", can: "crud/read" });
+console.log(verdict.valid, verdict.rootIssuer, verdict.authorises);
 ```
 
-| Method | Returns | Description |
-|---|---|---|
-| `secrets.list()` | `string[]` | List secret names |
-| `secrets.set(name, value)` | `SecretSetResult` | Store a secret (`secret:set`) |
-| `secrets.extract(name)` | `SecretExtractResult` | Extract value (requires UCAN) |
-| `secrets.delete(name)` | `void` | Delete a secret |
-
----
-
-### UCAN — `venue.ucan`
-
-Issue UCAN (User Controlled Authorization Network) capability tokens.
+Tokens can also be minted **client-side** with your own Ed25519 key, with no venue round-trip:
 
 ```typescript
-const att = [{ with: "/w/my-app/", can: "crud/read" }];
-const exp = Math.floor(Date.now() / 1000) + 3600; // 1 hour
-
-const token = await venue.ucan.issue("did:key:z6MkBob", att, exp);
-```
-
-| Method | Returns | Description |
-|---|---|---|
-| `ucan.issue(aud, att, exp)` | `UCANIssueResult` | Issue a venue-signed UCAN token |
-| `ucan.verify(token, check?)` | `UCANVerifyResult` | Diagnose a token against the venue's trust policy |
-
-`ucan.verify` explains a token's verdict — `valid`/`reason`, `chainDepth`,
-`rootIssuer`, and a per-capability `rootAuthority` (`owner` / `venue` /
-`refused`). Pass `check: { with, can, aud }` to also ask whether the token
-would authorise a specific request (`authorises`).
-
-#### Client-side minting
-
-Tokens can also be minted locally with your own Ed25519 key — no venue
-round-trip:
-
-```typescript
-import { grant, identityToken, relayDelegation, didFor } from "@covia/covia-sdk";
+import { grant, identityToken, didFor } from "@covia/covia-sdk";
 
 // Self-sovereign grant over your own namespace — verifies on ANY venue
-const token = grant(privateKey, "did:key:z6MkBob", `${didFor(privateKey)}/w/shared/`, "crud/read", 3600);
+const shared = grant(privateKey, "did:key:z6MkBob", `${didFor(privateKey)}/w/shared/`, "crud/read", 3600);
 
 // Identity token — proves control of your DID to a venue (empty attenuation)
 const idToken = identityToken(privateKey, venue.venueId);
-
-// Relay delegation — authorises the venue to forward your authority cross-venue
-const relay = relayDelegation(privateKey, venue.venueId, 300, [{ with: `${didFor(privateKey)}/w/`, can: "crud/read" }]);
 ```
 
----
+### Venue Discovery
 
-## Error Handling
+```typescript
+const status = await venue.status();
+const didDoc = await venue.didDocument();
+const card = await venue.agentCard(); // A2A agent card
 
-The SDK provides a hierarchy of typed errors:
+// MCP: discovery, tools, and tool calls
+const mcp = await venue.mcp.discovery();
+const tools = await venue.mcp.listAllTools();
+const call = await venue.mcp.callTool("covia_read", { path: "w/notes" });
+```
+
+### Error Handling
 
 ```typescript
 import {
-  Venue,
-  CoviaError,          // Base error
-  GridError,           // HTTP API errors (4xx/5xx)
-  NotFoundError,       // 404 responses
-  AssetNotFoundError,  // Asset not found
-  JobNotFoundError,    // Job not found
-  CoviaConnectionError,// Transport/connect failures (url, method, attempts)
-  VenueIdentityChangedError, // Same address now reports a different DID
-  CoviaTimeoutError,   // Timeout exceeded
-  JobFailedError,      // Job finished with non-COMPLETE status
-  RateLimitError,      // 429 after bounded retries (carries retryAfterSeconds)
+  CoviaError, GridError, AssetNotFoundError, JobFailedError,
+  CoviaTimeoutError, CoviaConnectionError, RateLimitError,
 } from "@covia/covia-sdk";
 
 try {
-  const asset = await venue.getAsset("nonexistent");
+  const result = await venue.operations.run("might-fail", { x: 1 });
 } catch (err) {
-  if (err instanceof AssetNotFoundError) {
-    console.log(`Asset ${err.assetId} not found`);
+  if (err instanceof JobFailedError) {
+    console.error(`Job failed: ${err.jobData.error}`);
+  } else if (err instanceof CoviaTimeoutError) {
+    console.error("Operation timed out");
+  } else if (err instanceof RateLimitError) {
+    // 429 after bounded automatic retries — rate limit or concurrent-job cap
+    console.error(`Rate limited, retry after ${err.retryAfterSeconds}s`);
+  } else if (err instanceof AssetNotFoundError) {
+    console.error(`No asset ${err.assetId}`);
   } else if (err instanceof GridError) {
-    console.log(`HTTP ${err.statusCode}: ${err.message}`);
-  }
-}
-
-try {
-  const result = await job.result({ timeout: 5000 });
-} catch (err) {
-  if (err instanceof CoviaTimeoutError) {
-    console.log("Job took too long");
-  } else if (err instanceof JobFailedError) {
-    console.log(`Job failed: ${err.jobData.status}`);
+    console.error(`API error ${err.statusCode}: ${err.message}`);
+  } else if (err instanceof CoviaConnectionError) {
+    // Every candidate URL and failed request a connect attempt made
+    console.error(err.candidates, err.attempts);
+  } else if (err instanceof CoviaError) {
+    console.error(`SDK error: ${err.message}`);
   }
 }
 ```
 
-Transport failures include the exact request target and method. A failed
-`Venue.connect()` additionally includes every candidate and failed validation
-request:
+## Development
 
-```typescript
-try {
-  await Venue.connect("localhost:8080");
-} catch (err) {
-  if (err instanceof CoviaConnectionError) {
-    console.error(err.candidates);
-    for (const attempt of err.attempts) {
-      console.error(attempt.method, attempt.url, attempt.error.message);
-    }
-  }
-}
+```bash
+# Clone and install
+git clone https://github.com/covia-ai/covia-sdk.git
+cd covia-sdk
+pnpm install
 
-try {
-  await venue.status();
-} catch (err) {
-  if (err instanceof VenueIdentityChangedError) {
-    console.error(`Venue changed from ${err.oldDid} to ${err.newDid}`);
-    // Reconnect and re-authorise explicitly; the old handle is not rebound.
-  }
-}
+# Build, unit tests, lint
+pnpm run build
+pnpm run test:unit
+pnpm run lint
+
+# Integration tests against a throwaway Docker venue
+.github/integration/start-venue.sh > .it-env
+(while IFS= read -r l; do export "$l"; done < .it-env; pnpm run test:integration)
+docker stop covia-sdk-it-venue
 ```
 
-## Job Status
-
-```typescript
-import { RunStatus } from "@covia/covia-sdk";
-
-RunStatus.PENDING;         // Queued, not yet started
-RunStatus.STARTED;         // Running
-RunStatus.COMPLETE;        // Finished successfully
-RunStatus.FAILED;          // Finished with error
-RunStatus.CANCELLED;       // Cancelled by user
-RunStatus.TIMEOUT;         // Timed out
-RunStatus.REJECTED;        // Rejected by venue
-RunStatus.PAUSED;          // Paused
-RunStatus.INPUT_REQUIRED;  // Waiting for user input
-RunStatus.AUTH_REQUIRED;   // Waiting for authentication
-```
-
-## Requirements
-
-- Node.js >= 18
-- TypeScript >= 5.3 (for TypeScript users)
-
-## TypeScript
-
-`@covia/covia-sdk` is written in TypeScript and ships with full type declarations. No `@types/` package is needed.
-
-```typescript
-import {
-  Venue, Grid, Job, Agent, ChatSession, Asset, Operation, DataAsset,
-  AdapterManager, AssetManager, OperationManager, JobManager,
-  AgentManager, WorkspaceManager, SecretManager, UCANManager, SkillManager,
-  MemoryManager,
-  Ed25519Auth, BearerAuth,
-  RunStatus, CoviaError,
-} from "@covia/covia-sdk";
-```
-
-## Upgrading from 1.8
-
-1.9.0 keeps every exported signature compatible, but three behaviours changed
-deliberately:
-
-- **Reads never create jobs — and no longer fall back to the job path.**
-  In 1.8.x, workspace reads with UCAN proofs, multi-path `inspect`, and
-  `agents.list()`/`info()` on older venues silently fell back to invoking an
-  operation, persisting a Job per read. These calls now throw
-  `UnsupportedVenueFeatureError` instead. If creating a persisted job is
-  genuinely intended, invoke the corresponding operation explicitly
-  (e.g. `operations.run("v/ops/covia/read", ...)`).
-- **`Ed25519Auth` requires a venue audience.** Tokens are always bound to the
-  venue's DID (`aud` claim) so they cannot be replayed at another venue.
-  Connect via `Grid.connect()` / `Venue.connect()` and this happens
-  automatically; hand-constructed `new Venue({...})` usage must either call
-  `venue.status()`-style validation first or pin `auth.audience` explicitly.
-  Connect-time probing itself is anonymous — credentials are only ever sent to
-  a venue whose identity has been pinned.
-- **`assets.clearCache()` clears only the in-memory cache.** Purging a
-  configured persistent metadata store (e.g. localStorage) is the new
-  `assets.clearPersistentCache()`. Cached entries are content-addressed and
-  immutable, so keeping them across sessions is safe; call
-  `clearPersistentCache()` at sign-out if your app must empty the store.
-
-## Resources
-
-- [Covia.ai Platform](https://covia.ai)
-- [Documentation](https://docs.covia.ai/)
-- [GitHub Repository](https://github.com/covia-ai/covia-sdk)
-- [npm Package](https://www.npmjs.com/package/@covia/covia-sdk)
+See [AGENTS.md](AGENTS.md) for the module layout and release process.
 
 ## License
 
-Apache-2.0 - [Covia AI](https://covia.ai)
+Apache License 2.0. See [LICENSE.md](LICENSE.md).
+
+## Links
+
+- [TypeScript SDK Documentation](https://docs.covia.ai/docs/user-guide/sdk/typescript)
+- [Covia Documentation](https://docs.covia.ai)
+- [Covia Website](https://covia.ai)
+- [npm Package](https://www.npmjs.com/package/@covia/covia-sdk)
+- [GitHub](https://github.com/covia-ai/covia-sdk)
+- [Discord](https://discord.gg/fywdrKd8QT)
