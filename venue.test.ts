@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Venue,  CoviaError, GridError, NotFoundError,  StatusData, Job, Grid, RunStatus, isJobComplete, isJobFinished, getParsedAssetId, getAssetIdFromPath, getAssetIdFromVenueId, MCPError, Ed25519Auth, Ed25519Signer, webCryptoSigner, generateNonExtractableKeyPair, createUCANJWTWith } from './src/index';
+import { Venue,  CoviaError, GridError, JobFailedError, NotFoundError,  StatusData, Job, Grid, RunStatus, isJobComplete, isJobFinished, getParsedAssetId, getAssetIdFromPath, getAssetIdFromVenueId, MCPError, Ed25519Auth, Ed25519Signer, webCryptoSigner, generateNonExtractableKeyPair, createUCANJWTWith } from './src/index';
 
 // Live-venue integration suite. Required env (via .env or the shell):
 //   VENUE_HOST        - connectable venue id: did:web:<host> or a URL
@@ -318,3 +318,17 @@ test('agent lifecycle accepts current venue response shapes', async () => {
     }
   }
 }, 30000);
+
+// users.delete (covia-sdk#85, covia#536, venue 0.9.9+): deletion needs
+// venue-issued user/delete authority, with no exemption for the caller's own
+// account. The venue refuses through the invoked Job, not with an HTTP 403.
+test('users.delete is refused without venue user/delete authority, even for oneself', async () => {
+  const auth = Ed25519Auth.fromSigner(await webCryptoSigner(await generateNonExtractableKeyPair()));
+  const v = await Grid.connect(process.env.VENUE_HOST!, auth);
+  const other = Ed25519Auth.fromSigner(await webCryptoSigner(await generateNonExtractableKeyPair())).getDID();
+  for (const did of [other, auth.getDID()]) {
+    const err = await v.users.delete(did).catch((e) => e);
+    expect(err).toBeInstanceOf(JobFailedError);
+    expect((err as JobFailedError).message).toMatch(/user\/delete/);
+  }
+});

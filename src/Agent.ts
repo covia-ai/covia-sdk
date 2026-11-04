@@ -1,4 +1,7 @@
 import {
+  AgentCompactSessionResult,
+  AgentReloadContextResult,
+  AgentRequestOptions,
   AgentRequestResult,
   AgentMessageResult,
   AgentChatResult,
@@ -15,11 +18,12 @@ import {
   AgentSession,
   AgentSessionMessage,
   VenueInterface,
+  CoviaError,
 } from './types';
 
 /** Minimal interface for the agent operations Agent needs from the venue's AgentManager. */
 interface AgentOps {
-  request(agentId: string, input?: unknown, wait?: boolean | number): Promise<AgentRequestResult>;
+  request(agentId: string, input?: unknown, options?: boolean | number | AgentRequestOptions): Promise<AgentRequestResult>;
   message(agentId: string, message: unknown): Promise<AgentMessageResult>;
   chat(agentId: string, message: unknown, sessionId?: string): Promise<AgentChatResult>;
   trigger(agentId: string): Promise<AgentTriggerResult>;
@@ -33,6 +37,8 @@ interface AgentOps {
   delete(agentId: string, remove?: boolean): Promise<AgentDeleteResult>;
   listSessions(agentId: string, options?: AgentSessionListOptions): Promise<AgentSessionPage>;
   getSession(agentId: string, sessionId: string): Promise<AgentSession>;
+  compactSession(agentId: string, sessionId: string, summary: string): Promise<AgentCompactSessionResult>;
+  reloadContext(agentId: string, sessionId: string): Promise<AgentReloadContextResult>;
   events(agentId: string, options?: { sessionId?: string; detail?: boolean; signal?: AbortSignal }): AsyncGenerator<AgentEvent>;
 }
 
@@ -47,8 +53,9 @@ export class Agent {
     this._agents = (venue as unknown as { agents: AgentOps }).agents;
   }
 
-  async request(input?: unknown, wait?: boolean | number): Promise<AgentRequestResult> {
-    return this._agents.request(this.id, input, wait);
+  /** Submit a task to this agent. See `AgentManager.request` for `options`. */
+  async request(input?: unknown, options?: boolean | number | AgentRequestOptions): Promise<AgentRequestResult> {
+    return this._agents.request(this.id, input, options);
   }
 
   async message(message: unknown): Promise<AgentMessageResult> {
@@ -111,6 +118,16 @@ export class Agent {
     return (await this._agents.getSession(this.id, sessionId)).conversation;
   }
 
+  /** Compact one of this agent's idle sessions. See `AgentManager.compactSession`. */
+  async compactSession(sessionId: string, summary: string): Promise<AgentCompactSessionResult> {
+    return this._agents.compactSession(this.id, sessionId, summary);
+  }
+
+  /** Reload one of this agent's idle sessions' context. See `AgentManager.reloadContext`. */
+  async reloadContext(sessionId: string): Promise<AgentReloadContextResult> {
+    return this._agents.reloadContext(this.id, sessionId);
+  }
+
   /** Stream this agent's run-loop events. See `AgentManager.events`. */
   async *events(options?: { sessionId?: string; detail?: boolean; signal?: AbortSignal }): AsyncGenerator<AgentEvent> {
     yield* this._agents.events(this.id, options);
@@ -159,5 +176,22 @@ export class ChatSession {
     const result = await this.agent.chat(message, this._sessionId);
     this._sessionId = result.sessionId;
     return result;
+  }
+
+  /** Compact this session. See `AgentManager.compactSession`. */
+  async compact(summary: string): Promise<AgentCompactSessionResult> {
+    return this.agent.compactSession(this.requireSessionId(), summary);
+  }
+
+  /** Reload this session's context. See `AgentManager.reloadContext`. */
+  async reloadContext(): Promise<AgentReloadContextResult> {
+    return this.agent.reloadContext(this.requireSessionId());
+  }
+
+  private requireSessionId(): string {
+    if (this._sessionId === undefined) {
+      throw new CoviaError('This chat session has no id yet: send a message first, or construct it with an existing session id');
+    }
+    return this._sessionId;
   }
 }

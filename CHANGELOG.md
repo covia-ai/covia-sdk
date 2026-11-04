@@ -4,6 +4,42 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.28.0
+
+### Added
+
+- `agents.request` / `agent.request` take an options object as their third
+  argument: `{ wait, sessionId, responseSchema, strict, outputPath, loads }`
+  (#124). Everything but `wait` is sent to the venue's `agent:request` under
+  the same name, and omitted options are not sent. The positional `wait` form
+  still works. Snapshots now carry `agentId`, and `sessionId` when one was
+  given. The venue's `timeout` input is deliberately not exposed: it only
+  applies on the venue's synchronous run path, while the SDK invokes through
+  `/api/v1/invoke` and applies `wait` itself.
+- `agents.compactSession(agentId, sessionId, summary)` and
+  `agents.reloadContext(agentId, sessionId)`, with typed
+  `AgentCompactSessionResult` / `AgentReloadContextResult`; also on `Agent`
+  (`compactSession`, `reloadContext`) and `ChatSession` (`compact`,
+  `reloadContext`) (#125). Both act on idle sessions. Compaction keeps the
+  replaced history, so `conversation` / `transcript()` still show every turn.
+- `didWebToUrl(did, { scheme? })` and `urlToDidWeb(url)` convert between a
+  `did:web` DID and its base URL per the W3C did:web rules (port as `%3A`,
+  path segments as `:`), matching the Python SDK's `did_web_to_url` /
+  `url_to_did_web` (#126).
+
+### Fixed
+
+- The `users.delete` doc comment said a caller without `user/delete` authority
+  gets an HTTP 403. The venue actually fails the Job, so the refusal surfaces as
+  a `JobFailedError` ("Venue administration denied: requires user/delete …").
+  Self-deletion is refused the same way. The behaviour is unchanged; only the
+  documentation was wrong. Now covered by an integration test against venue
+  0.9.10 (#85).
+
+### Internal
+
+- CI integration tests run against venue 0.9.10 (was 0.9.8).
+
 ## 1.27.0
 
 ### Added

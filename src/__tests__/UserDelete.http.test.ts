@@ -2,7 +2,7 @@ import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
 import { AddressInfo } from 'net';
 import { OperationManager } from '../OperationManager';
 import { UserManager } from '../UserManager';
-import { GridError } from '../types';
+import { JobFailedError } from '../types';
 
 // users.delete over real HTTP against a local stub venue (#85): checks what
 // actually goes on the wire (bearer auth, operation name, DID, body UCANs)
@@ -67,11 +67,12 @@ describe('users.delete over HTTP (#85)', () => {
     expect(stub.seen.every((s) => s.body.ucans === undefined)).toBe(true);
   });
 
-  it('surfaces a 403 for a caller without user/delete authority', async () => {
-    const stub = await startStub((s, res) => send(res, 403, { error: 'Requires user/delete on did:key:zVenue/users' }));
+  it('surfaces the venue\'s refusal (a FAILED job, not a 403) as JobFailedError', async () => {
+    const denial = 'Venue administration denied: requires user/delete on did:key:zVenue/users';
+    const stub = await startStub((s, res) => send(res, 200, { id: '0xjob', status: 'FAILED', error: denial }));
     server = stub.server;
     const err = await usersFor(stub.baseUrl).delete(record.did).catch((e) => e);
-    expect(err).toBeInstanceOf(GridError);
-    expect((err as GridError).statusCode).toBe(403);
+    expect(err).toBeInstanceOf(JobFailedError);
+    expect((err as JobFailedError).message).toContain(denial);
   });
 });
