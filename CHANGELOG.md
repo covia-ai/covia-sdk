@@ -22,6 +22,10 @@ its own SemVer track (independent of the venue/platform version).
   (`compactSession`, `reloadContext`) and `ChatSession` (`compact`,
   `reloadContext`) (#125). Both act on idle sessions. Compaction keeps the
   replaced history, so `conversation` / `transcript()` still show every turn.
+- `didWebToUrl(did, { scheme? })` and `urlToDidWeb(url)` convert between a
+  `did:web` DID and its base URL per the W3C did:web rules (port as `%3A`,
+  path segments as `:`), matching the Python SDK's `did_web_to_url` /
+  `url_to_did_web` (#126).
 
 ### Fixed
 

@@ -1,4 +1,4 @@
-import { Namespace, isDid, didMethod, parseDidUrl, didUrl, assetHash } from '../did';
+import { Namespace, isDid, didMethod, parseDidUrl, didUrl, assetHash, didWebToUrl, urlToDidWeb } from '../did';
 
 describe('isDid', () => {
   it.each([
@@ -74,5 +74,43 @@ describe('assetHash', () => {
   it.each(['w/my-assets/foo', 'o/my-op', 'did:key:zA/w/x', 'not-a-hash'])(
     'not content-addressed: %s',
     (ref) => expect(assetHash(ref)).toBeNull(),
+  );
+});
+
+// Same cases as the Python SDK's tests/unit/test_did.py TestDidWeb (#126).
+describe('didWebToUrl', () => {
+  it.each([
+    ['did:web:venue.covia.ai', 'https://venue.covia.ai'],
+    ['did:web:localhost%3A8080', 'https://localhost:8080'],
+    ['did:web:example.com:user:alice', 'https://example.com/user/alice'],
+    ['did:web:host%3A3000:a:b', 'https://host:3000/a/b'],
+    ['did:web:host%3a3000', 'https://host:3000'],
+  ])('%s → %s', (did, url) => expect(didWebToUrl(did)).toBe(url));
+
+  it('takes an http scheme', () => {
+    expect(didWebToUrl('did:web:localhost%3A8080', { scheme: 'http' })).toBe('http://localhost:8080');
+  });
+
+  it.each(['did:key:z6Mk', 'did:web:', 'venue.covia.ai'])('rejects %s', (v) => {
+    expect(() => didWebToUrl(v)).toThrow(/did:web/);
+  });
+});
+
+describe('urlToDidWeb', () => {
+  it.each([
+    ['https://venue.covia.ai', 'did:web:venue.covia.ai'],
+    ['https://venue.covia.ai/', 'did:web:venue.covia.ai'],
+    ['https://localhost:8080', 'did:web:localhost%3A8080'],
+    ['https://example.com/user/alice', 'did:web:example.com:user:alice'],
+    ['http://host:3000/a/b', 'did:web:host%3A3000:a:b'],
+    ['venue.covia.ai', 'did:web:venue.covia.ai'],
+  ])('%s → %s', (url, did) => expect(urlToDidWeb(url)).toBe(did));
+
+  it.each(['ftp://example.com', 'https://', ''])('rejects %j', (v) => {
+    expect(() => urlToDidWeb(v)).toThrow();
+  });
+
+  it.each(['https://venue.covia.ai', 'https://localhost:8080', 'https://example.com/user/alice'])(
+    'round-trips %s', (url) => expect(didWebToUrl(urlToDidWeb(url))).toBe(url),
   );
 });
