@@ -15,6 +15,8 @@ function createMockAgents() {
     context: jest.fn().mockResolvedValue('context string'),
     delete: jest.fn().mockResolvedValue({ agentId: 'a1', status: 'TERMINATED' }),
     events: jest.fn(),
+    compactSession: jest.fn().mockResolvedValue({ agentId: 'a1', sessionId: 'sess-1', compacted: true }),
+    reloadContext: jest.fn().mockResolvedValue({ agentId: 'a1', sessionId: 'sess-1', reloaded: true }),
   };
 }
 
@@ -109,6 +111,29 @@ describe('Agent', () => {
   it('delete delegates to agents.delete', async () => {
     await agent.delete(true);
     expect(mockAgents.delete).toHaveBeenCalledWith('a1', true);
+  });
+
+  it('compactSession and reloadContext delegate with this agent id (#125)', async () => {
+    await agent.compactSession('sess-1', 'we agreed on X');
+    expect(mockAgents.compactSession).toHaveBeenCalledWith('a1', 'sess-1', 'we agreed on X');
+    await agent.reloadContext('sess-1');
+    expect(mockAgents.reloadContext).toHaveBeenCalledWith('a1', 'sess-1');
+  });
+
+  it('a ChatSession compacts and reloads its own session (#125)', async () => {
+    const session = agent.chatSession('sess-1');
+    await session.compact('summary');
+    expect(mockAgents.compactSession).toHaveBeenCalledWith('a1', 'sess-1', 'summary');
+    await session.reloadContext();
+    expect(mockAgents.reloadContext).toHaveBeenCalledWith('a1', 'sess-1');
+  });
+
+  it('a ChatSession with no id yet refuses to compact or reload (#125)', async () => {
+    const session = agent.chatSession();
+    await expect(session.compact('summary')).rejects.toThrow(/no id yet/);
+    await expect(session.reloadContext()).rejects.toThrow(/no id yet/);
+    expect(mockAgents.compactSession).not.toHaveBeenCalled();
+    expect(mockAgents.reloadContext).not.toHaveBeenCalled();
   });
 
   it('chatSession returns a ChatSession bound to this agent', () => {

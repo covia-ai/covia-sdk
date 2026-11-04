@@ -1,4 +1,4 @@
-import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentRequestOptions, AgentSession, AgentSessionListOptions, AgentSessionMessage, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, CoviaTimeoutError, InvokeOptions, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult, WorkspaceCountResult } from './types';
+import { AgentCompactSessionResult, AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentReloadContextResult, AgentRenameSessionResult, AgentRequestOptions, AgentSession, AgentSessionListOptions, AgentSessionMessage, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, CoviaTimeoutError, InvokeOptions, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult, WorkspaceCountResult } from './types';
 import { parseSSEStream } from './Utils';
 import { venueJson, venueStream, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
@@ -258,6 +258,29 @@ export class AgentManager {
    */
   async renameSession(agentId: string, sessionId: string, title?: string): Promise<AgentRenameSessionResult> {
     return this.venue.operations.run<AgentRenameSessionResult>('v/ops/agent/rename-session', { agentId, sessionId, title });
+  }
+
+  /**
+   * Compact an idle session (#125): replace its visible conversation with one
+   * assistant-memory `summary` you write. The replaced history is kept, nested
+   * under the compaction record, so the transcript (`getSession().conversation`,
+   * `agent.transcript()`) still shows every turn. Later turns append normally.
+   * A busy session is refused by the venue, and that error propagates.
+   */
+  async compactSession(agentId: string, sessionId: string, summary: string): Promise<AgentCompactSessionResult> {
+    return this.venue.operations.run<AgentCompactSessionResult>('v/ops/agent/compact-session', { agentId, sessionId, summary });
+  }
+
+  /**
+   * Reload an idle session's context (#125): clear its cached provider prefix
+   * so the next inference rebuilds the system prompt, tools, skill catalog and
+   * pinned context from the agent's current configuration and sources. The
+   * conversation and loaded context are left exactly as they are. Use it after
+   * changing an agent's config when an existing session should pick it up. A
+   * busy session is refused by the venue, and that error propagates.
+   */
+  async reloadContext(agentId: string, sessionId: string): Promise<AgentReloadContextResult> {
+    return this.venue.operations.run<AgentReloadContextResult>('v/ops/agent/reload-context', { agentId, sessionId });
   }
 
   async trigger(agentId: string): Promise<AgentTriggerResult> {

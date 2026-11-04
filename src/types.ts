@@ -505,6 +505,32 @@ export interface AgentRenameSessionResult {
   title?: string;
 }
 
+/** Result of `agents.compactSession` (#125, venue `agent:compact-session`). */
+export interface AgentCompactSessionResult {
+  agentId: string;
+  /** The session's lattice address. */
+  address: string;
+  sessionId: string;
+  /** False when there was nothing to compact. */
+  compacted: boolean;
+  /** Live conversation entries folded into the summary by this compaction. */
+  archivedTurns: number;
+  /** Leaf entries retained, recursively, under the resulting segment. */
+  turnCount: number;
+}
+
+/** Result of `agents.reloadContext` (#125, venue `agent:reload-context`). */
+export interface AgentReloadContextResult {
+  agentId: string;
+  /** The session's lattice address. */
+  address: string;
+  sessionId: string;
+  /** True when a cached provider prefix was cleared. */
+  reloaded: boolean;
+  /** Number of frame prefixes cleared. */
+  frames: number;
+}
+
 export interface AgentResumeInput {
   agentId: string;
   autoWake?: boolean;

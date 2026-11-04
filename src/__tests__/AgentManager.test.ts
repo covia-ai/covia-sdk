@@ -134,6 +134,26 @@ describe('AgentManager', () => {
     });
   });
 
+  it('compactSession calls v/ops/agent/compact-session (#125)', async () => {
+    venue.operations.run.mockResolvedValueOnce({ agentId: 'a1', address: 'addr', sessionId: 's1', compacted: true, archivedTurns: 4, turnCount: 4 });
+    const r = await agents.compactSession('a1', 's1', 'we agreed on X');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/compact-session', { agentId: 'a1', sessionId: 's1', summary: 'we agreed on X' });
+    expect(r.archivedTurns).toBe(4);
+  });
+
+  it('reloadContext calls v/ops/agent/reload-context (#125)', async () => {
+    venue.operations.run.mockResolvedValueOnce({ agentId: 'a1', address: 'addr', sessionId: 's1', reloaded: true, frames: 1 });
+    const r = await agents.reloadContext('a1', 's1');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/reload-context', { agentId: 'a1', sessionId: 's1' });
+    expect(r.reloaded).toBe(true);
+  });
+
+  it('propagates the venue refusing to compact a busy session (#125)', async () => {
+    const busy = new Error('Session is busy');
+    venue.operations.run.mockRejectedValueOnce(busy);
+    await expect(agents.compactSession('a1', 's1', 'x')).rejects.toBe(busy);
+  });
+
   it('message calls v/ops/agent/message', async () => {
     await agents.message('a1', { text: 'hello' });
     expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/message', { agentId: 'a1', message: { text: 'hello' } });
@@ -639,6 +659,18 @@ describe('AgentManager session transcripts', () => {
   ])('rejects %s in a legacy session (#107)', async (_label, frames) => {
     readsSession(sessionValue(frames));
     await expect(agents.getSession('a1', 'sess-1')).rejects.toThrow();
+  });
+
+  it('still shows every turn after compactSession, in both stored formats (#125)', async () => {
+    const t1 = turn('user', 'q1'), t2 = turn('assistant', 'a1'), t3 = turn('user', 'q2');
+    // Versioned: the summary covers [contextStart, count) and contextStart moves to it.
+    readsSession(sessionValue([{ historyVersion: 1, contextStart: 2, history: [
+      t1, t2, { summary: 'talked about q1', turns: 2, historyRange: [0, 2] }, t3,
+    ] }]));
+    expect((await agents.getSession('a1', 'sess-1')).conversation).toEqual([t1, t2, t3]);
+    // Legacy: the old conversation is nested under the summary segment.
+    readsSession(sessionValue([{ conversation: [{ summary: 'talked about q1', turns: 2, items: [t1, t2] }, t3] }]));
+    expect((await agents.getSession('a1', 'sess-1')).conversation).toEqual([t1, t2, t3]);
   });
 
   it('gives an empty transcript for a session with no frames', async () => {

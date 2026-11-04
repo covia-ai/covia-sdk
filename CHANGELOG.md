@@ -16,6 +16,12 @@ its own SemVer track (independent of the venue/platform version).
   given. The venue's `timeout` input is deliberately not exposed: it only
   applies on the venue's synchronous run path, while the SDK invokes through
   `/api/v1/invoke` and applies `wait` itself.
+- `agents.compactSession(agentId, sessionId, summary)` and
+  `agents.reloadContext(agentId, sessionId)`, with typed
+  `AgentCompactSessionResult` / `AgentReloadContextResult`; also on `Agent`
+  (`compactSession`, `reloadContext`) and `ChatSession` (`compact`,
+  `reloadContext`) (#125). Both act on idle sessions. Compaction keeps the
+  replaced history, so `conversation` / `transcript()` still show every turn.
 
 ### Fixed
 
