@@ -4,12 +4,13 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
-## Unreleased
+## 1.26.0
 
 ### Removed
 
-- `relayDelegation`, `relayDelegationWith` and `VENUE_RELAY`. Venues no longer
-  authenticate as themselves on a caller's behalf, so they refuse these tokens.
+- **Breaking:** `relayDelegation`, `relayDelegationWith` and `VENUE_RELAY`.
+  Venues no longer authenticate as themselves on a caller's behalf, so they
+  refuse these tokens.
   To act at another venue, present your own identity token audienced to it, with
   `authenticateAs: "caller"` and grants.
 
@@ -34,6 +35,16 @@ its own SemVer track (independent of the venue/platform version).
   it need at least that version; this release is recommended. Read turns
   through `conversation` / `transcript()` rather than raw `frames[].conversation`,
   which migrated frames no longer have.
+
+### Changed
+
+- The README is now a landing page (install, quick start, one example per
+  area) after the Python SDK's; the per-method reference lives in the doc
+  comments on the exported classes (#114, #116).
+
+### Internal
+
+- Dev dependency bumps (#115).
 
 ## 1.25.0
 
