@@ -118,6 +118,6 @@ describe('urlToDidWeb', () => {
 
 it('urlToDidWeb handles a long run of slashes quickly', () => {
   const start = Date.now();
-  expect(() => urlToDidWeb('https://' + '/'.repeat(100000) + 'x')).not.toThrow();
+  expect(urlToDidWeb('https://venue.covia.ai' + '/'.repeat(100000))).toBe('did:web:venue.covia.ai');
   expect(Date.now() - start).toBeLessThan(1000);
 });
