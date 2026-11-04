@@ -5,6 +5,7 @@ import {
   OperationRunner,
   StatusData,
   UnsupportedVenueFeatureError,
+  UserDeleteResult,
   UserInfo,
   UserListResult,
 } from './types';
@@ -81,5 +82,32 @@ export class UserManager {
     return this.venue.operations.run<AuthenticatorRevokeResult>(
       'v/ops/user/authentication-revoke', { did, key }, { ucans },
     );
+  }
+
+  /**
+   * Delete a venue account (covia#536): its profile, login aliases and
+   * namespace, with its jobs, agents and schedules cancelled.
+   *
+   * **Operator-authorised, not self-service.** The caller needs venue-issued
+   * `user/delete` authority on `<venueDID>/users`, even to delete their own
+   * account; pass a delegation as `ucans` if the caller's own identity doesn't
+   * carry it. Without it the venue answers 403 (a `GridError` with
+   * `statusCode` 403), which propagates unchanged.
+   *
+   * Idempotent: deleting an account that is still absent returns the original
+   * deletion record. Deletion is not a ban: the venue's normal admission policy
+   * can later create a new, empty account under the same DID, and the old
+   * venue-managed authentication keys stay revoked.
+   *
+   * This is logical removal. Physical erasure waits for the venue to collect
+   * unreferenced data and for retained checkpoints, backups and external
+   * copies to expire; neither is implied by this call.
+   *
+   * A mutation, so it goes through `operations.run` (`v/ops/user/delete`) and
+   * mints a Job, like `revokeAuthenticator`. That path carries `ucans` in the
+   * request body; the venue's `DELETE /api/v1/users/{did}` route does not.
+   */
+  async delete(did: string, ucans?: string[]): Promise<UserDeleteResult> {
+    return this.venue.operations.run<UserDeleteResult>('v/ops/user/delete', { did }, { ucans });
   }
 }

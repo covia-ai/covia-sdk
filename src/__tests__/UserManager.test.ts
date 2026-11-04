@@ -111,4 +111,34 @@ describe('UserManager', () => {
       { ucans: ['ucan-jwt'] },
     );
   });
+
+  describe('delete (#85)', () => {
+    const record = { did: 'did:key:z1', deletedAt: 1762236000000, deletedBy: 'did:key:zOperator' };
+
+    it('invokes v/ops/user/delete with the DID and UCAN proofs, not a REST call', async () => {
+      venue.operations.run.mockResolvedValueOnce(record);
+      expect(await users.delete('did:key:z1', ['ucan-jwt'])).toEqual(record);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(venue.operations.run).toHaveBeenCalledWith(
+        'v/ops/user/delete', { did: 'did:key:z1' }, { ucans: ['ucan-jwt'] });
+    });
+
+    it('passes a did:web DID through verbatim', async () => {
+      await users.delete('did:web:example.com%3A8080:u:alice');
+      expect(venue.operations.run).toHaveBeenCalledWith(
+        'v/ops/user/delete', { did: 'did:web:example.com%3A8080:u:alice' }, { ucans: undefined });
+    });
+
+    it('returns the original record on a repeated deletion', async () => {
+      venue.operations.run.mockResolvedValue(record);
+      expect(await users.delete('did:key:z1')).toEqual(record);
+      expect(await users.delete('did:key:z1')).toEqual(record);
+    });
+
+    it('propagates a 403 for a caller without user/delete authority', async () => {
+      const denied = new GridError(403, 'Requires user/delete on did:key:zVenue/users');
+      venue.operations.run.mockRejectedValueOnce(denied);
+      await expect(users.delete('did:key:z1')).rejects.toBe(denied);
+    });
+  });
 });
