@@ -1081,6 +1081,17 @@ export interface AuthenticatorRevokeResult {
   revoked: boolean;
 }
 
+/** Result of `users.delete` (covia#536). Repeating the deletion while the
+ *  account is still absent returns this same original record. */
+export interface UserDeleteResult {
+  /** The deleted account's DID. */
+  did: string;
+  /** When the account was deleted, in ms since the epoch. */
+  deletedAt: number;
+  /** DID of the caller that deleted it. */
+  deletedBy: string;
+}
+
 // ── Discovery Types ──
 
 export interface FunctionInfo {

@@ -4,6 +4,20 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.27.0
+
+### Added
+
+- `users.delete(did, ucans?)` deletes a venue account through
+  `v/ops/user/delete` and returns a typed `UserDeleteResult`
+  (`{did, deletedAt, deletedBy}`); repeating it returns the original record
+  (#85, covia#536). It needs venue-issued `user/delete` authority on
+  `<venueDID>/users`, even for the caller's own account, so it is not user
+  self-service; without that authority the venue's 403 propagates. Deletion is
+  logical: the DID can be admitted again as a new, empty account, its old
+  managed keys stay revoked, and backups or external copies are not erased.
+  Needs venue 0.9.9 or later.
+
 ## 1.26.0
 
 ### Removed
