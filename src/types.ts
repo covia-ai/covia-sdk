@@ -380,18 +380,45 @@ export interface AgentCreateResult {
   warnings?: string[];
 }
 
-export interface AgentRequestInput {
+export interface AgentRequestInput extends AgentRequestOptions {
   agentId: string;
   input?: any;
-  /** Client-side wait policy for `agents.request`; never sent to the venue,
-   *  whose agent:request has no `wait` input (#112). */
+}
+
+/**
+ * Options for `agents.request` / `agent.request` (#124). Everything except
+ * `wait` is sent to the venue's `agent:request` under the same name.
+ */
+export interface AgentRequestOptions {
+  /** Client-side wait policy, never sent to the venue (#112): `true` /
+   *  omitted blocks for the result, `false` (or `0`) returns a snapshot at
+   *  once, a number waits up to that many ms. The venue's own `timeout`
+   *  input is not exposed: it only applies on the venue's synchronous run
+   *  path, and the SDK invokes through `/api/v1/invoke`. */
   wait?: boolean | number;
+  /** Continue an existing session; requests sharing a session id are one
+   *  conversation. Hex, with or without `0x`. */
+  sessionId?: string;
+  /** JSON Schema for the task result: the target shape shown to the agent,
+   *  advisory unless `strict` is set. */
+  responseSchema?: Record<string, unknown>;
+  /** Enforce `responseSchema` when the task completes (venue default false). */
+  strict?: boolean;
+  /** Mutable Covia path for structural result handoff, e.g.
+   *  `w/pipeline/run1/chapter1` or `t/stage1`. */
+  outputPath?: string;
+  /** Untrusted context to pre-load into a new session, keyed by source. */
+  loads?: Record<string, unknown>;
 }
 
 export interface AgentRequestResult {
   id: string;
   status: string;
   output?: any;
+  /** On a snapshot: the agent the task was submitted to. */
+  agentId?: string;
+  /** On a snapshot: the session the task runs in, when known. */
+  sessionId?: string;
 }
 
 export interface AgentMessageInput {
@@ -476,6 +503,32 @@ export interface AgentRenameSessionResult {
   sessionId: string;
   /** Absent when the title was cleared (an omitted/blank title on the call). */
   title?: string;
+}
+
+/** Result of `agents.compactSession` (#125, venue `agent:compact-session`). */
+export interface AgentCompactSessionResult {
+  agentId: string;
+  /** The session's lattice address. */
+  address: string;
+  sessionId: string;
+  /** False when there was nothing to compact. */
+  compacted: boolean;
+  /** Live conversation entries folded into the summary by this compaction. */
+  archivedTurns: number;
+  /** Leaf entries retained, recursively, under the resulting segment. */
+  turnCount: number;
+}
+
+/** Result of `agents.reloadContext` (#125, venue `agent:reload-context`). */
+export interface AgentReloadContextResult {
+  agentId: string;
+  /** The session's lattice address. */
+  address: string;
+  sessionId: string;
+  /** True when a cached provider prefix was cleared. */
+  reloaded: boolean;
+  /** Number of frame prefixes cleared. */
+  frames: number;
 }
 
 export interface AgentResumeInput {

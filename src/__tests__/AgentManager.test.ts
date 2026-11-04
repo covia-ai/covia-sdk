@@ -67,7 +67,7 @@ describe('AgentManager', () => {
 
     it('wait=false invokes and returns the task snapshot without waiting', async () => {
       const job = mockJob();
-      expect(await agents.request('a1', { task: 'go' }, false)).toEqual({ id: 'job1', status: 'STARTED' });
+      expect(await agents.request('a1', { task: 'go' }, false)).toEqual({ id: 'job1', status: 'STARTED', agentId: 'a1' });
       expect(venue.operations.invoke).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { task: 'go' } });
       expect(job.result).not.toHaveBeenCalled();
       expect(venue.operations.run).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe('AgentManager', () => {
 
     it('wait=0 behaves as wait=false', async () => {
       const job = mockJob();
-      expect(await agents.request('a1', { task: 'go' }, 0)).toEqual({ id: 'job1', status: 'STARTED' });
+      expect(await agents.request('a1', { task: 'go' }, 0)).toEqual({ id: 'job1', status: 'STARTED', agentId: 'a1' });
       expect(job.result).not.toHaveBeenCalled();
     });
 
@@ -87,7 +87,7 @@ describe('AgentManager', () => {
 
     it('wait=<ms> returns the snapshot when the task outlives the wait', async () => {
       mockJob(jest.fn().mockRejectedValue(new CoviaTimeoutError('slow')));
-      expect(await agents.request('a1', { task: 'go' }, 2000)).toEqual({ id: 'job1', status: 'STARTED' });
+      expect(await agents.request('a1', { task: 'go' }, 2000)).toEqual({ id: 'job1', status: 'STARTED', agentId: 'a1' });
     });
 
     it('wait=<ms> propagates a task failure', async () => {
@@ -95,6 +95,63 @@ describe('AgentManager', () => {
       mockJob(jest.fn().mockRejectedValue(failure));
       await expect(agents.request('a1', { task: 'go' }, 2000)).rejects.toBe(failure);
     });
+  });
+
+  describe('request options (#124)', () => {
+    const opts = {
+      sessionId: '0xabc',
+      responseSchema: { type: 'object' },
+      strict: true,
+      outputPath: 'w/pipeline/run1',
+      loads: { brief: 'notes' },
+    };
+
+    it('sends each option to the venue unchanged and never sends wait', async () => {
+      await agents.request('a1', { task: 'go' }, opts);
+      expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { task: 'go' }, ...opts });
+    });
+
+    it('omits options that are not set', async () => {
+      await agents.request('a1', { task: 'go' }, { sessionId: '0xabc', strict: undefined });
+      expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { task: 'go' }, sessionId: '0xabc' });
+    });
+
+    it('applies wait from the options object and carries options on invoke', async () => {
+      const job = { id: 'job1', metadata: { id: 'job1', status: 'STARTED' }, result: jest.fn() };
+      venue.operations.invoke.mockResolvedValue(job);
+      expect(await agents.request('a1', { task: 'go' }, { wait: false, sessionId: '0xabc', outputPath: 't/out' }))
+        .toEqual({ id: 'job1', status: 'STARTED', agentId: 'a1', sessionId: '0xabc' });
+      expect(venue.operations.invoke).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { task: 'go' }, sessionId: '0xabc', outputPath: 't/out' });
+      expect(job.result).not.toHaveBeenCalled();
+      expect(venue.operations.run).not.toHaveBeenCalled();
+    });
+
+    it('{ wait: true } and {} block like the default', async () => {
+      await agents.request('a1', { task: 'go' }, { wait: true });
+      await agents.request('a1', { task: 'go' }, {});
+      expect(venue.operations.run).toHaveBeenCalledTimes(2);
+      expect(venue.operations.invoke).not.toHaveBeenCalled();
+    });
+  });
+
+  it('compactSession calls v/ops/agent/compact-session (#125)', async () => {
+    venue.operations.run.mockResolvedValueOnce({ agentId: 'a1', address: 'addr', sessionId: 's1', compacted: true, archivedTurns: 4, turnCount: 4 });
+    const r = await agents.compactSession('a1', 's1', 'we agreed on X');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/compact-session', { agentId: 'a1', sessionId: 's1', summary: 'we agreed on X' });
+    expect(r.archivedTurns).toBe(4);
+  });
+
+  it('reloadContext calls v/ops/agent/reload-context (#125)', async () => {
+    venue.operations.run.mockResolvedValueOnce({ agentId: 'a1', address: 'addr', sessionId: 's1', reloaded: true, frames: 1 });
+    const r = await agents.reloadContext('a1', 's1');
+    expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/reload-context', { agentId: 'a1', sessionId: 's1' });
+    expect(r.reloaded).toBe(true);
+  });
+
+  it('propagates the venue refusing to compact a busy session (#125)', async () => {
+    const busy = new Error('Session is busy');
+    venue.operations.run.mockRejectedValueOnce(busy);
+    await expect(agents.compactSession('a1', 's1', 'x')).rejects.toBe(busy);
   });
 
   it('message calls v/ops/agent/message', async () => {
@@ -602,6 +659,18 @@ describe('AgentManager session transcripts', () => {
   ])('rejects %s in a legacy session (#107)', async (_label, frames) => {
     readsSession(sessionValue(frames));
     await expect(agents.getSession('a1', 'sess-1')).rejects.toThrow();
+  });
+
+  it('still shows every turn after compactSession, in both stored formats (#125)', async () => {
+    const t1 = turn('user', 'q1'), t2 = turn('assistant', 'a1'), t3 = turn('user', 'q2');
+    // Versioned: the summary covers [contextStart, count) and contextStart moves to it.
+    readsSession(sessionValue([{ historyVersion: 1, contextStart: 2, history: [
+      t1, t2, { summary: 'talked about q1', turns: 2, historyRange: [0, 2] }, t3,
+    ] }]));
+    expect((await agents.getSession('a1', 'sess-1')).conversation).toEqual([t1, t2, t3]);
+    // Legacy: the old conversation is nested under the summary segment.
+    readsSession(sessionValue([{ conversation: [{ summary: 'talked about q1', turns: 2, items: [t1, t2] }, t3] }]));
+    expect((await agents.getSession('a1', 'sess-1')).conversation).toEqual([t1, t2, t3]);
   });
 
   it('gives an empty transcript for a session with no frames', async () => {

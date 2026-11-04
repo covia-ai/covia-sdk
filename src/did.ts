@@ -106,3 +106,51 @@ export function assetHash(ref: string): string | null {
   }
   return null;
 }
+
+/**
+ * The base URL a `did:web` DID names, per the W3C did:web rules (#126): the
+ * domain may encode a port as `%3A`, and further `:`-separated segments become
+ * URL path segments.
+ *
+ * `didWebToUrl('did:web:host%3A3000:a:b')` → `'https://host:3000/a/b'`
+ *
+ * Matches the Python SDK's `did_web_to_url`. This is the DID's base URL, not
+ * its document URL (`/.well-known/did.json` or `<path>/did.json`).
+ *
+ * @throws Error if `did` is not a `did:web` DID with a host.
+ */
+export function didWebToUrl(did: string, opts: { scheme?: 'https' | 'http' } = {}): string {
+  const prefix = 'did:web:';
+  const rest = did.startsWith(prefix) ? did.slice(prefix.length) : '';
+  const [domain, ...path] = rest.split(':');
+  if (!domain) throw new Error(`Not a did:web DID: ${JSON.stringify(did)}`);
+  const host = domain.replace(/%3A/gi, ':');
+  return `${opts.scheme ?? 'https'}://${host}${path.length ? `/${path.join('/')}` : ''}`;
+}
+
+/**
+ * The `did:web` DID for an HTTP(S) URL; the inverse of {@link didWebToUrl}
+ * (#126). A port is encoded as `%3A` and path segments are joined with `:`.
+ * A trailing slash is ignored, and a bare host (no scheme) is accepted.
+ *
+ * `urlToDidWeb('https://host:3000/a/b')` → `'did:web:host%3A3000:a:b'`
+ *
+ * Matches the Python SDK's `url_to_did_web`.
+ *
+ * @throws Error for a non-HTTP(S) scheme, or a URL with no host.
+ */
+export function urlToDidWeb(url: string): string {
+  const schemeEnd = url.indexOf('://');
+  if (schemeEnd >= 0 && !/^https?$/i.test(url.slice(0, schemeEnd))) {
+    throw new Error(`Not an HTTP(S) URL: ${JSON.stringify(url)}`);
+  }
+  let after = schemeEnd >= 0 ? url.slice(schemeEnd + 3) : url;
+  let end = after.length;
+  while (end > 0 && after[end - 1] === '/') end--; // trim trailing slashes without a backtracking regex
+  after = after.slice(0, end);
+  const slash = after.indexOf('/');
+  const host = slash >= 0 ? after.slice(0, slash) : after;
+  const path = slash >= 0 ? after.slice(slash + 1) : '';
+  if (!host) throw new Error(`URL has no host: ${JSON.stringify(url)}`);
+  return `did:web:${host.replace(/:/g, '%3A')}${path ? `:${path.split('/').join(':')}` : ''}`;
+}
