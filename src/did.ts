@@ -144,7 +144,10 @@ export function urlToDidWeb(url: string): string {
   if (schemeEnd >= 0 && !/^https?$/i.test(url.slice(0, schemeEnd))) {
     throw new Error(`Not an HTTP(S) URL: ${JSON.stringify(url)}`);
   }
-  const after = (schemeEnd >= 0 ? url.slice(schemeEnd + 3) : url).replace(/\/+$/, '');
+  let after = schemeEnd >= 0 ? url.slice(schemeEnd + 3) : url;
+  let end = after.length;
+  while (end > 0 && after[end - 1] === '/') end--; // trim trailing slashes without a backtracking regex
+  after = after.slice(0, end);
   const slash = after.indexOf('/');
   const host = slash >= 0 ? after.slice(0, slash) : after;
   const path = slash >= 0 ? after.slice(slash + 1) : '';

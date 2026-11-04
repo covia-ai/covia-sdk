@@ -100,6 +100,7 @@ describe('urlToDidWeb', () => {
   it.each([
     ['https://venue.covia.ai', 'did:web:venue.covia.ai'],
     ['https://venue.covia.ai/', 'did:web:venue.covia.ai'],
+    ['https://venue.covia.ai///', 'did:web:venue.covia.ai'],
     ['https://localhost:8080', 'did:web:localhost%3A8080'],
     ['https://example.com/user/alice', 'did:web:example.com:user:alice'],
     ['http://host:3000/a/b', 'did:web:host%3A3000:a:b'],
@@ -113,4 +114,10 @@ describe('urlToDidWeb', () => {
   it.each(['https://venue.covia.ai', 'https://localhost:8080', 'https://example.com/user/alice'])(
     'round-trips %s', (url) => expect(didWebToUrl(urlToDidWeb(url))).toBe(url),
   );
+});
+
+it('urlToDidWeb handles a long run of slashes quickly', () => {
+  const start = Date.now();
+  expect(() => urlToDidWeb('https://' + '/'.repeat(100000) + 'x')).not.toThrow();
+  expect(Date.now() - start).toBeLessThan(1000);
 });
