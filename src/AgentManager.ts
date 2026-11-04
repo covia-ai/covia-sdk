@@ -1,4 +1,4 @@
-import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentSession, AgentSessionListOptions, AgentSessionMessage, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, CoviaTimeoutError, InvokeOptions, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult, WorkspaceCountResult } from './types';
+import { AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentRenameSessionResult, AgentRequestOptions, AgentSession, AgentSessionListOptions, AgentSessionMessage, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, CoviaTimeoutError, InvokeOptions, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult, WorkspaceCountResult } from './types';
 import { parseSSEStream } from './Utils';
 import { venueJson, venueStream, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
@@ -187,20 +187,33 @@ export class AgentManager {
   /**
    * Submit a task to an agent.
    *
-   * The venue's agent:request has no `wait` input, and over REST the request
-   * Job is the task Job, so the wait policy is applied here (#112):
+   * The third argument is either the wait policy alone (the original
+   * positional form) or an {@link AgentRequestOptions} object. `wait` is
+   * applied here, because the venue's agent:request has no `wait` input and
+   * over REST the request Job is the task Job (#112):
    * - `true` / omitted: block until the task finishes and return its result.
-   * - `false`: return a `{id, status}` snapshot of the task Job immediately.
+   * - `false` (or `0`): return an `{id, status, agentId, sessionId?}`
+   *   snapshot of the task Job immediately.
    * - a number: wait up to that many ms; the result if the task finished in
    *   time, otherwise the snapshot. The task keeps running either way — poll
    *   it with `venue.getJob(id)`.
+   *
+   * The other options (`sessionId`, `responseSchema`, `strict`, `outputPath`,
+   * `loads`) go to the venue unchanged; omitted ones are not sent (#124).
    */
-  async request(agentId: string, input?: unknown, wait?: boolean | number): Promise<AgentRequestResult> {
+  async request(
+    agentId: string,
+    input?: unknown,
+    options?: boolean | number | AgentRequestOptions,
+  ): Promise<AgentRequestResult> {
     const op = 'v/ops/agent/request';
+    const { wait, ...venueOptions } = typeof options === 'object' && options !== null ? options : { wait: options };
+    const payload: Record<string, unknown> = { agentId, input };
+    for (const [k, v] of Object.entries(venueOptions)) if (v !== undefined) payload[k] = v;
     if (wait === undefined || wait === true) {
-      return this.venue.operations.run<AgentRequestResult>(op, { agentId, input });
+      return this.venue.operations.run<AgentRequestResult>(op, payload);
     }
-    const job = await this.venue.operations.invoke(op, { agentId, input });
+    const job = await this.venue.operations.invoke(op, payload);
     if (typeof wait === 'number' && wait > 0) {
       try {
         return (await job.result({ timeout: wait })) as AgentRequestResult;
@@ -208,7 +221,9 @@ export class AgentManager {
         if (!(e instanceof CoviaTimeoutError)) throw e;
       }
     }
-    return { id: job.id, status: String(job.metadata.status ?? '') };
+    const snapshot: AgentRequestResult = { id: job.id, status: String(job.metadata.status ?? ''), agentId };
+    if (venueOptions.sessionId !== undefined) snapshot.sessionId = venueOptions.sessionId;
+    return snapshot;
   }
 
   async message(agentId: string, message: unknown): Promise<AgentMessageResult> {

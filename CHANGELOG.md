@@ -6,6 +6,17 @@ its own SemVer track (independent of the venue/platform version).
 
 ## Unreleased
 
+### Added
+
+- `agents.request` / `agent.request` take an options object as their third
+  argument: `{ wait, sessionId, responseSchema, strict, outputPath, loads }`
+  (#124). Everything but `wait` is sent to the venue's `agent:request` under
+  the same name, and omitted options are not sent. The positional `wait` form
+  still works. Snapshots now carry `agentId`, and `sessionId` when one was
+  given. The venue's `timeout` input is deliberately not exposed: it only
+  applies on the venue's synchronous run path, while the SDK invokes through
+  `/api/v1/invoke` and applies `wait` itself.
+
 ### Fixed
 
 - The `users.delete` doc comment said a caller without `user/delete` authority

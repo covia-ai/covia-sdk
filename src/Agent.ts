@@ -1,4 +1,5 @@
 import {
+  AgentRequestOptions,
   AgentRequestResult,
   AgentMessageResult,
   AgentChatResult,
@@ -19,7 +20,7 @@ import {
 
 /** Minimal interface for the agent operations Agent needs from the venue's AgentManager. */
 interface AgentOps {
-  request(agentId: string, input?: unknown, wait?: boolean | number): Promise<AgentRequestResult>;
+  request(agentId: string, input?: unknown, options?: boolean | number | AgentRequestOptions): Promise<AgentRequestResult>;
   message(agentId: string, message: unknown): Promise<AgentMessageResult>;
   chat(agentId: string, message: unknown, sessionId?: string): Promise<AgentChatResult>;
   trigger(agentId: string): Promise<AgentTriggerResult>;
@@ -47,8 +48,9 @@ export class Agent {
     this._agents = (venue as unknown as { agents: AgentOps }).agents;
   }
 
-  async request(input?: unknown, wait?: boolean | number): Promise<AgentRequestResult> {
-    return this._agents.request(this.id, input, wait);
+  /** Submit a task to this agent. See `AgentManager.request` for `options`. */
+  async request(input?: unknown, options?: boolean | number | AgentRequestOptions): Promise<AgentRequestResult> {
+    return this._agents.request(this.id, input, options);
   }
 
   async message(message: unknown): Promise<AgentMessageResult> {

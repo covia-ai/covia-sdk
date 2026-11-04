@@ -67,7 +67,7 @@ describe('AgentManager', () => {
 
     it('wait=false invokes and returns the task snapshot without waiting', async () => {
       const job = mockJob();
-      expect(await agents.request('a1', { task: 'go' }, false)).toEqual({ id: 'job1', status: 'STARTED' });
+      expect(await agents.request('a1', { task: 'go' }, false)).toEqual({ id: 'job1', status: 'STARTED', agentId: 'a1' });
       expect(venue.operations.invoke).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { task: 'go' } });
       expect(job.result).not.toHaveBeenCalled();
       expect(venue.operations.run).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe('AgentManager', () => {
 
     it('wait=0 behaves as wait=false', async () => {
       const job = mockJob();
-      expect(await agents.request('a1', { task: 'go' }, 0)).toEqual({ id: 'job1', status: 'STARTED' });
+      expect(await agents.request('a1', { task: 'go' }, 0)).toEqual({ id: 'job1', status: 'STARTED', agentId: 'a1' });
       expect(job.result).not.toHaveBeenCalled();
     });
 
@@ -87,13 +87,50 @@ describe('AgentManager', () => {
 
     it('wait=<ms> returns the snapshot when the task outlives the wait', async () => {
       mockJob(jest.fn().mockRejectedValue(new CoviaTimeoutError('slow')));
-      expect(await agents.request('a1', { task: 'go' }, 2000)).toEqual({ id: 'job1', status: 'STARTED' });
+      expect(await agents.request('a1', { task: 'go' }, 2000)).toEqual({ id: 'job1', status: 'STARTED', agentId: 'a1' });
     });
 
     it('wait=<ms> propagates a task failure', async () => {
       const failure = new JobFailedError({ id: 'job1', status: 'FAILED' as any, error: 'boom' });
       mockJob(jest.fn().mockRejectedValue(failure));
       await expect(agents.request('a1', { task: 'go' }, 2000)).rejects.toBe(failure);
+    });
+  });
+
+  describe('request options (#124)', () => {
+    const opts = {
+      sessionId: '0xabc',
+      responseSchema: { type: 'object' },
+      strict: true,
+      outputPath: 'w/pipeline/run1',
+      loads: { brief: 'notes' },
+    };
+
+    it('sends each option to the venue unchanged and never sends wait', async () => {
+      await agents.request('a1', { task: 'go' }, opts);
+      expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { task: 'go' }, ...opts });
+    });
+
+    it('omits options that are not set', async () => {
+      await agents.request('a1', { task: 'go' }, { sessionId: '0xabc', strict: undefined });
+      expect(venue.operations.run).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { task: 'go' }, sessionId: '0xabc' });
+    });
+
+    it('applies wait from the options object and carries options on invoke', async () => {
+      const job = { id: 'job1', metadata: { id: 'job1', status: 'STARTED' }, result: jest.fn() };
+      venue.operations.invoke.mockResolvedValue(job);
+      expect(await agents.request('a1', { task: 'go' }, { wait: false, sessionId: '0xabc', outputPath: 't/out' }))
+        .toEqual({ id: 'job1', status: 'STARTED', agentId: 'a1', sessionId: '0xabc' });
+      expect(venue.operations.invoke).toHaveBeenCalledWith('v/ops/agent/request', { agentId: 'a1', input: { task: 'go' }, sessionId: '0xabc', outputPath: 't/out' });
+      expect(job.result).not.toHaveBeenCalled();
+      expect(venue.operations.run).not.toHaveBeenCalled();
+    });
+
+    it('{ wait: true } and {} block like the default', async () => {
+      await agents.request('a1', { task: 'go' }, { wait: true });
+      await agents.request('a1', { task: 'go' }, {});
+      expect(venue.operations.run).toHaveBeenCalledTimes(2);
+      expect(venue.operations.invoke).not.toHaveBeenCalled();
     });
   });
 
