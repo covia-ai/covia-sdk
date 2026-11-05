@@ -1,5 +1,6 @@
 import { Auth } from "./Credentials";
 import { Venue } from "./Venue";
+import { trimTrailingSlashes } from "./strings";
 
 interface ConnectionEntry {
   promise: Promise<Venue>;
@@ -22,7 +23,7 @@ function connectionsFor(auth?: Auth): Map<string, ConnectionEntry> {
 }
 
 function normaliseKey(venueId: string): string {
-  return venueId.replace(/\/+$/, '');
+  return trimTrailingSlashes(venueId);
 }
 
 function removeEntry(cache: Map<string, ConnectionEntry>, entry: ConnectionEntry): void {
