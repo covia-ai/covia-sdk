@@ -15,6 +15,8 @@
  * - A namespace-relative path (no `<DID>`) resolves to the authenticated caller.
  */
 
+import { trimSlashes, trimTrailingSlashes } from './strings';
+
 /** Lattice namespace identifiers. */
 export const Namespace = {
   ASSET: 'a',
@@ -82,7 +84,7 @@ export function parseDidUrl(value: string): DIDURL {
 export function didUrl(did: string | null, namespace: string, ...segments: string[]): string {
   const tail = segments
     .filter((s) => s !== '')
-    .map((s) => s.replace(/^\/+|\/+$/g, ''))
+    .map(trimSlashes)
     .join('/');
   const base = tail ? `${namespace}/${tail}` : namespace;
   return did ? `${did}/${base}` : base;
@@ -144,10 +146,7 @@ export function urlToDidWeb(url: string): string {
   if (schemeEnd >= 0 && !/^https?$/i.test(url.slice(0, schemeEnd))) {
     throw new Error(`Not an HTTP(S) URL: ${JSON.stringify(url)}`);
   }
-  let after = schemeEnd >= 0 ? url.slice(schemeEnd + 3) : url;
-  let end = after.length;
-  while (end > 0 && after[end - 1] === '/') end--; // trim trailing slashes without a backtracking regex
-  after = after.slice(0, end);
+  const after = trimTrailingSlashes(schemeEnd >= 0 ? url.slice(schemeEnd + 3) : url);
   const slash = after.indexOf('/');
   const host = slash >= 0 ? after.slice(0, slash) : after;
   const path = slash >= 0 ? after.slice(slash + 1) : '';

@@ -7,6 +7,7 @@ import {
 } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
+import { trimTrailingSlashes } from './strings';
 
 interface WorkspaceManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
@@ -306,7 +307,7 @@ export class WorkspaceManager {
       { path, limit: opts.limit, offset: opts.offset },
     );
     const keys = base.keys ?? [];
-    const parent = path.replace(/\/+$/, '');
+    const parent = trimTrailingSlashes(path);
     const rows = await Promise.all(keys.map(async (key) => {
       const projected = await Promise.all(fields.map(async (field): Promise<[string, WorkspaceFieldValue]> => {
         // A projected field *is* a read of that subpath — same envelope, same

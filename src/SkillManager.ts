@@ -1,5 +1,6 @@
 import { Asset } from './Asset';
 import { AssetMetadata, CoviaError, WorkspaceListResult } from './types';
+import { trimTrailingSlashes } from './strings';
 
 /** Agent behaviour optionally attached to otherwise ordinary asset metadata. */
 export interface SkillFacet {
@@ -46,7 +47,7 @@ export class SkillManager {
    * already collected" principle this method already applies across pages.
    */
   async list(path: string): Promise<Skill[]> {
-    const location = path.replace(/\/+$/, '');
+    const location = trimTrailingSlashes(path);
     const skills: Skill[] = [];
     let offset = 0;
 
