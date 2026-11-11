@@ -5,7 +5,7 @@ import {
 import { parseSSEStream } from './Utils';
 import { Job } from './Job';
 import { venueJson, VenueRequestContext, venueStream } from './VenueTransport';
-import { descWindow, record } from './values-util';
+import { bareHex, descWindow, record } from './values-util';
 
 interface JobManagerVenue extends VenueRequestContext {
   workspace: {
@@ -38,8 +38,8 @@ function isSliceCapError(error: unknown): boolean {
  * Shape `{key, value}` slice entries into JobMetadata.
  *
  * Records written before the venue carried `id` in the body are identified by
- * their index key, which is the job id in hex without the `0x` the rest of the
- * API uses.
+ * their index key: the job id in hex, bare before venue 0.11 and `0x`-prefixed
+ * since. Either way the id gets the one `0x` the rest of the API uses.
  */
 function jobRecords(values: unknown[]): JobMetadata[] {
   const records: JobMetadata[] = [];
@@ -49,7 +49,7 @@ function jobRecords(values: unknown[]): JobMetadata[] {
     if (!value) continue;
     const meta = value as JobMetadata;
     const key = typeof pair?.key === 'string' ? pair.key : '';
-    records.push({ ...meta, id: meta.id ?? `0x${key}` });
+    records.push({ ...meta, id: meta.id ?? `0x${bareHex(key)}` });
   }
   return records;
 }

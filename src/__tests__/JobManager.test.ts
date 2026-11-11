@@ -243,6 +243,13 @@ describe('JobManager.history', () => {
     expect(page.items[0].id).toBe('0xdeadbeef');                  // hex key → API id form
   });
 
+  // Venue 0.11+ writes slice keys as 0x hex; 0.10 wrote them bare (covia-sdk#133).
+  it('gives a 0x-prefixed index key one 0x, not two', async () => {
+    const venue = createWorkspaceVenue([{ key: '0xDEADBEEF', value: { status: 'COMPLETE' } }]);
+    const page = await new JobManager(venue as any).history();
+    expect(page.items[0].id).toBe('0xdeadbeef');
+  });
+
   it('prefers an id carried in the record body', async () => {
     const venue = createWorkspaceVenue([{ key: 'deadbeef', value: { id: '0xfeed', status: 'COMPLETE' } }]);
     const page = await new JobManager(venue as any).history();
