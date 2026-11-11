@@ -4,6 +4,54 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## 1.29.0
+
+Updates for Covia venue 0.11 (#133).
+
+### Changed
+
+- `workspace.list()` with no path, or an empty one, is refused before any
+  request instead of listing `/`. Venues from 0.11 refuse to list the root,
+  naming the namespaces to use instead. `skills.list('/')` reaches the same
+  check. Pass a path that starts at a namespace, such as `w` or `g`.
+
+### Added
+
+- `AgentCap` and `AgentCaps` (`"unrestricted"` or a list of `{with, can}`)
+  type an agent's `caps`, now typed on `AgentCreateInput.config`. On venues
+  from 0.11 an agent created without `caps`, or given `caps: null`, has no
+  authority for its tool calls. The README example sets
+  `caps: "unrestricted"`.
+- `AgentInfoResult.controller`: the principal whose authority the agent acts
+  with.
+
+### Fixed
+
+- Ids read from slice keys accept either form. Venue 0.11 writes a key as
+  `0x` hex (0.10 wrote it bare) while `agent:chat` and `agent:request` still
+  return a `sessionId` bare. Session records (`listSessions`, `getSession`)
+  now carry a bare `id`, so it matches the `sessionId` a chat returns, and job
+  history no longer builds `0x0x…` for a record with no `id` (#134).
+- `jobs.get`, `cancel`, `pause`, `resume`, `delete`, `sendMessage` and
+  `stream` report a malformed job id's 400 as `JobNotFoundError`. `stream` now
+  maps a 404 too. `agents.getSession` reports a non-hex session id's 400 as
+  `AgentSessionNotFoundError`. A 400 counts as not found only when the id is
+  not hex.
+- Slash trimming no longer uses backtracking regexes (CodeQL
+  `js/polynomial-redos`, #131).
+
+### Documented
+
+- `jobs.sendMessage` to a job that takes no messages answers 409 on venues from
+  0.11 (earlier venues dropped the message), surfaced as a `GridError`.
+- `jobs.list` and `agents.list` need `crud/read` on the caller's `j/` or `g/`
+  on venues from 0.11. A restricted token without it gets a 403 `GridError`.
+
+### Internal
+
+- CI integration tests run against venue 0.11.0 (was 0.9.10).
+- GitHub Actions bumped (#132).
+
 ## 1.28.0
 
 ### Added
