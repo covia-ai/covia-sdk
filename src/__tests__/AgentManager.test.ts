@@ -698,6 +698,27 @@ describe('AgentManager session transcripts', () => {
     const page = await agents.listSessions('a1');
     expect(page.items[0].conversation.map((m) => m.content)).toEqual(['hi']);
   });
+
+  // Venue 0.11+ writes a session's slice key as 0x hex, while agent:chat
+  // returns its sessionId bare (covia-sdk#133). Both must name one session.
+  it('lists a 0x-keyed session under the bare id a chat returns', async () => {
+    venue.workspace.slice = jest.fn().mockResolvedValue({
+      exists: true, count: 2, offset: 0,
+      values: [
+        { key: '0xABCDEF01', value: sessionValue([]) },
+        { key: 'abcdef02', value: sessionValue([]) },
+      ],
+    }) as any;
+    const page = await agents.listSessions('a1');
+    expect(page.items.map((s) => s.id)).toEqual(['abcdef01', 'abcdef02']);
+  });
+
+  it('reads a session given its id in either form under the same bare id', async () => {
+    readsSession(sessionValue([]));
+    await expect(agents.getSession('a1', '0xabcdef01')).resolves.toMatchObject({ id: 'abcdef01' });
+    readsSession(sessionValue([]));
+    await expect(agents.getSession('a1', 'abcdef01')).resolves.toMatchObject({ id: 'abcdef01' });
+  });
 });
 
 describe('AgentManager.listSessions ordering', () => {
