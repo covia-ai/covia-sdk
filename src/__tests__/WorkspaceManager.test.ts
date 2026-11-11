@@ -141,14 +141,13 @@ describe('WorkspaceManager', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('a rootless list normalises to "/" and stays on the job-free GET (#16: it used to mint a Job)', async () => {
-    okJson({ exists: true, type: 'Map', count: 2, keys: ['j', 'meta'] });
-    const r = await ws.list();
-    expect(venue.operations.run).not.toHaveBeenCalled();            // NOT the job path
-    const u = new URL(fetchUrl());
-    expect(u.pathname).toBe('/api/v1/values/list');
-    expect(u.searchParams.get('path')).toBe('/');
-    expect(r.keys).toEqual(['j', 'meta']);
+  // Venues from 0.11 list no root (covia-sdk#133): a rootless list is refused
+  // before any request, and never falls back to the job-minting op (#16).
+  it('refuses a rootless list without a request', async () => {
+    await expect(ws.list()).rejects.toThrow(/starts at a namespace/);
+    await expect(ws.list('')).rejects.toThrow(/starts at a namespace/);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
   it('multi-path inspect rejects rather than creating a job', async () => {

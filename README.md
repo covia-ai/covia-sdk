@@ -185,8 +185,13 @@ console.log(`${assets.total} assets available`);
 `venue.agent(id)` returns a lazy handle; no request is made until you call a method.
 
 ```typescript
-// Create (the name must be unused)
-await venue.agents.create({ agentId: "mina", config: { systemPrompt: "You are helpful." } });
+// Create (the name must be unused). `caps` is the agent's authority: "unrestricted"
+// is all of yours, a list of {with, can} narrows it. Without caps the agent has
+// no authority for its tool calls (venue 0.11+).
+await venue.agents.create({
+  agentId: "mina",
+  config: { systemPrompt: "You are helpful.", caps: "unrestricted" },
+});
 const mina = venue.agent("mina");
 
 // Send a task and wait for the result

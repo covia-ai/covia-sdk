@@ -1,5 +1,5 @@
 import { AgentManager } from '../AgentManager';
-import { AgentSessionNotFoundError, CoviaTimeoutError, JobFailedError, UnsupportedVenueFeatureError } from '../types';
+import { AgentSessionNotFoundError, CoviaTimeoutError, GridError, JobFailedError, UnsupportedVenueFeatureError } from '../types';
 
 // list/info are job-free GETs to /api/v1/agents (covia #180); everything else
 // stays on the invoke/job path. Fetch is mocked for the GET surface,
@@ -358,6 +358,28 @@ describe('AgentManager', () => {
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
+  // Venue 0.11 refuses a session id that is not hex with 400 (covia-sdk#133).
+  it('reports a non-hex session id the venue refuses as not found', async () => {
+    venue.workspace.read.mockRejectedValueOnce(new GridError(400, 'A path names no place'));
+    await expect(agents.getSession('a1', 'not-hex')).rejects.toBeInstanceOf(AgentSessionNotFoundError);
+  });
+
+  it('keeps a 400 for a hex session id as the venue\'s own error', async () => {
+    venue.workspace.read.mockRejectedValueOnce(new GridError(400, 'Something else'));
+    const error = (await agents.getSession('a1', 'abcdef01').catch((e: unknown) => e)) as GridError;
+    expect(error).toBeInstanceOf(GridError);
+    expect(error).not.toBeInstanceOf(AgentSessionNotFoundError);
+  });
+
+  it('surfaces a listing refused for want of crud/read as a 403 GridError', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 403,
+      json: () => Promise.resolve({ error: 'Access denied' }), text: () => Promise.resolve('Access denied') });
+    const error = (await agents.list().catch((e: unknown) => e)) as GridError;
+    expect(error).toBeInstanceOf(GridError);
+    expect(error.statusCode).toBe(403);
+    expect(venue.operations.run).not.toHaveBeenCalled();
+  });
+
   it('assembles a truncated session from per-field reads instead of reporting not-found', async () => {
     // A session over the venue's single-read cap answers {exists, truncated}
     // with the value withheld — it exists and must not surface as missing.
@@ -697,6 +719,27 @@ describe('AgentManager session transcripts', () => {
     }) as any;
     const page = await agents.listSessions('a1');
     expect(page.items[0].conversation.map((m) => m.content)).toEqual(['hi']);
+  });
+
+  // Venue 0.11+ writes a session's slice key as 0x hex, while agent:chat
+  // returns its sessionId bare (covia-sdk#133). Both must name one session.
+  it('lists a 0x-keyed session under the bare id a chat returns', async () => {
+    venue.workspace.slice = jest.fn().mockResolvedValue({
+      exists: true, count: 2, offset: 0,
+      values: [
+        { key: '0xABCDEF01', value: sessionValue([]) },
+        { key: 'abcdef02', value: sessionValue([]) },
+      ],
+    }) as any;
+    const page = await agents.listSessions('a1');
+    expect(page.items.map((s) => s.id)).toEqual(['abcdef01', 'abcdef02']);
+  });
+
+  it('reads a session given its id in either form under the same bare id', async () => {
+    readsSession(sessionValue([]));
+    await expect(agents.getSession('a1', '0xabcdef01')).resolves.toMatchObject({ id: 'abcdef01' });
+    readsSession(sessionValue([]));
+    await expect(agents.getSession('a1', 'abcdef01')).resolves.toMatchObject({ id: 'abcdef01' });
   });
 });
 

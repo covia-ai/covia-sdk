@@ -1,4 +1,5 @@
 import { JobManager } from '../JobManager';
+import { GridError, JobNotFoundError } from '../types';
 
 // jobs.list is a job-free GET to /api/v1/jobs. Venue 0.6.0 returns a paged
 // {items, total, offset, limit} envelope (covia#229); earlier venues return a
@@ -243,6 +244,13 @@ describe('JobManager.history', () => {
     expect(page.items[0].id).toBe('0xdeadbeef');                  // hex key → API id form
   });
 
+  // Venue 0.11+ writes slice keys as 0x hex; 0.10 wrote them bare (covia-sdk#133).
+  it('gives a 0x-prefixed index key one 0x, not two', async () => {
+    const venue = createWorkspaceVenue([{ key: '0xDEADBEEF', value: { status: 'COMPLETE' } }]);
+    const page = await new JobManager(venue as any).history();
+    expect(page.items[0].id).toBe('0xdeadbeef');
+  });
+
   it('prefers an id carried in the record body', async () => {
     const venue = createWorkspaceVenue([{ key: 'deadbeef', value: { id: '0xfeed', status: 'COMPLETE' } }]);
     const page = await new JobManager(venue as any).history();
@@ -305,5 +313,66 @@ describe('JobManager.history', () => {
     const page = await new JobManager(venue as any).history({ limit: 0 });
     expect(page).toEqual({ items: [], total: 7, offset: 0, limit: 0 });
     expect(venue.workspace.slice).not.toHaveBeenCalled();
+  });
+});
+
+// Venue 0.11 answers 400 for a job id that is not hex, and 409 for a message
+// to a job that takes none (covia-sdk#133).
+describe('JobManager errors about one job', () => {
+  let jobs: JobManager;
+  const fail = (status: number, error: string) =>
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status,
+      json: () => Promise.resolve({ error }), text: () => Promise.resolve(JSON.stringify({ error })),
+    });
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    jobs = new JobManager(createMockVenue() as any);
+  });
+
+  it.each([
+    ['get', (j: JobManager) => j.get('zzz')],
+    ['cancel', (j: JobManager) => j.cancel('zzz')],
+    ['pause', (j: JobManager) => j.pause('zzz')],
+    ['resume', (j: JobManager) => j.resume('zzz')],
+    ['delete', (j: JobManager) => j.delete('zzz')],
+    ['sendMessage', (j: JobManager) => j.sendMessage('zzz', { hi: 1 })],
+  ])('%s reports a malformed id\'s 400 as JobNotFoundError', async (_name, call) => {
+    fail(400, 'Job request requires a job ID as a valid hex string');
+    await expect(call(jobs)).rejects.toBeInstanceOf(JobNotFoundError);
+  });
+
+  it('stream reports a malformed id\'s 400 as JobNotFoundError', async () => {
+    fail(400, 'Job request requires a job ID as a valid hex string');
+    await expect(jobs.stream('zzz').next()).rejects.toBeInstanceOf(JobNotFoundError);
+  });
+
+  it('stream reports a 404 as JobNotFoundError', async () => {
+    fail(404, 'Job not found: 0x0123');
+    await expect(jobs.stream('0x0123').next()).rejects.toBeInstanceOf(JobNotFoundError);
+  });
+
+  it('keeps a 400 for a hex id as the venue\'s own error', async () => {
+    fail(400, 'Something else was wrong');
+    const error = (await jobs.get('0x0123').catch((e: unknown) => e)) as GridError;
+    expect(error).toBeInstanceOf(GridError);
+    expect(error).not.toBeInstanceOf(JobNotFoundError);
+    expect(error.statusCode).toBe(400);
+  });
+
+  it('surfaces a job that takes no messages as a 409 GridError, not as missing', async () => {
+    fail(409, 'Job does not accept messages');
+    const error = (await jobs.sendMessage('0x0123', { hi: 1 }).catch((e: unknown) => e)) as GridError;
+    expect(error).toBeInstanceOf(GridError);
+    expect(error).not.toBeInstanceOf(JobNotFoundError);
+    expect(error.statusCode).toBe(409);
+  });
+
+  it('surfaces a listing refused for want of crud/read as a 403 GridError', async () => {
+    fail(403, 'Access denied');
+    const error = (await jobs.list().catch((e: unknown) => e)) as GridError;
+    expect(error).toBeInstanceOf(GridError);
+    expect(error.statusCode).toBe(403);
   });
 });

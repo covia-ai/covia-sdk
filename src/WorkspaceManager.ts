@@ -7,6 +7,7 @@ import {
 } from './types';
 import { venueJson, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
+import { trimTrailingSlashes } from './strings';
 
 interface WorkspaceManagerVenue extends VenueRequestContext {
   operations: OperationRunner;
@@ -222,11 +223,16 @@ export class WorkspaceManager {
     return this.valuesRead('read', { path, maxSize });
   }
 
+  /**
+   * List the keys at `path`. The path must start at a namespace (`w`, `g`,
+   * `j`, …): venues from 0.11 refuse an empty path, `/` or a DID alone, naming
+   * the namespaces to use instead, so a missing path is refused here before
+   * any request.
+   */
   async list(path?: string, limit?: number, offset?: number, ucans?: string[]): Promise<WorkspaceListResult> {
-    // The GET route requires a non-empty path but serves the root as "/", so a
-    // root/undefined list normalises to "/" and stays job-free — previously it
-    // was forced onto the op path, minting a Job for every root listing.
-    path = path || '/';
+    if (!path) {
+      throw new CoviaError('workspace.list needs a path that starts at a namespace, such as w or g; venues list no root');
+    }
     if (ucans?.length) return this.unsupported('UCAN-authorised workspace listings');
     return this.valuesRead('list', { path, limit, offset });
   }
@@ -306,7 +312,7 @@ export class WorkspaceManager {
       { path, limit: opts.limit, offset: opts.offset },
     );
     const keys = base.keys ?? [];
-    const parent = path.replace(/\/+$/, '');
+    const parent = trimTrailingSlashes(path);
     const rows = await Promise.all(keys.map(async (key) => {
       const projected = await Promise.all(fields.map(async (field): Promise<[string, WorkspaceFieldValue]> => {
         // A projected field *is* a read of that subpath — same envelope, same

@@ -62,3 +62,21 @@ export function descWindow(total: number, offset: number, limit: number): [numbe
   const end = Math.max(0, total - offset);
   return [Math.max(0, end - limit), end];
 }
+
+/**
+ * A hex id as bare lowercase hex. The venue writes a blob key in `covia:list`,
+ * `covia:slice` and `covia:aggregate` results as `0x` hex since 0.11 (bare
+ * before), while other results still give some ids bare (an `agent:chat`
+ * `sessionId`), and its inputs take either. Ids read from a key go through
+ * here so they compare equal whichever form the venue used.
+ */
+export function bareHex(id: string): string {
+  const trimmed = id.trim();
+  return (/^0x/i.test(trimmed) ? trimmed.slice(2) : trimmed).toLowerCase();
+}
+
+/** Whether `id` is a hex id, with or without `0x`: the only ids the venue
+ *  accepts for jobs and sessions since 0.11. */
+export function isHexId(id: string): boolean {
+  return /^[0-9a-f]+$/.test(bareHex(id));
+}
