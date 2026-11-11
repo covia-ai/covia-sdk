@@ -1,8 +1,8 @@
-import { AgentCompactSessionResult, AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentReloadContextResult, AgentRenameSessionResult, AgentRequestOptions, AgentSession, AgentSessionListOptions, AgentSessionMessage, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, CoviaTimeoutError, InvokeOptions, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult, WorkspaceCountResult } from './types';
+import { AgentCompactSessionResult, AgentCreateInput, AgentCreateResult, AgentEvent, AgentRequestResult, AgentMessageResult, AgentChatResult, AgentTriggerResult, AgentListResult, AgentDeleteResult, AgentSuspendResult, AgentUpdateInput, AgentInfoResult, AgentForkInput, AgentForkResult, AgentCompleteTaskResult, AgentFailTaskResult, AgentReloadContextResult, AgentRenameSessionResult, AgentRequestOptions, AgentSession, AgentSessionListOptions, AgentSessionMessage, AgentSessionMetadata, AgentSessionNotFoundError, AgentSessionPage, CoviaTimeoutError, GridError, InvokeOptions, OperationRunner, NotFoundError, UnsupportedVenueFeatureError, WorkspaceReadResult, WorkspaceSliceResult, WorkspaceCountResult } from './types';
 import { parseSSEStream } from './Utils';
 import { venueJson, venueStream, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
-import { bareHex, descWindow, record, sliceAll } from './values-util';
+import { bareHex, descWindow, isHexId, record, sliceAll } from './values-util';
 import type { Job } from './Job';
 
 interface AgentManagerVenue extends VenueRequestContext {
@@ -297,6 +297,11 @@ export class AgentManager {
    * `GET /api/v1/agents` (covia#180) — synchronous, no Job persisted. Older
    * venues reject rather than silently creating a persisted Job.
    */
+  /**
+   * The caller's agents. On venues from 0.11 this needs `crud/read` on the
+   * caller's `g/`: a restricted token without it gets a `GridError` with
+   * `statusCode` 403.
+   */
   async list(includeTerminated?: boolean): Promise<AgentListResult> {
     const result = await this.agentsGet<AgentListResult>('', { includeTerminated });
     // GET /api/v1/agents returns bare id strings; the agent:list op returns
@@ -433,10 +438,22 @@ export class AgentManager {
     };
   }
 
-  /** Read one agent session directly from the workspace Values surface. */
+  /**
+   * Read one agent session directly from the workspace Values surface. A
+   * session that does not exist is `AgentSessionNotFoundError`, including a
+   * session id that is not hex, which venues from 0.11 refuse with 400.
+   */
   async getSession(agentId: string, sessionId: string): Promise<AgentSession> {
     const path = `g/${agentId}/sessions/${sessionId}`;
-    const result = await this.venue.workspace.read(path);
+    let result: WorkspaceReadResult;
+    try {
+      result = await this.venue.workspace.read(path);
+    } catch (error) {
+      if (error instanceof GridError && error.statusCode === 400 && !isHexId(sessionId)) {
+        throw new AgentSessionNotFoundError(agentId, sessionId);
+      }
+      throw error;
+    }
     if (!result.exists) {
       throw new AgentSessionNotFoundError(agentId, sessionId);
     }

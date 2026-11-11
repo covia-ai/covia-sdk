@@ -1,5 +1,5 @@
 import { AgentManager } from '../AgentManager';
-import { AgentSessionNotFoundError, CoviaTimeoutError, JobFailedError, UnsupportedVenueFeatureError } from '../types';
+import { AgentSessionNotFoundError, CoviaTimeoutError, GridError, JobFailedError, UnsupportedVenueFeatureError } from '../types';
 
 // list/info are job-free GETs to /api/v1/agents (covia #180); everything else
 // stays on the invoke/job path. Fetch is mocked for the GET surface,
@@ -355,6 +355,28 @@ describe('AgentManager', () => {
       ['g/a1/sessions/sess-1'],
       ['g/a1/sessions/missing'],
     ]);
+    expect(venue.operations.run).not.toHaveBeenCalled();
+  });
+
+  // Venue 0.11 refuses a session id that is not hex with 400 (covia-sdk#133).
+  it('reports a non-hex session id the venue refuses as not found', async () => {
+    venue.workspace.read.mockRejectedValueOnce(new GridError(400, 'A path names no place'));
+    await expect(agents.getSession('a1', 'not-hex')).rejects.toBeInstanceOf(AgentSessionNotFoundError);
+  });
+
+  it('keeps a 400 for a hex session id as the venue\'s own error', async () => {
+    venue.workspace.read.mockRejectedValueOnce(new GridError(400, 'Something else'));
+    const error = (await agents.getSession('a1', 'abcdef01').catch((e: unknown) => e)) as GridError;
+    expect(error).toBeInstanceOf(GridError);
+    expect(error).not.toBeInstanceOf(AgentSessionNotFoundError);
+  });
+
+  it('surfaces a listing refused for want of crud/read as a 403 GridError', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 403,
+      json: () => Promise.resolve({ error: 'Access denied' }), text: () => Promise.resolve('Access denied') });
+    const error = (await agents.list().catch((e: unknown) => e)) as GridError;
+    expect(error).toBeInstanceOf(GridError);
+    expect(error.statusCode).toBe(403);
     expect(venue.operations.run).not.toHaveBeenCalled();
   });
 
