@@ -362,10 +362,27 @@ export enum AgentStatus {
   TERMINATED = "TERMINATED"
 }
 
+/** One capability an agent may use: an ability (`can`) over a resource (`with`). */
+export interface AgentCap {
+  with: string;
+  can: string;
+}
+
+/**
+ * An agent's authority, its config's `caps`. The agent acts with its
+ * controller's authority narrowed by these: `"unrestricted"` is all of it, a
+ * list narrows it, and an empty list leaves none. On venues from 0.11 an agent
+ * created without `caps`, or given `caps: null`, has no authority for its tool
+ * calls; `agent:info` shows an unrestricted agent as `"unrestricted"`.
+ */
+export type AgentCaps = 'unrestricted' | AgentCap[];
+
 /** Creates a new name only. Use update to preserve an existing agent and its history. */
 export interface AgentCreateInput {
   agentId: string;
-  config?: Record<string, any>;
+  /** The agent's config. Set `caps` (see `AgentCaps`): without it the agent
+   *  has no authority for its tool calls on venues from 0.11. */
+  config?: Record<string, any> & { caps?: AgentCaps };
   state?: Record<string, any>;
 }
 
@@ -556,6 +573,9 @@ export interface AgentInfoResult {
   tasks?: number;
   /** Absent on venues before covia#557; treat as unknown, not zero. */
   awaiting?: AgentAwaiting;
+  /** The principal whose authority the agent acts with, narrowed by its
+   *  `caps` (venue 0.11+). */
+  controller?: string;
   error?: string;
 }
 

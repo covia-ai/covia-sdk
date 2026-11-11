@@ -1,11 +1,11 @@
 import {
-  CoviaError, JobMetadata, SSEEvent, NotFoundError, JobNotFoundError, VenueInterface,
+  CoviaError, GridError, JobMetadata, SSEEvent, NotFoundError, JobNotFoundError, VenueInterface,
   JobHistoryOptions, JobHistoryPage, WorkspaceCountResult, WorkspaceSliceResult,
 } from './types';
 import { parseSSEStream } from './Utils';
 import { Job } from './Job';
 import { venueJson, VenueRequestContext, venueStream } from './VenueTransport';
-import { bareHex, descWindow, record } from './values-util';
+import { bareHex, descWindow, isHexId, record } from './values-util';
 
 interface JobManagerVenue extends VenueRequestContext {
   workspace: {
@@ -80,6 +80,11 @@ function jobPage(value: unknown): JobPage {
 export class JobManager {
   constructor(private venue: JobManagerVenue) {}
 
+  /**
+   * Every job id visible to the caller. On venues from 0.11 this needs
+   * `crud/read` on the caller's `j/`: a restricted token without it gets a
+   * `GridError` with `statusCode` 403.
+   */
   async list(): Promise<string[]> {
     const items: string[] = [];
     let offset = 0;
@@ -184,89 +189,69 @@ export class JobManager {
     return { count, values };
   }
 
-  async get(jobId: string): Promise<Job> {
+  /**
+   * Run a call about one job, reporting a job that cannot exist as
+   * `JobNotFoundError`: a 404, or the 400 a venue from 0.11 answers for an id
+   * that is not hex ("Job request requires a job ID as a valid hex string").
+   * The 400 is read as the id's only when the id is indeed not hex.
+   */
+  private async aboutJob<T>(jobId: string, call: () => Promise<T>): Promise<T> {
     try {
-      const data = await venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}`);
-      return new Job(jobId, this.venue as unknown as VenueInterface, data);
+      return await call();
     } catch (error) {
-      if (error instanceof NotFoundError) {
+      if (error instanceof NotFoundError) throw new JobNotFoundError(jobId);
+      if (error instanceof GridError && error.statusCode === 400 && !isHexId(jobId)) {
         throw new JobNotFoundError(jobId);
       }
       throw error;
     }
+  }
+
+  async get(jobId: string): Promise<Job> {
+    const data = await this.aboutJob(jobId, () =>
+      venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}`));
+    return new Job(jobId, this.venue as unknown as VenueInterface, data);
   }
 
   async cancel(jobId: string): Promise<JobMetadata> {
-    try {
-      return await venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/cancel`, {
-        method: 'PUT',
-      });
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        throw new JobNotFoundError(jobId);
-      }
-      throw error;
-    }
+    return this.aboutJob(jobId, () =>
+      venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/cancel`, { method: 'PUT' }));
   }
 
   async delete(jobId: string): Promise<void> {
-    try {
-      await venueStream(this.venue, `/api/v1/jobs/${jobId}/delete`, {
-        method: 'PUT',
-      });
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        throw new JobNotFoundError(jobId);
-      }
-      throw error;
-    }
+    await this.aboutJob(jobId, () =>
+      venueStream(this.venue, `/api/v1/jobs/${jobId}/delete`, { method: 'PUT' }));
   }
 
   async pause(jobId: string): Promise<JobMetadata> {
-    try {
-      return await venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/pause`, {
-        method: 'PUT',
-      });
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        throw new JobNotFoundError(jobId);
-      }
-      throw error;
-    }
+    return this.aboutJob(jobId, () =>
+      venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/pause`, { method: 'PUT' }));
   }
 
   async resume(jobId: string): Promise<JobMetadata> {
-    try {
-      return await venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/resume`, {
-        method: 'PUT',
-      });
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        throw new JobNotFoundError(jobId);
-      }
-      throw error;
-    }
+    return this.aboutJob(jobId, () =>
+      venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/resume`, { method: 'PUT' }));
   }
 
+  /**
+   * Send a message to a running job. A job that does not take messages answers
+   * 409 on venues from 0.11 (earlier venues dropped the message), surfaced as
+   * a `GridError` with `statusCode` 409.
+   */
   async sendMessage(jobId: string, message: unknown): Promise<unknown> {
-    try {
-      return await venueJson<unknown>(this.venue, `/api/v1/jobs/${jobId}`, {
+    return this.aboutJob(jobId, () =>
+      venueJson<unknown>(this.venue, `/api/v1/jobs/${jobId}`, {
         method: 'POST',
         body: JSON.stringify(message),
-      });
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        throw new JobNotFoundError(jobId);
-      }
-      throw error;
-    }
+      }));
   }
 
   async *stream(jobId: string, options?: { signal?: AbortSignal }): AsyncGenerator<SSEEvent> {
-    const response = await venueStream(this.venue, `/api/v1/jobs/${jobId}/sse`, {
-      headers: { 'Accept': 'text/event-stream' },
-      signal: options?.signal,
-    });
+    const response = await this.aboutJob(jobId, () =>
+      venueStream(this.venue, `/api/v1/jobs/${jobId}/sse`, {
+        headers: { 'Accept': 'text/event-stream' },
+        signal: options?.signal,
+      }));
     yield* parseSSEStream(response, { signal: options?.signal });
   }
 }

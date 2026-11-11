@@ -74,3 +74,9 @@ export function bareHex(id: string): string {
   const trimmed = id.trim();
   return (/^0x/i.test(trimmed) ? trimmed.slice(2) : trimmed).toLowerCase();
 }
+
+/** Whether `id` is a hex id, with or without `0x`: the only ids the venue
+ *  accepts for jobs and sessions since 0.11. */
+export function isHexId(id: string): boolean {
+  return /^[0-9a-f]+$/.test(bareHex(id));
+}
