@@ -4,6 +4,26 @@ All notable changes to `@covia/covia-sdk` are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/); this package follows
 its own SemVer track (independent of the venue/platform version).
 
+## Unreleased
+
+Updates for Covia venue 0.12 (#139, part 1: job controls).
+
+### Changed
+
+- `jobs.cancel`, `jobs.pause` and `jobs.resume` return a `JobControlAck`
+  (`{id, accepted}`), typed as what the venue answers. Venues from 0.12
+  acknowledge a control without the job's record, which needs `job/read`
+  where the control needs `job/manage`. Read the job with `jobs.get` for its
+  status.
+- CI's integration suite runs against venue 0.12.0.
+
+### Fixed
+
+- `Job.cancel()`, `pause()` and `resume()` read the job again after the
+  control, so `metadata.status`, `isFinished`, `isPaused` and `output` reflect
+  it. On 0.12 they stored the acknowledgement as the job's metadata, leaving
+  `status` undefined until `refresh()`.
+
 ## 1.29.0
 
 Updates for Covia venue 0.11 (#133).

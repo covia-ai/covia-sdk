@@ -4,11 +4,11 @@ import { createSSEEvent } from '../Utils';
 
 function createMockJobs() {
   return {
-    cancel: jest.fn().mockResolvedValue({ status: RunStatus.CANCELLED }),
+    cancel: jest.fn().mockResolvedValue({ id: 'job', accepted: true }),
     delete: jest.fn().mockResolvedValue(undefined),
     sendMessage: jest.fn().mockResolvedValue({ status: 'queued', queueDepth: 1 }),
-    pause: jest.fn().mockResolvedValue({ status: RunStatus.PAUSED }),
-    resume: jest.fn().mockResolvedValue({ status: RunStatus.STARTED }),
+    pause: jest.fn().mockResolvedValue({ id: 'job', accepted: true }),
+    resume: jest.fn().mockResolvedValue({ id: 'job', accepted: true }),
     stream: jest.fn(),
   };
 }
@@ -53,13 +53,33 @@ describe('Job', () => {
     expect(job.metadata).toBe(meta);
   });
 
-  it('cancel delegates to jobs.cancel', async () => {
+  // Venues from 0.12 answer a control with {id, accepted}, not the job record,
+  // so the Job reads itself again rather than storing the acknowledgement.
+  it.each([
+    ['cancel', RunStatus.CANCELLED],
+    ['pause', RunStatus.PAUSED],
+    ['resume', RunStatus.STARTED],
+  ] as const)('%s delegates to jobs.%s, then reads the job for its status', async (op, status) => {
     const venue = createMockVenue();
+    (venue.getJob as jest.Mock).mockResolvedValue({ metadata: { id: 'job-2', status } });
     const job = new Job('job-2', venue, { status: RunStatus.STARTED });
 
-    const result = await job.cancel();
-    expect(result).toEqual({ status: RunStatus.CANCELLED });
-    expect(getJobs(venue).cancel).toHaveBeenCalledWith('job-2');
+    const result = await job[op]();
+    expect(getJobs(venue)[op]).toHaveBeenCalledWith('job-2');
+    expect(venue.getJob).toHaveBeenCalledWith('job-2');
+    expect(result).toEqual({ id: 'job-2', status });
+    expect(job.metadata.status).toBe(status);
+    expect((job.metadata as Record<string, unknown>).accepted).toBeUndefined();
+  });
+
+  it('a cancelled job is finished and has no output to read', async () => {
+    const venue = createMockVenue();
+    (venue.getJob as jest.Mock).mockResolvedValue({ metadata: { id: 'job-2', status: RunStatus.CANCELLED } });
+    const job = new Job('job-2', venue, { status: RunStatus.STARTED });
+
+    await job.cancel();
+    expect(job.isFinished).toBe(true);
+    expect(() => job.output).toThrow(JobFailedError);
   });
 
   it('delete delegates to jobs.delete', async () => {
@@ -252,7 +272,7 @@ describe('Job.isPaused / needsInput / needsAuth', () => {
   });
 });
 
-describe('Job.sendMessage / pause / resume', () => {
+describe('Job.sendMessage', () => {
   it('sendMessage delegates to jobs.sendMessage', async () => {
     const venue = createMockVenue();
     const job = new Job('job-msg', venue, { status: RunStatus.INPUT_REQUIRED });
@@ -260,24 +280,6 @@ describe('Job.sendMessage / pause / resume', () => {
     const result = await job.sendMessage({ text: 'hello' });
     expect(getJobs(venue).sendMessage).toHaveBeenCalledWith('job-msg', { text: 'hello' });
     expect(result).toEqual({ status: 'queued', queueDepth: 1 });
-  });
-
-  it('pause delegates to jobs.pause', async () => {
-    const venue = createMockVenue();
-    const job = new Job('job-p', venue, { status: RunStatus.STARTED });
-
-    const result = await job.pause();
-    expect(getJobs(venue).pause).toHaveBeenCalledWith('job-p');
-    expect(result).toEqual({ status: RunStatus.PAUSED });
-  });
-
-  it('resume delegates to jobs.resume', async () => {
-    const venue = createMockVenue();
-    const job = new Job('job-r', venue, { status: RunStatus.PAUSED });
-
-    const result = await job.resume();
-    expect(getJobs(venue).resume).toHaveBeenCalledWith('job-r');
-    expect(result).toEqual({ status: RunStatus.STARTED });
   });
 });
 

@@ -1,4 +1,4 @@
-import { JobMetadata, RunStatus, CoviaTimeoutError, JobFailedError, VenueInterface, SSEEvent } from "./types";
+import { JobMetadata, JobControlAck, RunStatus, CoviaTimeoutError, JobFailedError, VenueInterface, SSEEvent } from "./types";
 import { isJobFinished, isJobComplete, isJobPaused } from "./Utils";
 import { logger } from "./Logger";
 
@@ -8,10 +8,10 @@ const MAX_POLL_DELAY = 10000;     // ms
 
 /** Minimal interface for the job operations Job needs from the venue's JobManager. */
 interface JobOps {
-  cancel(jobId: string): Promise<JobMetadata>;
+  cancel(jobId: string): Promise<JobControlAck>;
   delete(jobId: string): Promise<void>;
-  pause(jobId: string): Promise<JobMetadata>;
-  resume(jobId: string): Promise<JobMetadata>;
+  pause(jobId: string): Promise<JobControlAck>;
+  resume(jobId: string): Promise<JobControlAck>;
   sendMessage(jobId: string, message: unknown): Promise<unknown>;
   stream(jobId: string, options?: { signal?: AbortSignal }): AsyncGenerator<SSEEvent>;
 }
@@ -145,29 +145,35 @@ export class Job {
   }
 
   /**
-   * Pause the job
-   * @returns {Promise<JobMetadata>} Updated job metadata
+   * Pause the job, then read it again: the venue answers a control only with
+   * an acknowledgement, so the job's status comes from a fresh read.
+   * @returns {Promise<JobMetadata>} The job's metadata after the control
    */
   async pause(): Promise<JobMetadata> {
-    this.metadata = await this._jobs.pause(this.id);
+    await this._jobs.pause(this.id);
+    await this.refresh();
     return this.metadata;
   }
 
   /**
-   * Resume the job
-   * @returns {Promise<JobMetadata>} Updated job metadata
+   * Resume the job, then read it again: the venue answers a control only with
+   * an acknowledgement, so the job's status comes from a fresh read.
+   * @returns {Promise<JobMetadata>} The job's metadata after the control
    */
   async resume(): Promise<JobMetadata> {
-    this.metadata = await this._jobs.resume(this.id);
+    await this._jobs.resume(this.id);
+    await this.refresh();
     return this.metadata;
   }
 
   /**
-   * Cancel the job
-   * @returns {Promise<JobMetadata>} Updated job metadata
+   * Cancel the job, then read it again: the venue answers a control only with
+   * an acknowledgement, so the job's status comes from a fresh read.
+   * @returns {Promise<JobMetadata>} The job's metadata after the control
    */
   async cancel(): Promise<JobMetadata> {
-    this.metadata = await this._jobs.cancel(this.id);
+    await this._jobs.cancel(this.id);
+    await this.refresh();
     return this.metadata;
   }
 
