@@ -1,5 +1,5 @@
 import {
-  CoviaError, GridError, JobMetadata, SSEEvent, NotFoundError, JobNotFoundError, VenueInterface,
+  CoviaError, GridError, JobMetadata, JobControlAck, SSEEvent, NotFoundError, JobNotFoundError, VenueInterface,
   JobHistoryOptions, JobHistoryPage, WorkspaceCountResult, WorkspaceSliceResult,
 } from './types';
 import { parseSSEStream } from './Utils';
@@ -213,9 +213,14 @@ export class JobManager {
     return new Job(jobId, this.venue as unknown as VenueInterface, data);
   }
 
-  async cancel(jobId: string): Promise<JobMetadata> {
+  /**
+   * Cancel, pause or resume a job. The venue answers that it accepted the
+   * control (`JobControlAck`), not with the job's record: read the job with
+   * `get` for its status. `Job.cancel()` and its siblings do that for you.
+   */
+  async cancel(jobId: string): Promise<JobControlAck> {
     return this.aboutJob(jobId, () =>
-      venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/cancel`, { method: 'PUT' }));
+      venueJson<JobControlAck>(this.venue, `/api/v1/jobs/${jobId}/cancel`, { method: 'PUT' }));
   }
 
   async delete(jobId: string): Promise<void> {
@@ -223,14 +228,14 @@ export class JobManager {
       venueStream(this.venue, `/api/v1/jobs/${jobId}/delete`, { method: 'PUT' }));
   }
 
-  async pause(jobId: string): Promise<JobMetadata> {
+  async pause(jobId: string): Promise<JobControlAck> {
     return this.aboutJob(jobId, () =>
-      venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/pause`, { method: 'PUT' }));
+      venueJson<JobControlAck>(this.venue, `/api/v1/jobs/${jobId}/pause`, { method: 'PUT' }));
   }
 
-  async resume(jobId: string): Promise<JobMetadata> {
+  async resume(jobId: string): Promise<JobControlAck> {
     return this.aboutJob(jobId, () =>
-      venueJson<JobMetadata>(this.venue, `/api/v1/jobs/${jobId}/resume`, { method: 'PUT' }));
+      venueJson<JobControlAck>(this.venue, `/api/v1/jobs/${jobId}/resume`, { method: 'PUT' }));
   }
 
   /**

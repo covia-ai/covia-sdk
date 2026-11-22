@@ -122,8 +122,10 @@ test('venueRunOpAndCancel', async () => {
   const result = await operation.invoke(JSON.parse(process.env.VALID_OP2_INPUT!));
   if(result.metadata.status == 'STARTED' || result.metadata.status == 'PENDING') {
     const jobId = result.id;
-    const status = await venue.jobs.cancel(jobId);
-    expect(status.status).toBe('CANCELLED');
+    const ack = await venue.jobs.cancel(jobId);
+    expect(ack).toEqual({ id: expect.anything(), accepted: true });
+    const job = await venue.jobs.get(jobId);
+    expect(job.metadata.status).toBe('CANCELLED');
   }
 });
 
@@ -133,9 +135,9 @@ test('venueInvokeOpAndCancel', async () => {
   expect(operation.id).not.toBeNull();
   const result = await operation.invoke(JSON.parse(process.env.VALID_OP2_INPUT!));
   if(result.metadata.status == 'STARTED' || result.metadata.status == 'PENDING') {
-    const jobId = result.id;
-    const status = await venue.jobs.cancel(jobId);
-    expect(status.status).toBe('CANCELLED');
+    await result.cancel();
+    expect(result.metadata.status).toBe('CANCELLED');
+    expect(result.isFinished).toBe(true);
   }
 });
 

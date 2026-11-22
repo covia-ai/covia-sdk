@@ -119,6 +119,18 @@ export interface JobHistoryPage {
   limit: number;
 }
 
+/**
+ * What a venue answers to `PUT /jobs/{id}/{cancel,pause,resume}` from 0.12:
+ * that it accepted the control, without the job's input, output or history
+ * (controlling a job needs `job/manage`, reading it `job/read`). Read the job
+ * (`jobs.get`) for its status afterwards. Venues before 0.12 answered with the
+ * job record instead.
+ */
+export interface JobControlAck {
+  id: string;
+  accepted: boolean;
+}
+
 export interface JobMetadata {
   id?: string;
   name?:string;
