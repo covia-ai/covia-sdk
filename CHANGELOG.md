@@ -6,7 +6,7 @@ its own SemVer track (independent of the venue/platform version).
 
 ## Unreleased
 
-Updates for Covia venue 0.12 (#139, part 1: job controls).
+Updates for Covia venue 0.12 (#139).
 
 ### Changed
 
@@ -16,6 +16,15 @@ Updates for Covia venue 0.12 (#139, part 1: job controls).
   where the control needs `job/manage`. Read the job with `jobs.get` for its
   status.
 - CI's integration suite runs against venue 0.12.0.
+- Session ids from `listSessions()` and `getSession()` are `0x` hex, the form
+  `chat()` and `request()` return a `sessionId` in from 0.12, so they compare
+  equal again. They were bare hex.
+
+### Added
+
+- `AgentCreateInput.config.acceptTasks`. On venues from 0.12 an agent takes
+  `request` only when its config sets `acceptTasks: true`; otherwise every
+  request fails ("does not take tasks"). The README's agents example sets it.
 
 ### Fixed
 
@@ -23,6 +32,11 @@ Updates for Covia venue 0.12 (#139, part 1: job controls).
   control, so `metadata.status`, `isFinished`, `isPaused` and `output` reflect
   it. On 0.12 they stored the acknowledgement as the job's metadata, leaving
   `status` undefined until `refresh()`.
+- Docs name the grants 0.12 checks: listing jobs needs `job/read` on `j/`
+  (1.29.0 said `crud/read`), controls `job/manage`, `sendMessage`
+  `job/message`, and `users.delete` `admin/user/delete` (was `user/delete`).
+  `jobs.history()` notes that its rows leave out `caller` when it is the
+  account itself, which `jobs.get()` names in full.
 
 ## 1.29.0
 

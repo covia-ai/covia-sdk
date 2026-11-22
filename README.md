@@ -187,10 +187,11 @@ console.log(`${assets.total} assets available`);
 ```typescript
 // Create (the name must be unused). `caps` is the agent's authority: "unrestricted"
 // is all of yours, a list of {with, can} narrows it. Without caps the agent has
-// no authority for its tool calls (venue 0.11+).
+// no authority for its tool calls (venue 0.11+). `acceptTasks: true` lets it take
+// `request`; without it every request fails (venue 0.12+).
 await venue.agents.create({
   agentId: "mina",
-  config: { systemPrompt: "You are helpful.", caps: "unrestricted" },
+  config: { systemPrompt: "You are helpful.", caps: "unrestricted", acceptTasks: true },
 });
 const mina = venue.agent("mina");
 
