@@ -81,9 +81,9 @@ export class JobManager {
   constructor(private venue: JobManagerVenue) {}
 
   /**
-   * Every job id visible to the caller. On venues from 0.11 this needs
-   * `crud/read` on the caller's `j/`: a restricted token without it gets a
-   * `GridError` with `statusCode` 403.
+   * Every job id visible to the caller. On venues from 0.12 this needs
+   * `job/read` on the caller's `j/` (0.11 checked `crud/read`): a restricted
+   * token without it gets a `GridError` with `statusCode` 403.
    */
   async list(): Promise<string[]> {
     const items: string[] = [];
@@ -131,6 +131,9 @@ export class JobManager {
    * The total is read before a `desc` window can be placed, so the index may
    * grow in between; the page self-corrects once against the count the slice
    * itself reports, which is authoritative for the rows returned with it.
+   *
+   * Rows are the records as stored, which leave out `caller` when it is the
+   * account itself; `get()` names the caller in full.
    */
   async history(options: JobHistoryOptions = {}): Promise<JobHistoryPage> {
     const offset = Math.max(0, Math.trunc(options.offset ?? 0));
@@ -217,6 +220,7 @@ export class JobManager {
    * Cancel, pause or resume a job. The venue answers that it accepted the
    * control (`JobControlAck`), not with the job's record: read the job with
    * `get` for its status. `Job.cancel()` and its siblings do that for you.
+   * Controls need `job/manage` on the job, reading it `job/read`.
    */
   async cancel(jobId: string): Promise<JobControlAck> {
     return this.aboutJob(jobId, () =>
@@ -241,7 +245,8 @@ export class JobManager {
   /**
    * Send a message to a running job. A job that does not take messages answers
    * 409 on venues from 0.11 (earlier venues dropped the message), surfaced as
-   * a `GridError` with `statusCode` 409.
+   * a `GridError` with `statusCode` 409. Needs `job/message` on the job on
+   * venues from 0.12.
    */
   async sendMessage(jobId: string, message: unknown): Promise<unknown> {
     return this.aboutJob(jobId, () =>

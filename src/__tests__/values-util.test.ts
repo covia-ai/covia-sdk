@@ -1,4 +1,4 @@
-import { bareHex, isHexId } from '../values-util';
+import { bareHex, hexId, isHexId } from '../values-util';
 
 // Venue 0.11+ writes slice keys as 0x hex and still returns some ids bare
 // (covia-sdk#133); bareHex is what makes the two compare equal.
@@ -17,4 +17,17 @@ describe('bareHex', () => {
 describe('isHexId', () => {
   it.each(['0xabcdef01', 'ABCDEF01', '0X01'])('accepts %p', (id) => expect(isHexId(id)).toBe(true));
   it.each(['zzz', 'sess-1', '', '0x'])('rejects %p', (id) => expect(isHexId(id)).toBe(false));
+});
+
+// Venue 0.12 returns session and job ids as 0x hex (covia-sdk#139).
+describe('hexId', () => {
+  it.each([
+    ['abcdef01', '0xabcdef01'],
+    ['0xabcdef01', '0xabcdef01'],
+    ['0XABCDEF01', '0xabcdef01'],
+    ['  ABCDEF01 ', '0xabcdef01'],
+    ['sess-1', 'sess-1'],
+  ])('reads %p as %p', (input, expected) => {
+    expect(hexId(input)).toBe(expected);
+  });
 });

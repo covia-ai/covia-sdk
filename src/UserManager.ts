@@ -89,10 +89,11 @@ export class UserManager {
    * namespace, with its jobs, agents and schedules cancelled.
    *
    * **Operator-authorised, not self-service.** The caller needs venue-issued
-   * `user/delete` authority on `<venueDID>/users`, even to delete their own
-   * account; pass a delegation as `ucans` if the caller's own identity doesn't
-   * carry it. Without it the venue fails the Job ("Venue administration
-   * denied: requires user/delete …"), which surfaces as a `JobFailedError`,
+   * `admin/user/delete` authority on `<venueDID>/users` (`user/delete` before
+   * venue 0.12), even to delete their own account; pass a delegation as
+   * `ucans` if the caller's own identity doesn't carry it. Without it the venue
+   * fails the Job ("Venue administration denied: requires admin/user/delete …"),
+   * which surfaces as a `JobFailedError`,
    * not an HTTP 403.
    *
    * Idempotent: deleting an account that is still absent returns the original

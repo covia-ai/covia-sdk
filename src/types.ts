@@ -393,8 +393,12 @@ export type AgentCaps = 'unrestricted' | AgentCap[];
 export interface AgentCreateInput {
   agentId: string;
   /** The agent's config. Set `caps` (see `AgentCaps`): without it the agent
-   *  has no authority for its tool calls on venues from 0.11. */
-  config?: Record<string, any> & { caps?: AgentCaps };
+   *  has no authority for its tool calls on venues from 0.11. Set
+   *  `acceptTasks: true` for the agent to take `request`: on venues from 0.12
+   *  an agent whose config doesn't set it fails every request ("does not take
+   *  tasks"). Creating with no config at all, or from a standard template
+   *  other than `minimal`, sets it for you. */
+  config?: Record<string, any> & { caps?: AgentCaps; acceptTasks?: boolean };
   state?: Record<string, any>;
 }
 
@@ -650,6 +654,7 @@ export interface AgentCompactedSegment {
 
 /** A session record read directly from `g/<agentId>/sessions`. */
 export interface AgentSession {
+  /** `0x` hex, the form `chat` returns a `sessionId` in on venues from 0.12. */
   id: string;
   metadata: AgentSessionMetadata;
   pending: unknown[];

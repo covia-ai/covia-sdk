@@ -2,7 +2,7 @@ import { AgentCompactSessionResult, AgentCreateInput, AgentCreateResult, AgentEv
 import { parseSSEStream } from './Utils';
 import { venueJson, venueStream, VenueRequestContext } from './VenueTransport';
 import { ROUTE_MISSING_404 } from './venue-features';
-import { bareHex, descWindow, isHexId, record, sliceAll } from './values-util';
+import { descWindow, hexId, isHexId, record, sliceAll } from './values-util';
 import type { Job } from './Job';
 
 interface AgentManagerVenue extends VenueRequestContext {
@@ -114,16 +114,16 @@ function sessionConversation(frames: unknown[]): AgentSessionMessage[] {
 }
 
 /**
- * A session record. Its `id` is bare hex, the form `agent:chat` and
- * `agent:request` return a `sessionId` in, whatever form it was read under:
- * venue 0.11+ writes a session's slice key with `0x`.
+ * A session record. Its `id` is `0x` hex, the form `agent:chat` and
+ * `agent:request` return a `sessionId` in from venue 0.12, whatever form it
+ * was read or asked for under.
  */
 function sessionRecord(sessionId: string, value: unknown): AgentSession {
   const session = record(value) ?? {};
   const meta: AgentSessionMetadata | undefined = record(session.meta);
   const frames = Array.isArray(session.frames) ? session.frames : [];
   return {
-    id: bareHex(sessionId),
+    id: hexId(sessionId),
     metadata: meta ?? {},
     pending: Array.isArray(session.pending) ? session.pending : [],
     frames,

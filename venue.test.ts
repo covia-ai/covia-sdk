@@ -321,16 +321,48 @@ test('agent lifecycle accepts current venue response shapes', async () => {
   }
 }, 30000);
 
+// Venue 0.12 (covia-sdk#139): agent:chat returns a sessionId as 0x hex, and
+// the session the SDK lists and reads must carry that same id. An agent takes
+// agent:request only when its config sets acceptTasks.
+test('a chat session lists and reads under the id chat returned', async () => {
+  const agentId = `sdk-sess-${randomUUID()}`;
+  try {
+    await venue.agents.create({ agentId, config: { operation: 'v/test/ops/echo', defaultTools: false } });
+    const agent = venue.agent(agentId);
+    const { sessionId } = await agent.chat('hi');
+    expect((await agent.listSessions()).items.map(s => s.id)).toEqual([sessionId]);
+    expect((await agent.getSession(sessionId)).id).toBe(sessionId);
+  } finally {
+    await venue.operations.run('v/ops/agent/delete', { agentId, remove: true }).catch(() => undefined);
+  }
+}, 30000);
+
+test('agent:request needs acceptTasks in the agent config', async () => {
+  const refuses = `sdk-notasks-${randomUUID()}`;
+  const takes = `sdk-tasks-${randomUUID()}`;
+  try {
+    await venue.agents.create({ agentId: refuses, config: { operation: 'v/test/ops/echo', defaultTools: false } });
+    await venue.agents.create({ agentId: takes, config: { operation: 'v/test/ops/echo', defaultTools: false, acceptTasks: true } });
+    await expect(venue.agent(refuses).request({ q: 1 })).rejects.toThrow(/acceptTasks/);
+    await expect(venue.agent(takes).request({ q: 1 }, { wait: false })).resolves.toBeDefined();
+  } finally {
+    for (const agentId of [refuses, takes]) {
+      await venue.operations.run('v/ops/agent/delete', { agentId, remove: true }).catch(() => undefined);
+    }
+  }
+}, 30000);
+
 // users.delete (covia-sdk#85, covia#536, venue 0.9.9+): deletion needs
-// venue-issued user/delete authority, with no exemption for the caller's own
+// venue-issued admin/user/delete authority (user/delete before 0.12), with no
+// exemption for the caller's own
 // account. The venue refuses through the invoked Job, not with an HTTP 403.
-test('users.delete is refused without venue user/delete authority, even for oneself', async () => {
+test('users.delete is refused without venue admin/user/delete authority, even for oneself', async () => {
   const auth = Ed25519Auth.fromSigner(await webCryptoSigner(await generateNonExtractableKeyPair()));
   const v = await Grid.connect(process.env.VENUE_HOST!, auth);
   const other = Ed25519Auth.fromSigner(await webCryptoSigner(await generateNonExtractableKeyPair())).getDID();
   for (const did of [other, auth.getDID()]) {
     const err = await v.users.delete(did).catch((e) => e);
     expect(err).toBeInstanceOf(JobFailedError);
-    expect((err as JobFailedError).message).toMatch(/user\/delete/);
+    expect((err as JobFailedError).message).toMatch(/admin\/user\/delete/);
   }
 });
